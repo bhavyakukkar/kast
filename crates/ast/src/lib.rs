@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashSet};
 
 use decursion::FutureExt;
-use group::PartsAccumulator;
+use group::{GroupPtr, PartsAccumulator, Quantifier, RelativeParts};
 use kast_util::*;
 
 mod group;
@@ -610,13 +610,71 @@ impl Parser {
     }
 }
 
-// TODO here
 fn assign_progress(
     definition: &SyntaxDefinition,
     values: impl IntoIterator<Item = ProgressPart>,
 ) -> Result<Tuple<Ast>> {
+    use SyntaxDefinitionPart::{Keyword, NamedBinding, UnnamedBinding};
     let mut result = Tuple::empty();
-    let mut progress = values.into_iter();
+    let mut progress = values.into_iter().peekable();
+    let mut syntax = definition.parts.iter().peekable();
+
+    let mut group_ptr = group::GroupPtr::new();
+    let mut part_quantifier: Option<Quantifier>;
+    let mut times_traversed;
+    // let relative_parts = RelativeParts {
+    //     parts: &definition.parts,
+    // };
+    let syntax_parts;
+
+    loop {
+        let syntax_part = syntax.peek();
+        let Some(progress_part) = progress.peek() else {
+            if syntax_part.is_none() {
+                return Ok(result);
+            } else {
+                return error!("not enough progress was made");
+            }
+        };
+        let Some(syntax_part) = syntax_part else {
+            return error!("too many values");
+        };
+
+        if let SyntaxDefinitionPart::Group(group) = syntax_part {
+            group_ptr.step_in(group.clone());
+            times_traversed = 0;
+        }
+        let relative_parts: RelativeParts = match group_ptr.current_group().as_ref() {
+            Some(group) => RelativeParts::Group(group.clone()),
+            None => RelativeParts::Vec(&definition.parts),
+        };
+        // TODO over here
+        syntax_parts = relative_parts.parts().peekable();
+        match (syntax_part, progress_part) {
+            (Keyword(_), ProgressPart::Keyword(_, span)) => todo!(),
+            (Keyword(_), ProgressPart::Value(ast)) => todo!(),
+            (UnnamedBinding, ProgressPart::Keyword(_, span)) => todo!(),
+            (UnnamedBinding, ProgressPart::Value(ast)) => todo!(),
+            (NamedBinding(_), ProgressPart::Keyword(_, span)) => todo!(),
+            (NamedBinding(_), ProgressPart::Value(ast)) => todo!(),
+            (SyntaxDefinitionPart::Group(parc), ProgressPart::Keyword(_, span)) => todo!(),
+            (SyntaxDefinitionPart::Group(parc), ProgressPart::Value(ast)) => todo!(),
+        }
+    }
+
+    // TODO here
+    // just `next` is not enough to get a continuous stream of parts without worrying about group nesting, because we need to repeat over parts of a group until match fails
+
+    // iterate over each group how many ever times needed by recreating the iterator
+
+    // for each progress-part,
+    //     if current non-group syn-def-part can
+
+    /*
+    let parts = match group_ptr.group {
+        Some(group) => group.lock().unwrap().sub_parts.as_ref(),
+        None => &definition.parts,
+    };
     for part in &definition.parts {
         let progress = progress
             .next()
@@ -646,7 +704,6 @@ fn assign_progress(
                         .ok_or_else(|| error_fmt!("expected a value"))?,
                 );
             }
-            // TODO
             SyntaxDefinitionPart::Group(group) => {
                 todo!()
             }
@@ -655,6 +712,7 @@ fn assign_progress(
     if progress.next().is_some() {
         return error!("too many values");
     }
+    */
     Ok(result)
 }
 

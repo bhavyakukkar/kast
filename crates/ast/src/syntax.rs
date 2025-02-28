@@ -20,7 +20,7 @@ pub enum Associativity {
     Right,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SyntaxDefinitionPart {
     Keyword(String),
     UnnamedBinding,

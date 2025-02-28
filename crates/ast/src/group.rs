@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use crate::{lexer::Result, SyntaxDefinitionPart};
 use kast_util::*;
@@ -43,7 +43,7 @@ pub enum Quantifier {
 pub struct Group {
     pub name: Option<String>,
     pub quantifier: Quantifier,
-    sub_parts: Vec<SyntaxDefinitionPart>,
+    pub(super) sub_parts: Vec<SyntaxDefinitionPart>,
 }
 
 impl PartialEq for Group {
@@ -107,52 +107,203 @@ pub struct PartsAccumulator {
     unassigned_group: bool,
 }
 
-trait TryInsertGroup {
-    fn try_insert_named_group(&mut self) -> Result<Parc<Mutex<Group>>>;
-    fn insert_unnamed_group(&mut self) -> Parc<Mutex<Group>>;
-    // fn assign_quantifier(&mut self, quantifier: Quantifier) -> Result<()>;
+pub enum RelativePartsMut<'a> {
+    Group(Parc<Mutex<Group>>),
+    Vec(&'a mut Vec<SyntaxDefinitionPart>),
 }
 
-impl TryInsertGroup for Vec<SyntaxDefinitionPart> {
+pub enum RelativeParts<'a> {
+    Group(Parc<Mutex<Group>>),
+    Vec(&'a Vec<SyntaxDefinitionPart>),
+}
+
+// pub(super) trait RelativeParts {
+//     fn try_insert_named_group(&mut self) -> Result<Parc<Mutex<Group>>>;
+//     fn insert_unnamed_group(&mut self) -> Parc<Mutex<Group>>;
+//     // fn assign_quantifier(&mut self, quantifier: Quantifier) -> Result<()>;
+
+//     fn parts(&self) -> impl Iterator<Item = SyntaxDefinitionPart>
+//     where
+//         Self: Sized;
+// }
+
+impl<'a> RelativePartsMut<'a> {
     fn try_insert_named_group(&mut self) -> Result<Parc<Mutex<Group>>> {
-        match &self.last() {
-            Some(SyntaxDefinitionPart::NamedBinding(name)) => {
-                let name = name.clone();
-                _ = self.pop();
-                let group = Parc::new(Mutex::new(Group::named(name)));
-                self.push(SyntaxDefinitionPart::Group(group.clone()));
-                Ok(group)
+        match self {
+            RelativePartsMut::Group(parc) => {
+                let mut lock = parc.lock().unwrap();
+                match &lock.sub_parts.last() {
+                    Some(SyntaxDefinitionPart::NamedBinding(name)) => {
+                        let name = name.clone();
+                        _ = lock.sub_parts.pop();
+                        let group = Parc::new(Mutex::new(Group::named(name)));
+                        lock.sub_parts
+                            .push(SyntaxDefinitionPart::Group(group.clone()));
+                        Ok(group)
+                    }
+                    None | Some(_) => {
+                        error!("named groups (`[ ... ]`) should be preceded with their name")
+                    }
+                }
             }
-            None | Some(_) => error!("named groups (`[ ... ]`) should be preceded with their name"),
+            RelativePartsMut::Vec(vec) => match &vec.last() {
+                Some(SyntaxDefinitionPart::NamedBinding(name)) => {
+                    let name = name.clone();
+                    _ = vec.pop();
+                    let group = Parc::new(Mutex::new(Group::named(name)));
+                    vec.push(SyntaxDefinitionPart::Group(group.clone()));
+                    Ok(group)
+                }
+                None | Some(_) => {
+                    error!("named groups (`[ ... ]`) should be preceded with their name")
+                }
+            },
         }
     }
 
     fn insert_unnamed_group(&mut self) -> Parc<Mutex<Group>> {
-        let group = Parc::new(Mutex::new(Group::unnamed()));
-        self.push(SyntaxDefinitionPart::Group(group.clone()));
-        group
+        match self {
+            RelativePartsMut::Group(parc) => {
+                let mut lock = parc.lock().unwrap();
+                let group = Parc::new(Mutex::new(Group::unnamed()));
+                lock.sub_parts
+                    .push(SyntaxDefinitionPart::Group(group.clone()));
+                group
+            }
+            RelativePartsMut::Vec(vec) => {
+                let group = Parc::new(Mutex::new(Group::unnamed()));
+                vec.push(SyntaxDefinitionPart::Group(group.clone()));
+                group
+            }
+        }
+    }
+}
+
+impl<'a> RelativeParts<'a> {
+    pub fn parts(&'a self) -> RelativePartsIter<'a> {
+        RelativePartsIter { group: self, id: 0 }
+    }
+}
+
+pub struct RelativePartsIter<'a> {
+    group: &'a RelativeParts<'a>,
+    id: usize,
+}
+
+impl<'a> Iterator for RelativePartsIter<'a> {
+    type Item = SyntaxDefinitionPart;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.group {
+            RelativeParts::Group(parc) => {
+                let lock = parc.lock().unwrap();
+                lock.sub_parts
+                    .get(self.id)
+                    .map(|part| {
+                        self.id += 1;
+                        part
+                    })
+                    .cloned()
+            }
+            RelativeParts::Vec(vec) => vec.get(self.id).cloned(),
+        }
     }
 }
 
 /// Reverse linked-list data-structure so that syntax-definitions may contain nested [`Groups`](Group)
-struct GroupPtr {
+///
+/// NOTE: This linked-list cannot represent a list of length 0, only 1 or more
+pub enum RevLinkedList<Item> {
     /// the current group that parts being read will be pushed into
     /// *None* means we are in no group right now
-    group: Option<Parc<Mutex<Group>>>,
+    First { group: Item },
     /// the pointer to the previous group-ptr node so we can get back to it when the current group
     /// gets closed
     /// *None* means we are in no group right now, or we are in a group inside the root
-    previous: Option<Parc<GroupPtr>>,
+    Nth {
+        group: Item,
+        previous: Box<RevLinkedList<Item>>,
+    },
+}
+
+pub(crate) struct GroupPtr(pub Option<RevLinkedList<Parc<Mutex<Group>>>>);
+
+impl GroupPtr {
+    pub fn new() -> Self {
+        GroupPtr(None)
+    }
+
+    pub fn step_out(&mut self) -> Result<Parc<Mutex<Group>>> {
+        let self_old = std::mem::replace(&mut self.0, None);
+
+        match self_old {
+            Some(group_ptr) => match group_ptr {
+                RevLinkedList::First { group } => {
+                    // *self = GroupPtr2(None); // not needed, `self` was already made `None`
+                    Ok(group)
+                }
+                RevLinkedList::Nth { group, previous } => {
+                    *self = GroupPtr(Some(match *previous {
+                        RevLinkedList::First { group } => RevLinkedList::First { group },
+                        RevLinkedList::Nth { group, previous } => {
+                            RevLinkedList::Nth { group, previous }
+                        }
+                    }));
+                    Ok(group)
+                }
+            },
+            None => error!("cannot close a group when currently not in a group"),
+        }
+    }
+
+    pub fn step_in(&mut self, group: Parc<Mutex<Group>>) {
+        let self_old = std::mem::replace(&mut self.0, None);
+        self.0 = match self_old {
+            None => Some(RevLinkedList::First { group }),
+            Some(RevLinkedList::First { group: old_group }) => {
+                let new_group = RelativePartsMut::Group(old_group).insert_unnamed_group();
+                Some(RevLinkedList::Nth {
+                    group: new_group,
+                    previous: Box::new(RevLinkedList::First {
+                        group: group.clone(),
+                    }),
+                })
+            }
+            Some(RevLinkedList::Nth {
+                group: old_group,
+                previous: older_groups,
+            }) => {
+                let new_group = RelativePartsMut::Group(old_group).insert_unnamed_group();
+                Some(RevLinkedList::Nth {
+                    group: new_group,
+                    previous: Box::new(RevLinkedList::Nth {
+                        group: group.clone(),
+                        previous: older_groups,
+                    }),
+                })
+            }
+        };
+    }
+
+    pub fn current_group(&self) -> Option<Parc<Mutex<Group>>> {
+        match &self.0 {
+            Some(RevLinkedList::First { group } | RevLinkedList::Nth { group, previous: _ }) => {
+                Some(group.clone())
+            }
+            None => None,
+        }
+    }
 }
 
 impl PartsAccumulator {
     pub fn new() -> Self {
         PartsAccumulator {
             parts: Vec::new(),
-            current: GroupPtr {
-                group: None,
-                previous: None,
-            },
+            current: GroupPtr(None),
+            // current: GroupPtr {
+            //     group: None,
+            //     previous: None,
+            // },
             unassigned_group: false,
         }
     }
@@ -177,13 +328,19 @@ impl PartsAccumulator {
             return error!("syntax definition ended when expecting quantifier for group");
         }
         let current = self.current;
-        match (current.group, current.previous) {
+        match current.0 {
+            None => Ok(self.parts),
+            Some(RevLinkedList::First { .. } | RevLinkedList::Nth { .. }) => {
+                error!("syntax definition ended when expecting group to be closed")
+            }
+        }
+        /* match (current.group, current.previous) {
             (None, None) => Ok(self.parts),
             (Some(_), None | Some(_)) => {
                 error!("syntax definition ended when expecting group to be closed")
             }
             (None, Some(_)) => unreachable!(),
-        }
+        } */
     }
 
     /// Close a group (match the `[` or `(` that marked the opening of a group with a `]` or `)`
@@ -195,6 +352,15 @@ impl PartsAccumulator {
         if self.unassigned_group {
             return error!("unexpected token encountered when expecting quantifier for group");
         }
+        let closed_group = current.step_out()?;
+        let closed_group = closed_group.lock().unwrap();
+        if closed_group.is_named() && !matches!(tag, GroupTag::Named) {
+            return error!("mismatch of tokens, named group `[` cannot be closed with `)`");
+        } else if closed_group.is_unnamed() && !matches!(tag, GroupTag::Unnamed) {
+            return error!("mismatch of tokens, unnamed group `(` cannot be closed with `]`");
+        }
+
+        /*
         (current.group, current.previous) = match (&current.group, &current.previous) {
             (None, None) => {
                 return error!("unexpected symbol to close group when there are no groups open")
@@ -217,6 +383,8 @@ impl PartsAccumulator {
             ),
             (None, Some(_)) => unreachable!(),
         };
+        */
+
         // Group that has been closed is now waiting to be assigned a quantifier
         self.unassigned_group = true;
         Ok(())
@@ -235,14 +403,21 @@ impl PartsAccumulator {
             );
         }
         self.unassigned_group = false;
-        match &self.current.group {
+        match &self.current.0 {
+            None => Self::update_group(self.parts.last(), quantifier),
+            Some(RevLinkedList::First { group } | RevLinkedList::Nth { group, previous: _ }) => {
+                let group = group.lock().unwrap(); // temporary value
+                Self::update_group(group.sub_parts.last(), quantifier)
+            }
+        }
+        /* match &self.current.group {
             Some(group) => {
                 let group = group.lock().unwrap(); // temporary value
                 Self::update_group(group.sub_parts.last(), quantifier)
             }
             // no nesting, we're at depth 0 and inserting directly into `PartsAccumulator.parts`
             None => Self::update_group(self.parts.last(), quantifier),
-        }
+        } */
     }
 
     // Utility function to try to update a group with a quantifier
@@ -265,8 +440,10 @@ impl PartsAccumulator {
     // Utility function to insert a part THAT WE KNOW is not a group
     // Used by `PartsAccumulatorInserter`'s `keyword()`, `unnamed_binding()` and `named_binding()`
     fn insert_non_group_part(&mut self, part: SyntaxDefinitionPart) {
-        match &self.current.group {
-            Some(current_group) => current_group.lock().unwrap().sub_parts.push(part),
+        match &self.current.0 {
+            Some(RevLinkedList::First { group } | RevLinkedList::Nth { group, previous: _ }) => {
+                group.lock().unwrap().sub_parts.push(part)
+            }
             None => self.parts.push(part),
         }
     }
@@ -280,8 +457,14 @@ pub struct PartsAccumulatorInserter<'a> {
 impl<'a> PartsAccumulatorInserter<'a> {
     /// Insert a new unnamed group, thus increasing the nest depth
     pub fn unnamed_group(&mut self) {
-        let current = &mut self.inner.current;
-        (current.group, current.previous) = match (&current.group, &current.previous) {
+        self.inner.current.step_in(
+            self.inner
+                .current
+                .current_group()
+                .map(|current_group| RelativePartsMut::Group(current_group).insert_unnamed_group())
+                .unwrap_or(RelativePartsMut::Vec(&mut self.inner.parts).insert_unnamed_group()),
+        );
+        /* (current.group, current.previous) = match (&current.group, &current.previous) {
             (None, None) => {
                 let group = self.inner.parts.insert_unnamed_group();
                 (Some(group), None)
@@ -315,7 +498,7 @@ impl<'a> PartsAccumulatorInserter<'a> {
                 )
             }
             (None, Some(_)) => unreachable!(),
-        };
+        }; */
     }
 
     /// Insert a new named group, thus increasing the nest depth
@@ -323,7 +506,18 @@ impl<'a> PartsAccumulatorInserter<'a> {
     /// This fails if there isn't a named-binding at the tail of the `parts` of the currently
     /// pointed-to group, which is supposed to be popped out to become the name of this group
     pub fn named_group(&mut self) -> Result<()> {
-        let current = &mut self.inner.current;
+        self.inner.current.step_in(
+            self.inner
+                .current
+                .current_group()
+                .map(|current_group| {
+                    RelativePartsMut::Group(current_group).try_insert_named_group()
+                })
+                .unwrap_or(RelativePartsMut::Vec(&mut self.inner.parts).try_insert_named_group())?,
+        );
+        Ok(())
+
+        /* let current = &mut self.inner.current;
         (current.group, current.previous) = match (&current.group, &current.previous) {
             (None, None) => {
                 let group = self.inner.parts.try_insert_named_group()?;
@@ -359,7 +553,7 @@ impl<'a> PartsAccumulatorInserter<'a> {
             }
             (None, Some(_)) => unreachable!(),
         };
-        Ok(())
+        Ok(()) */
     }
 
     /// Insert a keyword
@@ -510,3 +704,39 @@ mod tests {
         );
     }
 }
+
+/* #[derive(Debug)]
+pub(crate) struct RelativeParts<'a> {
+    pub parts: &'a Vec<SyntaxDefinitionPart>,
+    cursor: usize,
+}
+
+impl<'a> PartialEq for RelativeParts<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        use std::ops::Deref;
+        use SyntaxDefinitionPart::{Keyword, NamedBinding, UnnamedBinding};
+
+        for (a, b) in self.parts.iter().zip(other.parts.iter()) {
+            match (a, b) {
+                (Keyword(a), Keyword(b)) if a == b => (),
+                (UnnamedBinding, UnnamedBinding) => (),
+                (NamedBinding(a), NamedBinding(b)) if a == b => (),
+                (SyntaxDefinitionPart::Group(a), SyntaxDefinitionPart::Group(b)) => {
+                    let a = a.deref().lock().unwrap();
+                    let b = b.deref().lock().unwrap();
+                    if *a != *b {
+                        return false;
+                    }
+                }
+                _ => return false,
+            };
+        }
+        true
+    }
+}
+
+impl<'a> RelativeParts<'a> {
+    pub fn part(&'a self) -> &'a SyntaxDefinitionPart {
+        todo!()
+    }
+} */
