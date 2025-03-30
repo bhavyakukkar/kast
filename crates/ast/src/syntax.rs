@@ -25,7 +25,9 @@ pub enum SyntaxDefinitionPart {
     Keyword(String),
     UnnamedBinding,
     NamedBinding(String),
-    // TODO HERE: change to Group
+    // NOTE: This is a Parc<Mutex<Group>> because we require multiple mutable references to it when
+    // traversing it while also keeping track of previously traversed non-leaf nodes so we can step
+    // out again
     GroupBinding(Parc<Mutex<Group>>),
 }
 
