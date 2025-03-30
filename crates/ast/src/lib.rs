@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashSet};
 
 use decursion::FutureExt;
-use group::PartsAccumulator;
+use group::{GroupPtr, PartsAccumulator};
 use kast_util::*;
 
 mod group;
@@ -554,7 +554,8 @@ impl Parser {
         };
         Ok(ReadOneResult::Progress(Ast::Complex {
             definition: definition.clone(),
-            values: assign_progress(definition, parsed_parts).expect("Failed to assign values"),
+            values: assign_progress(definition, parsed_parts, &span)
+                .expect("Failed to assign values"),
             data: span,
         }))
     }
@@ -615,9 +616,14 @@ impl Parser {
 
 // TODO here
 fn assign_progress(
-    definition: &SyntaxDefinition,
+    definition: &Parc<SyntaxDefinition>,
     values: impl IntoIterator<Item = ProgressPart>,
+    span: &Span,
 ) -> Result<Tuple<Ast>> {
+    //
+    // 1. Pop one value
+    // 2. If makes progress to group,
+    //
     /*
                 let mut progress_parts = values.into_iter().peekable();
         // This iterator returns `SyntaxDefinitionPart`s, but not of variant Group, and the group that the part is inside, and whether this is the last part of the group
