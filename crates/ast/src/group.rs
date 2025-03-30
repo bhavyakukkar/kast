@@ -1,6 +1,5 @@
 use std::{
-    borrow::{Borrow, BorrowMut, Cow},
-    ops::Deref,
+    borrow::{Borrow, BorrowMut},
     sync::Mutex,
 };
 
@@ -38,10 +37,10 @@ pub enum Quantifier {
 pub struct Group<V = Vec<SyntaxDefinitionPart>> {
     pub name: Option<String>,
     pub quantifier: Quantifier,
-    sub_parts: V,
+    pub sub_parts: V,
 }
 
-impl<V> Group<V> {
+impl Group {
     pub fn is_named(&self) -> bool {
         self.name.is_some()
     }
@@ -50,12 +49,6 @@ impl<V> Group<V> {
         self.name.is_none()
     }
 }
-
-/* impl<V> Group<V> where V: Borrow<Vec<SyntaxDefinitionPart>> {
-    pub fn flat_parts(&self) -> FlatParts<V> {
-        FlatParts::new(self)
-    }
-} */
 
 impl<V> Group<V>
 where
@@ -397,80 +390,6 @@ impl<'a> PartsAccumulatorInserter<'a> {
     }
 }
 
-/*
-#[derive(Clone)]
-pub struct FlatPartsPtr<'a> {
-    // Result is being used as Either and doesn't indicate success/failure
-    // + Ok indicates reference to Group that owns its sub-parts
-    // + Err indicates reference to Group that owns a reference to some sub-parts
-    group: Result<Parc<Mutex<Group>>, Parc<Mutex<Group<&'a Vec<SyntaxDefinitionPart>>>>>,
-    idx: usize,
-}
-
-pub(crate) struct FlatParts<'a> {
-    root: Parc<Mutex<Group<&'a Vec<SyntaxDefinitionPart>>>>,
-    ptr: RevLinkedList<FlatPartsPtr<'a>>,
-}
-
-impl<'a> FlatParts<'a> {
-    pub fn new(root: Parc<Mutex<Group<&'a Vec<SyntaxDefinitionPart>>>>) -> Self {
-        FlatParts {
-            ptr: RevLinkedList::First {
-                item: FlatPartsPtr {
-                    group: Err(root.clone()),
-                    idx: 0,
-                },
-            },
-            root,
-        }
-    }
-}
-
-impl<'a> Iterator for FlatParts<'a> {
-    // type Item = (SyntaxDefinitionPart, Parc<Mutex<Group>>);
-    type Item = SyntaxDefinitionPart;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Find next non-group part
-        let non_group_part = loop {
-            let FlatPartsPtr { group, idx } = self.ptr.current();
-            match group
-                .as_ref()
-                .map(|own_group| own_group.lock().unwrap().sub_parts.get(*idx).cloned())
-                .unwrap_or_else(|ref_group| ref_group.lock().unwrap().sub_parts.get(*idx).cloned())
-            {
-                // encountered group, step-in to it and start from id
-                Some(SyntaxDefinitionPart::GroupBinding(group)) => {
-                    self.ptr.step_in(FlatPartsPtr {
-                        group: Ok(group.clone()),
-                        idx: 0,
-                    });
-                }
-                // sub-parts of current-group are over, exit group but continue looking for
-                // non-group part in parent group
-                None => {
-                    let Ok(_) = self.ptr.step_out() else {
-                        // current-group is actually the root, meaning we are done with all parts
-                        return None;
-                    };
-                    self.ptr.current_mut().idx += 1;
-                }
-                // encountered non-group part, break
-                Some(part @ _) => {
-                    self.ptr.current_mut().idx += 1;
-                    break part;
-                }
-            }
-        };
-        assert!(!matches!(
-            non_group_part,
-            SyntaxDefinitionPart::GroupBinding(_)
-        ));
-        Some(non_group_part)
-    }
-}
-*/
-
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -503,7 +422,7 @@ mod tests {
             panic!();
         };
         let parts = syntax_def.parts;
-        /* assert_eq!(
+        assert_eq!(
             &Group {
                 name: None,
                 quantifier: One,
@@ -514,7 +433,7 @@ mod tests {
                 quantifier: One,
                 sub_parts: expected_parts,
             }
-        ) */
+        )
     }
 
     #[test]
@@ -588,51 +507,43 @@ mod tests {
             })],
         );
     }
-
-    // #[test]
-    /* fn group_flat_parts_iter() {
-        let parts = vec![group_ptr(Group {
-            name: None,
-            quantifier: ZeroOrOne,
-            sub_parts: vec![
-                NamedBinding("buckets".into()),
-                Keyword("=>".into()),
-                group_ptr(Group {
-                    name: None,
-                    quantifier: ZeroOrMore,
-                    sub_parts: vec![NamedBinding("values".into()), Keyword(",".into())],
-                }),
-            ],
-        })];
-        let root = Parc::new(Mutex::new(Group {
-            name: None,
-            quantifier: Quantifier::One,
-            sub_parts: &parts,
-        }));
-        let flat_parts = FlatParts::new(root);
-        flat_parts.for_each(|part| println!("Next non-group part: `{:?}`", part));
-    } */
 }
 
-pub struct GroupLocation<'a> {
+pub struct GroupLocation {
     // Group not used directly here because we can have either &Group or MutexGuard<Group>
-    // TODO HERE: change it back to &'a Group
-    group: Box<dyn Deref<Target = Group> + 'a>,
+    // NOTE: this is a Parc<Mutex<>>
+    group: Parc<Mutex<Group>>,
     part_index: usize,
     quantified: usize,
-    tuple: Tuple<Ast>,
+    t_fields: Tuple<Ast>, // `(.key :: ast, .value :: ast)`
+    t_groups: Tuple<Ast>, // `(_unnamed :: list[(.key :: ast, .value :: ast), ..])`
+}
+
+impl GroupLocation {
+    pub fn new(group: Parc<Mutex<Group>>) -> Self {
+        Self {
+            group,
+            part_index: 0,
+            quantified: 0,
+            t_fields: Tuple::empty(),
+            t_groups: Tuple::empty(),
+        }
+    }
+
+    pub fn name(&self) -> Option<String> {
+        self.group.lock().unwrap().name.clone()
+    }
 }
 
 pub struct GroupTupleCreator<'a> {
     syntax_def: &'a Parc<SyntaxDefinition>,
     span: &'a Span,
-    shape: RevLinkedList<GroupLocation<'a>>,
-    tuple: Tuple<Ast>,
+    shape: RevLinkedList<GroupLocation>,
 }
 
 impl<'a> GroupTupleCreator<'a> {
     pub fn new(
-        definition: impl Deref<Target = Group> + 'a,
+        group: Parc<Mutex<Group>>,
         syntax_def: &'a Parc<SyntaxDefinition>,
         span: &'a Span,
     ) -> Self {
@@ -640,132 +551,221 @@ impl<'a> GroupTupleCreator<'a> {
             syntax_def,
             span,
             shape: RevLinkedList::First {
-                item: GroupLocation {
-                    group: Box::new(definition),
-                    part_index: 0,
-                    quantified: 0,
-                    tuple: Tuple::empty(),
-                },
+                item: GroupLocation::new(group),
             },
-            tuple: Tuple::empty(),
         }
     }
 
+    // Pushes the field tuples into the group tuple, then pushes the group tuple into the parent
+    // group's tuple and finally closing the group
     fn close_group(&mut self) -> Result<()> {
-        let GroupLocation {
-            group: child_group,
-            tuple: child_tuple,
-            ..
-        } = self.shape.step_out()?;
-        let name = &(*child_group).borrow().name;
+        // Group being closed
+        let child_group = self.shape.step_out()?;
+        let name = child_group.name();
 
         let GroupLocation {
-            tuple: parent_tuple,
+            t_fields: mut child_tuple_fields,
+            t_groups: mut child_tuple_groups,
+            ..
+        } = child_group;
+        child_tuple_groups.add_unnamed(Ast::Complex {
+            definition: self.syntax_def.clone(),
+            data: self.span.clone(),
+            values: std::mem::replace(&mut child_tuple_fields, Tuple::empty()),
+        });
+
+        // Parent group of group being closed
+        self.shape.current_mut().t_fields.add(
+            name,
+            Ast::Complex {
+                definition: self.syntax_def.clone(),
+                values: child_tuple_groups,
+                data: self.span.clone(),
+            },
+        );
+        Ok(())
+    }
+
+    fn bail(&mut self, custom_err: ErrorMessage) -> Result<()> {
+        let GroupLocation {
+            group, quantified, ..
+        } = match &mut self.shape {
+            RevLinkedList::First { item: group } => group,
+            RevLinkedList::Nth { item: group, .. } => group,
+        };
+        let group = group.clone();
+        let group = &*group.lock().unwrap();
+        match (&group.quantifier, quantified) {
+            // Failure to finish group
+            (Quantifier::One, 0) | (Quantifier::OneOrMore, 0) => return Err(custom_err),
+            (Quantifier::Exact(m), n) if *n < m - 1 => return Err(custom_err),
+
+            // Commit empty group tuple to parent group
+            (Quantifier::ZeroOrOne, 0) | (Quantifier::ZeroOrMore, 0) => {
+                let name = self.shape.step_out()?.name();
+                self.shape.current_mut().t_fields.add(
+                    name,
+                    Ast::Complex {
+                        definition: self.syntax_def.clone(),
+                        values: Tuple::empty(),
+                        data: self.span.clone(),
+                    },
+                );
+                Ok(())
+            }
+
+            // Commit existing group tuple but abandon any field tuples this round
+            (Quantifier::OneOrMore, 1..) | (Quantifier::ZeroOrMore, 1..) => {
+                let child_group = self.shape.step_out()?;
+                let name = child_group.name();
+                self.shape.current_mut().t_fields.add(
+                    name,
+                    Ast::Complex {
+                        definition: self.syntax_def.clone(),
+                        values: child_group.t_groups,
+                        data: self.span.clone(),
+                    },
+                );
+                Ok(())
+            }
+
+            (Quantifier::Exact(_), _) => unreachable!(),
+            (Quantifier::One, _) => unreachable!(),
+            (Quantifier::ZeroOrOne, _) => unreachable!(),
+        }
+    }
+
+    fn _close_group_empty(&mut self) -> Result<()> {
+        // Group being closed
+        let GroupLocation {
+            group: child_group, ..
+        } = self.shape.step_out()?;
+        let name = &child_group.borrow().lock().unwrap().name;
+
+        // Parent group of group being closed
+        let GroupLocation {
+            t_fields: parent_tuple_fields,
             ..
         } = self.shape.current_mut();
 
         let ast = Ast::Complex {
             definition: self.syntax_def.clone(),
-            values: child_tuple,
+            values: Tuple::empty(),
             data: self.span.clone(),
         };
 
         if let Some(name) = &name {
-            parent_tuple.add_named(name, ast);
+            parent_tuple_fields.add_named(name, ast);
         } else {
-            parent_tuple.add_unnamed(ast);
+            parent_tuple_fields.add_unnamed(ast);
         }
         Ok(())
     }
 
-    pub fn insert(&mut self, value: ProgressPart) -> Result<()> {
-        fn fit(part: SyntaxDefinitionPart, progress: ProgressPart) -> bool {
-            match part {
-                SyntaxDefinitionPart::Keyword(expected) => {
-                    progress.into_keyword().is_some_and(|s| &s == &expected)
-                }
-                SyntaxDefinitionPart::UnnamedBinding => matches!(progress, ProgressPart::Value(_)),
-                SyntaxDefinitionPart::NamedBinding(name) => {
-                    matches!(progress, ProgressPart::Value(_))
-                }
-                SyntaxDefinitionPart::GroupBinding(_) => unreachable!(),
-            }
-        };
+    fn repeat_group(&mut self) {
+        // Rerun group
+        let GroupLocation {
+            part_index,
+            quantified,
+            ref mut t_fields,
+            t_groups,
+            ..
+        } = self.shape.current_mut();
+        // Set index back to 0
+        *part_index = 0;
+        *quantified += 1;
+        // Move field tuple from previous parse into group tuple
+        t_groups.add_unnamed(Ast::Complex {
+            definition: self.syntax_def.clone(),
+            data: self.span.clone(),
+            values: std::mem::replace(t_fields, Tuple::empty()),
+        });
+    }
 
+    fn _fit(part: SyntaxDefinitionPart, progress: ProgressPart) -> bool {
+        match part {
+            SyntaxDefinitionPart::Keyword(expected) => {
+                progress.into_keyword().is_some_and(|s| &s == &expected)
+            }
+            SyntaxDefinitionPart::UnnamedBinding => matches!(progress, ProgressPart::Value(_)),
+            SyntaxDefinitionPart::NamedBinding(_name) => {
+                matches!(progress, ProgressPart::Value(_))
+            }
+            SyntaxDefinitionPart::GroupBinding(_) => unreachable!(),
+        }
+    }
+
+    pub fn insert(&mut self, progress: ProgressPart) -> Result<()> {
         let GroupLocation {
             group,
             part_index,
             quantified,
-            tuple,
+            ..
         } = match &mut self.shape {
             RevLinkedList::First { item: group } => group,
             RevLinkedList::Nth { item: group, .. } => group,
         };
-        let group: &Group = &***group;
-
+        let group = group.clone();
+        let group = &*group.lock().unwrap();
         match group.sub_parts.get(*part_index) {
             Some(SyntaxDefinitionPart::GroupBinding(new_group)) => {
-                let new_group = new_group.clone();
-                /* self.shape.step_in(GroupLocation {
-                    group: Box::new(new_group.lock().unwrap()),
-                    part_index: 0,
-                    quantified: 0,
-                    tuple: Tuple::empty(),
-                }); */
+                self.shape.step_in(GroupLocation::new(new_group.clone()));
+                // We're still yet to insert the value so recurse
+                self.insert(progress)?;
+                Ok(())
             }
-            Some(part) => {
+            Some(SyntaxDefinitionPart::Keyword(expected)) => match progress {
+                ProgressPart::Keyword(keyword, _) if keyword.as_str() == expected => Ok(()),
+                _ => self.bail(error_fmt!("expected keyword not found")),
+            },
+            Some(SyntaxDefinitionPart::UnnamedBinding) => match progress {
+                ProgressPart::Value(value) => {
+                    let GroupLocation {
+                        t_fields: tuple, ..
+                    } = self.shape.current_mut();
+                    tuple.add_unnamed(value);
+                    Ok(())
+                }
+                _ => self.bail(error_fmt!("expected a value")),
+            },
+            Some(SyntaxDefinitionPart::NamedBinding(name)) => match progress {
+                ProgressPart::Value(value) => {
+                    let GroupLocation {
+                        t_fields: tuple, ..
+                    } = self.shape.current_mut();
+                    tuple.add_named(name.clone(), value);
+                    Ok(())
+                }
+                _ => self.bail(error_fmt!("expected a value")),
+            },
+            // Current group over
+            None => {
                 match (&group.quantifier, &quantified) {
                     // Close group and step-out to previous group
-                    (Quantifier::One, 0) | (Quantifier::ZeroOrOne, 0) => {
-                        // Close group (`self.shape` mutable borrow ends here)
-                        self.shape.step_out()?;
-                    }
-                    (Quantifier::Exact(m), n) if **n == m - 1 => {
-                        // Close group (`self.shape` mutable borrow ends here)
-                        self.shape.step_out()?;
-                    }
+                    (Quantifier::One, 0) | (Quantifier::ZeroOrOne, 0) => self.close_group()?,
+                    (Quantifier::Exact(m), n) if **n == m - 1 => self.close_group()?,
 
                     // Rerun same group
-                    (Quantifier::OneOrMore, _) | (Quantifier::ZeroOrMore, _) => {
-                        // Rerun group (`self.shape` mutable borrow ends here)
-                        self.shape.current_mut().part_index = 0;
+                    (Quantifier::OneOrMore, 0..) | (Quantifier::ZeroOrMore, 0..) => {
+                        self.repeat_group()
                     }
-                    (Quantifier::Exact(m), n) if **n < m - 1 => {
-                        // Rerun group (`self.shape` mutable borrow ends here)
-                        self.shape.current_mut().part_index = 0;
-                    }
+                    (Quantifier::Exact(m), n) if **n < m - 1 => self.repeat_group(),
 
-                    (Quantifier::One, _) => unreachable!(),
-                    (Quantifier::ZeroOrOne, _) => unreachable!(),
+                    (Quantifier::One, 1..) => unreachable!(),
+                    (Quantifier::ZeroOrOne, 1..) => unreachable!(),
                     (Quantifier::Exact(_), _) => unreachable!(),
                 }
+                // We're still yet to insert the value so recurse
+                self.insert(progress)?;
+                Ok(())
             }
-
-            // Current group over
-            None => match (&group.quantifier, &quantified) {
-                // Close group and step-out to previous group
-                (Quantifier::One, 0) | (Quantifier::ZeroOrOne, 0) => self.close_group()?,
-                (Quantifier::Exact(m), n) if **n == m - 1 => self.close_group()?,
-
-                // Rerun same group
-                (Quantifier::OneOrMore, _) => {
-                    // Rerun group
-                    self.shape.current_mut().part_index = 0;
-                }
-                (Quantifier::ZeroOrMore, _) => {
-                    // Rerun group
-                    self.shape.current_mut().part_index = 0;
-                }
-                (Quantifier::Exact(m), n) if **n < m - 1 => {
-                    // Rerun group
-                    *quantified = 0;
-                }
-
-                (Quantifier::One, _) => unreachable!(),
-                (Quantifier::ZeroOrOne, _) => unreachable!(),
-                (Quantifier::Exact(_), _) => unreachable!(),
-            },
         }
-        todo!()
+    }
+
+    pub fn finish(self) -> Result<Tuple<Ast>> {
+        match self.shape {
+            RevLinkedList::First { item } => Ok(item.t_groups),
+            RevLinkedList::Nth { .. } => error!("not enough progress was made"),
+        }
     }
 }

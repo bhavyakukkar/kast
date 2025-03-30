@@ -1,7 +1,7 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, sync::Mutex};
 
 use decursion::FutureExt;
-use group::{GroupPtr, PartsAccumulator};
+use group::{GroupTupleCreator, PartsAccumulator};
 use kast_util::*;
 
 mod group;
@@ -614,104 +614,22 @@ impl Parser {
     }
 }
 
-// TODO here
 fn assign_progress(
     definition: &Parc<SyntaxDefinition>,
     values: impl IntoIterator<Item = ProgressPart>,
     span: &Span,
 ) -> Result<Tuple<Ast>> {
-    //
-    // 1. Pop one value
-    // 2. If makes progress to group,
-    //
-    /*
-                let mut progress_parts = values.into_iter().peekable();
-        // This iterator returns `SyntaxDefinitionPart`s, but not of variant Group, and the group that the part is inside, and whether this is the last part of the group
-        let mut flat_syntax_parts = group::RelativeParts::<&_, _>::AsVec(&definition.parts).flat_parts();
-        let fit = |part, progress: ProgressPart| -> bool {
-            match part {
-                SyntaxDefinitionPart::Keyword(expected) => {
-                    progress.into_keyword().is_some_and(|s| &s == &expected)
-                }
-                SyntaxDefinitionPart::UnnamedBinding => matches!(progress, ProgressPart::Value(_)),
-                SyntaxDefinitionPart::NamedBinding(name) => matches!(progress, ProgressPart::Value(_)),
-                SyntaxDefinitionPart::Group(_) => unreachable!(),
-            }
-        };
-
-        loop {
-            let progress_part = progress_parts.peek();
-            let syntax_part = flat_syntax_parts.peek();
-            // let (syntax_part, current_group, is_last_of_group) = flat_syntax_parts.peek();
-
-            match (fit(syntax_part, ))
-        }
-
-        // () is proceed
-        //
-        // match (fits, current_group.quantified, current_group.quantifier) {
-        //     (true, 0, One) => (),
-        //     (false, 0, One) => fail,
-        //     (_, _, One) => unreachable!(),
-        //
-        //     (true, 0, One) => go to next progress-part; go to next syntax-part; update,
-        //     (false, 0, One) => go to next progress-part; go to next syntax-part; update,
-        //     (false, 0, ZeroOrOne) => completely exit group, report as empty tuple and try again,
-        //     (false, 0, ZeroOrMore) => completely exit group, report as empty tuple and try again,
-        //     (false, 0, OneOrMore) => fail,
-        //     (false, _, One) => fail too many tokens,
-        //     (false, 1, ZeroOrOne) => completely exit group, report as empty tuple and try again,
-        //     (false, 1, ZeroOrMore) => completely exit group, report as empty tuple and try again,
-        //     (false, 1, OneOrMore) => fail,
-        // }
-        //
-        // pop the progress-part
-        // pop the syntax-part, if its last of group, check quantified and decide whether to go to next group or repeat on this group
-        //
-
-        let mut result = Tuple::empty();
-        /* let mut progress = values.into_iter();
-        for part in &definition.parts {
-            let progress = progress
-                .next()
-                .ok_or_else(|| error_fmt!("not enough progress was made"))?;
-            match part {
-                SyntaxDefinitionPart::Keyword(expected) => {
-                    assert_eq!(
-                        expected.as_str(),
-                        progress
-                            .into_keyword()
-                            .ok_or_else(|| error_fmt!("expected a keyword"))?
-                            .as_str(),
-                    );
-                }
-                SyntaxDefinitionPart::UnnamedBinding => {
-                    result.add_unnamed(
-                        progress
-                            .into_value()
-                            .ok_or_else(|| error_fmt!("expected a value"))?,
-                    );
-                }
-                SyntaxDefinitionPart::NamedBinding(name) => {
-                    result.add_named(
-                        name.clone(),
-                        progress
-                            .into_value()
-                            .ok_or_else(|| error_fmt!("expected a value"))?,
-                    );
-                }
-                // TODO
-                SyntaxDefinitionPart::Group(group) => {
-                    todo!()
-                }
-            }
-        }
-        if progress.next().is_some() {
-            return error!("too many values");
-        } */
-        Ok(result)
-    */
-    todo!()
+    let mut g = GroupTupleCreator::new(
+        Parc::new(Mutex::new(Group {
+            name: None,
+            quantifier: group::Quantifier::One,
+            sub_parts: definition.parts.clone(),
+        })),
+        definition,
+        span,
+    );
+    values.into_iter().try_for_each(|value| g.insert(value))?;
+    g.finish()
 }
 
 fn should_resume(outer_bp: Option<BindingPower>, with: Option<BindingPower>) -> bool {
