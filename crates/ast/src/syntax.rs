@@ -25,6 +25,7 @@ pub enum SyntaxDefinitionPart {
     Keyword(String),
     UnnamedBinding,
     NamedBinding(String),
+    // TODO HERE: change to Group
     GroupBinding(Parc<Mutex<Group>>),
 }
 
