@@ -6,7 +6,7 @@ use std::{
 use crate::{lexer::Result, Ast, ProgressPart, SyntaxDefinition, SyntaxDefinitionPart};
 use kast_util::*;
 use replace_with::{replace_with_or_abort, replace_with_or_abort_and_return};
-use tracing::trace;
+use tracing::{trace, warn};
 
 #[derive(Debug)]
 pub enum GroupTag {
@@ -709,31 +709,52 @@ impl<'a> GroupTupleCreator<'a> {
         let group = &*group.lock().unwrap();
         match group.sub_parts.get(*part_index) {
             Some(SyntaxDefinitionPart::GroupBinding(new_group)) => {
+                warn!("got part group");
                 self.shape.step_in(GroupLocation::new(new_group.clone()));
                 // We're still yet to insert the value so recurse
                 self.insert(progress)?;
                 Ok(())
             }
             Some(SyntaxDefinitionPart::Keyword(expected)) => match progress {
-                ProgressPart::Keyword(keyword, _) if keyword.as_str() == expected => Ok(()),
+                ProgressPart::Keyword(keyword, _) if keyword.as_str() == expected => {
+                    trace!(
+                        "parsed part keyword `{keyword}` for syntax-def: {:#?} and span: {}",
+                        self.syntax_def,
+                        self.span
+                    );
+                    *part_index += 1;
+                    Ok(())
+                }
                 _ => self.bail(error_fmt!("expected keyword not found")),
             },
             Some(SyntaxDefinitionPart::UnnamedBinding) => match progress {
                 ProgressPart::Value(value) => {
+                    warn!(
+                        "parsed part unnamed-binding for syntax-def: {:#?} and span: {}",
+                        self.syntax_def, self.span
+                    );
+                    *part_index += 1;
                     let GroupLocation {
                         t_fields: tuple, ..
                     } = self.shape.current_mut();
                     tuple.add_unnamed(value);
+                    warn!("tuple now: {tuple}");
                     Ok(())
                 }
                 _ => self.bail(error_fmt!("expected a value")),
             },
             Some(SyntaxDefinitionPart::NamedBinding(name)) => match progress {
                 ProgressPart::Value(value) => {
+                    warn!(
+                        "parsed part named-binding `{name}` for syntax-def: {:#?} and span: {}",
+                        self.syntax_def, self.span
+                    );
+                    *part_index += 1;
                     let GroupLocation {
                         t_fields: tuple, ..
                     } = self.shape.current_mut();
                     tuple.add_named(name.clone(), value);
+                    warn!("tuple now: {tuple}");
                     Ok(())
                 }
                 _ => self.bail(error_fmt!("expected a value")),
