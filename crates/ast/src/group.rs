@@ -6,7 +6,7 @@ use std::{
 use crate::{lexer::Result, Ast, ProgressPart, SyntaxDefinition, SyntaxDefinitionPart};
 use kast_util::*;
 use replace_with::{replace_with_or_abort, replace_with_or_abort_and_return};
-use tracing::{trace, warn};
+use tracing::trace;
 
 #[derive(Debug)]
 pub enum GroupTag {
@@ -390,125 +390,6 @@ impl<'a> PartsAccumulatorInserter<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{
-        group::{Group, Quantifier},
-        lex, read_syntax_def, ParsedSyntax, Parser, SyntaxDefinitionPart,
-    };
-    use kast_util::{Parc, SourceFile};
-    use std::sync::Mutex;
-    use tracing::info;
-
-    use Quantifier::*;
-    use SyntaxDefinitionPart::*;
-
-    fn group_ptr(group: super::Group) -> SyntaxDefinitionPart {
-        GroupBinding(Parc::new(Mutex::new(group)))
-    }
-
-    fn test<'a>(source: impl Into<String>, expected_parts: &Vec<SyntaxDefinitionPart>) {
-        let syntax_str = format!("syntax foo <- 10 = {}", source.into());
-        info!("testing: `{syntax_str}`");
-        let mut parser = Parser {
-            reader: lex(SourceFile {
-                contents: syntax_str,
-                filename: "<stdin>".into(),
-            })
-            .unwrap(),
-        };
-        let syntax = read_syntax_def(&mut parser.reader).unwrap();
-        let ParsedSyntax::Definition(syntax_def) = syntax.0 else {
-            panic!();
-        };
-        let parts = syntax_def.parts;
-        assert_eq!(
-            &Group {
-                name: None,
-                quantifier: One,
-                sub_parts: &parts,
-            },
-            &Group {
-                name: None,
-                quantifier: One,
-                sub_parts: expected_parts,
-            }
-        )
-    }
-
-    #[test]
-    fn group_named() {
-        test(
-            r#"fields [ key ":" value ]?"#,
-            &vec![group_ptr(Group {
-                name: Some("fields".into()),
-                quantifier: ZeroOrOne,
-                sub_parts: vec![
-                    NamedBinding("key".into()),
-                    Keyword(":".into()),
-                    NamedBinding("value".into()),
-                ],
-            })],
-        );
-    }
-
-    #[test]
-    fn group_unnamed() {
-        test(
-            r#"( keys ":" values )?"#,
-            &vec![group_ptr(Group {
-                name: None,
-                quantifier: ZeroOrOne,
-                sub_parts: vec![
-                    NamedBinding("keys".into()),
-                    Keyword(":".into()),
-                    NamedBinding("values".into()),
-                ],
-            })],
-        );
-    }
-
-    #[test]
-    fn group_named_nested() {
-        test(
-            r#"hashTableFields[ bucket "=>" values[ value "," ]* ]?"#,
-            &vec![group_ptr(Group {
-                name: Some("hashTableFields".into()),
-                quantifier: ZeroOrOne,
-                sub_parts: vec![
-                    NamedBinding("bucket".into()),
-                    Keyword("=>".into()),
-                    group_ptr(Group {
-                        name: Some("values".into()),
-                        quantifier: ZeroOrMore,
-                        sub_parts: vec![NamedBinding("value".into()), Keyword(",".into())],
-                    }),
-                ],
-            })],
-        );
-    }
-
-    #[test]
-    fn group_unnamed_nested() {
-        test(
-            r#"( buckets "=>" ( values "," )* )?"#,
-            &vec![group_ptr(Group {
-                name: None,
-                quantifier: ZeroOrOne,
-                sub_parts: vec![
-                    NamedBinding("buckets".into()),
-                    Keyword("=>".into()),
-                    group_ptr(Group {
-                        name: None,
-                        quantifier: ZeroOrMore,
-                        sub_parts: vec![NamedBinding("values".into()), Keyword(",".into())],
-                    }),
-                ],
-            })],
-        );
-    }
-}
-
 pub struct GroupLocation {
     // Group not used directly here because we can have either &Group or MutexGuard<Group>
     // NOTE: this is a Parc<Mutex<>>
@@ -788,5 +669,124 @@ impl<'a> GroupTupleCreator<'a> {
             RevLinkedList::First { item } => Ok(item.t_fields),
             RevLinkedList::Nth { .. } => error!("not enough progress was made"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        group::{Group, Quantifier},
+        lex, read_syntax_def, ParsedSyntax, Parser, SyntaxDefinitionPart,
+    };
+    use kast_util::{Parc, SourceFile};
+    use std::sync::Mutex;
+    use tracing::info;
+
+    use Quantifier::*;
+    use SyntaxDefinitionPart::*;
+
+    fn group_ptr(group: super::Group) -> SyntaxDefinitionPart {
+        GroupBinding(Parc::new(Mutex::new(group)))
+    }
+
+    fn test<'a>(source: impl Into<String>, expected_parts: &Vec<SyntaxDefinitionPart>) {
+        let syntax_str = format!("syntax foo <- 10 = {}", source.into());
+        info!("testing: `{syntax_str}`");
+        let mut parser = Parser {
+            reader: lex(SourceFile {
+                contents: syntax_str,
+                filename: "<stdin>".into(),
+            })
+            .unwrap(),
+        };
+        let syntax = read_syntax_def(&mut parser.reader).unwrap();
+        let ParsedSyntax::Definition(syntax_def) = syntax.0 else {
+            panic!();
+        };
+        let parts = syntax_def.parts;
+        assert_eq!(
+            &Group {
+                name: None,
+                quantifier: One,
+                sub_parts: &parts,
+            },
+            &Group {
+                name: None,
+                quantifier: One,
+                sub_parts: expected_parts,
+            }
+        )
+    }
+
+    #[test]
+    fn group_named() {
+        test(
+            r#"fields [ key ":" value ]?"#,
+            &vec![group_ptr(Group {
+                name: Some("fields".into()),
+                quantifier: ZeroOrOne,
+                sub_parts: vec![
+                    NamedBinding("key".into()),
+                    Keyword(":".into()),
+                    NamedBinding("value".into()),
+                ],
+            })],
+        );
+    }
+
+    #[test]
+    fn group_unnamed() {
+        test(
+            r#"( keys ":" values )?"#,
+            &vec![group_ptr(Group {
+                name: None,
+                quantifier: ZeroOrOne,
+                sub_parts: vec![
+                    NamedBinding("keys".into()),
+                    Keyword(":".into()),
+                    NamedBinding("values".into()),
+                ],
+            })],
+        );
+    }
+
+    #[test]
+    fn group_named_nested() {
+        test(
+            r#"hashTableFields[ bucket "=>" values[ value "," ]* ]?"#,
+            &vec![group_ptr(Group {
+                name: Some("hashTableFields".into()),
+                quantifier: ZeroOrOne,
+                sub_parts: vec![
+                    NamedBinding("bucket".into()),
+                    Keyword("=>".into()),
+                    group_ptr(Group {
+                        name: Some("values".into()),
+                        quantifier: ZeroOrMore,
+                        sub_parts: vec![NamedBinding("value".into()), Keyword(",".into())],
+                    }),
+                ],
+            })],
+        );
+    }
+
+    #[test]
+    fn group_unnamed_nested() {
+        test(
+            r#"( buckets "=>" ( values "," )* )?"#,
+            &vec![group_ptr(Group {
+                name: None,
+                quantifier: ZeroOrOne,
+                sub_parts: vec![
+                    NamedBinding("buckets".into()),
+                    Keyword("=>".into()),
+                    group_ptr(Group {
+                        name: None,
+                        quantifier: ZeroOrMore,
+                        sub_parts: vec![NamedBinding("values".into()), Keyword(",".into())],
+                    }),
+                ],
+            })],
+        );
     }
 }
