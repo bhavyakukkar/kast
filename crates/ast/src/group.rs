@@ -128,6 +128,7 @@ where
     }
 }
 
+#[derive(Debug)]
 /// Reverse linked-list data-structure so that syntax-definitions may contain nested [`Groups`](Group)
 ///
 /// NOTE: This linked-list cannot represent a list of length 0, only 1 or more
@@ -390,6 +391,7 @@ impl<'a> PartsAccumulatorInserter<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct GroupLocation {
     // Group not used directly here because we can have either &Group or MutexGuard<Group>
     // NOTE: this is a Parc<Mutex<>>
@@ -668,6 +670,71 @@ impl<'a> GroupTupleCreator<'a> {
         match self.shape {
             RevLinkedList::First { item } => Ok(item.t_fields),
             RevLinkedList::Nth { .. } => error!("not enough progress was made"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GroupLocation2 {
+    group: Parc<Mutex<Group>>,
+    part_index: usize,
+    quantified: usize,
+}
+
+#[derive(Debug)]
+pub struct SimplePartsIter {
+    shape: RevLinkedList<GroupLocation2>,
+}
+
+#[derive(Debug)]
+pub enum SimplePart {
+    Keyword(String),
+    UnnamedBinding,
+    NamedBinding(String),
+}
+
+impl Iterator for SimplePartsIter {
+    type Item = SimplePart;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let GroupLocation2 {
+            group,
+            part_index,
+            quantified,
+        } = match &mut self.shape {
+            RevLinkedList::First { item: group } => group,
+            RevLinkedList::Nth { item: group, .. } => group,
+        };
+        let group = group.clone();
+        let group = &*group.lock().unwrap();
+        match group.sub_parts.get(*part_index) {
+            // Increase group nesting
+            Some(SyntaxDefinitionPart::GroupBinding(new_group)) => {
+                self.shape.step_in(GroupLocation2 {
+                    group: new_group.clone(),
+                    part_index: 0,
+                    quantified: 0,
+                });
+                Self::next(self)
+            }
+            // Decrease group nesting
+            None => {
+                _ = self.shape.step_out().ok()?;
+                Self::next(self)
+            }
+            // Simple Part
+            Some(SyntaxDefinitionPart::Keyword(k)) => {
+                *part_index += 1;
+                Some(SimplePart::Keyword(k.clone()))
+            }
+            Some(SyntaxDefinitionPart::UnnamedBinding) => {
+                *part_index += 1;
+                Some(SimplePart::UnnamedBinding)
+            }
+            Some(SyntaxDefinitionPart::NamedBinding(n)) => {
+                *part_index += 1;
+                Some(SimplePart::NamedBinding(n.clone()))
+            }
         }
     }
 }
