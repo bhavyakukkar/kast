@@ -3,7 +3,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{lexer::Result, Ast, ProgressPart, SyntaxDefinition, SyntaxDefinitionPart};
+use crate::{Ast, ProgressPart, SyntaxDefinition, SyntaxDefinitionPart, lexer::Result};
 use kast_util::*;
 use replace_with::{replace_with_or_abort, replace_with_or_abort_and_return};
 use tracing::trace;
@@ -550,7 +550,7 @@ impl<'a> GroupTupleCreator<'a> {
         let GroupLocation {
             part_index,
             quantified,
-            ref mut t_fields,
+            t_fields,
             t_groups,
             ..
         } = self.shape.current_mut();
@@ -602,8 +602,7 @@ impl<'a> GroupTupleCreator<'a> {
                 ProgressPart::Keyword(keyword, _) if keyword.as_str() == expected => {
                     trace!(
                         "parsed part keyword `{keyword}` for syntax-def: {:#?} and span: {}",
-                        self.syntax_def,
-                        self.span
+                        self.syntax_def, self.span
                     );
                     *part_index += 1;
                     Ok(())
@@ -742,8 +741,9 @@ impl Iterator for SimplePartsIter {
 #[cfg(test)]
 mod tests {
     use crate::{
+        ParsedSyntax, Parser, SyntaxDefinitionPart,
         group::{Group, Quantifier},
-        lex, read_syntax_def, ParsedSyntax, Parser, SyntaxDefinitionPart,
+        lex, read_syntax_def,
     };
     use kast_util::{Parc, SourceFile};
     use std::sync::Mutex;
