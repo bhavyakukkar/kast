@@ -77,5 +77,31 @@ let init () =
         let value = value.place |> claim ~span in
         Dynarray.add_last list.elements (Place.init ~mut:Inherit value);
         V_Unit |> Value.inferred ~span))
+  ; native_fn "List.pop_back" (fun _ty ~caller ~state:_ args : value ->
+      let args = args |> Value.expect_tuple |> Option.get in
+      let list = args.tuple |> Tuple.unwrap_single_unnamed in
+      with_return (fun { return } ->
+        let error msg () =
+          Error.error caller "List.pop_back: %s" msg;
+          return (V_Error |> Value.inferred ~span)
+        in
+        let list =
+          list.place
+          |> read_place ~span
+          |> Value.expect_ref
+          |> Option.unwrap_or_else (error "expected ref as arg")
+        in
+        let list =
+          read_place ~span list.place
+          |> Value.expect_list
+          |> Option.unwrap_or_else (error "expected ref to a list ")
+        in
+        let place = Dynarray.pop_last list.elements in
+        let value =
+          match place.state with
+          | Occupied value -> value
+          | _ -> error "expected popped place to be occupied" ()
+        in
+        value))
   ]
 ;;

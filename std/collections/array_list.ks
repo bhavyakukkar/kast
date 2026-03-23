@@ -9,6 +9,11 @@ const push_back = [T] (a :: &mut ArrayList.t[T], value :: T) => @cfg (
     | target.name == "interpreter" => (@native "List.push_back")(a, value)
     | target.name == "javascript" => @native "\(a^).push(\(value))"
 );
+# panics if `a` is empty
+const pop_back = [T] (a :: &mut ArrayList.t[T]) -> T => @cfg (
+    | target.name == "interpreter" => (@native "List.pop_back")(a)
+    | target.name == "javascript" => @native "\(a^).pop()"
+);
 const iter = [T] (a :: &ArrayList.t[T]) -> std.iter.Iterable[type (&T)] => {
     .iter = consumer => (
         for i in 0..length(a) do (
@@ -23,10 +28,12 @@ const iter_mut = [T] (a :: &mut ArrayList.t[T]) -> std.iter.Iterable[type (&mut 
         );
     ),
 };
+# panics if `idx` is out of bounds
 const at = [T] (a :: &ArrayList.t[T], idx :: Int32) -> &T => @cfg (
     | target.name == "interpreter" => (@native "List.at")(a, idx)
     | target.name == "javascript" => @native "{get:()=>\(a^)[\(idx)]}"
 );
+# panics if `idx` is out of bounds
 const at_mut = [T] (a :: &mut ArrayList.t[T], idx :: Int32) -> &mut T => @cfg (
     | target.name == "interpreter" => (@native "List.at")(a, idx)
     | target.name == "javascript" => @native "{get:()=>\(a^)[\(idx)],set:x=>{\(a^)[\(idx)]=x}}"
