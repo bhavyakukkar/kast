@@ -19,18 +19,17 @@
                 rlwrap ${kast}/bin/kast "$@"
             '')
             (pkgs.writeShellScriptBin "self-kast" ''
-              systemd-run --quiet --user --scope -p MemoryMax=5G \
-                rlwrap kast $SELF_KAST_ARGS src/main.ks "$@"
+              flock --shared target node target/main.mjs "$@"
             '')
             rlwrap
             nixfmt-classic
             nodejs
             just
             fd
+            inotify-tools
           ];
           shellHook = ''
             echo Hello from Kast dev shell
-            export SELF_KAST_ARGS="--js-ref-vars false --async always --use-numbers-instead-of-symbols false --quiet --target js"
           '';
         };
       });
