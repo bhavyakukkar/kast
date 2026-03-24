@@ -15,9 +15,9 @@ type async_mode =
   | Always
   | BasedOnInference
 
-let async_fns = ref BasedOnInference
+let async_fns = ref Always
 let use_numbers_instead_of_symbols = ref true
-let ref_vars_enabled = ref true
+let ref_vars_enabled = ref false
 
 let gen_symbol name =
   if !use_numbers_instead_of_symbols
@@ -1394,15 +1394,16 @@ module Impl = struct
         execute
           { shape =
               Assign
-                { assignee =
+                { assignee = { shape = Var ctx_var; span = None }
+                ; value =
                     { shape =
-                        Field
-                          { obj = { shape = Var ctx_var; span = None }
-                          ; field = context_ty_field context_ty
-                          }
+                        Obj
+                          [ Unpack { shape = Var ctx_var; span = None }
+                          ; Field
+                              { name = context_ty_field context_ty; value = pure value }
+                          ]
                     ; span = None
                     }
-                ; value = pure value
                 }
           ; span
           };

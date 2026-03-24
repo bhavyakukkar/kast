@@ -20,8 +20,8 @@ profile *args:
 lsp-stress-test:
     python lsp-stress-test/main.py 2>/dev/null | kast lsp >/dev/null
 
-test-aoc:
-    KAST_STD=$(pwd)/std kast ${AOC:-~/projects/aoc2025/test.ks}
+test-aoc *args:
+    KAST_STD=$(pwd)/std kast ${AOC:-~/projects/aoc2025/test.ks} {{args}}
 
 run-js path *args:
     kast run --format prettier --target javascript {{path}} {{args}}
