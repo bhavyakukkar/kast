@@ -173,44 +173,43 @@ module DefaultRules = struct
       if c = delimeter
       then ()
       else (
-        Reader.advance lexer.reader;
         with_return (fun { return } ->
           let c =
             if c = '\\'
             then (
               let c =
-                match Reader.peek lexer.reader with
+                match Reader.peek2 lexer.reader with
                 | Some c -> c
                 | None ->
                   error
                     "Expected escaped char, got @{<italic><eof>@} @{<dim>at %a@}"
                     Position.print
-                    lexer.reader.position
+                    (Position.advance c lexer.reader.position)
               in
+              if c = '('
+              then (
+                finish_contents_part ();
+                Reader.advance lexer.reader;
+                Reader.advance lexer.reader;
+                let tokens = ref [] in
+                while true do
+                  ignore (read_whitespace lexer);
+                  if Reader.peek lexer.reader = Some ')'
+                  then (
+                    Reader.advance lexer.reader;
+                    parts := !parts @ [ Token.Types.Interpolate !tokens ];
+                    contents_raw := Reader.start_rec lexer.reader;
+                    return ())
+                  else (
+                    let next_token = next lexer in
+                    if next_token.shape |> Token.Shape.is_eof
+                    then
+                      error "Unclosed string interpolation, got %a" Token.print next_token;
+                    tokens := !tokens @ [ next_token ])
+                done);
+              Reader.advance lexer.reader;
               let result =
                 match c with
-                | '(' ->
-                  finish_contents_part ();
-                  Reader.advance lexer.reader;
-                  let tokens = ref [] in
-                  while true do
-                    ignore (read_whitespace lexer);
-                    if Reader.peek lexer.reader = Some ')'
-                    then (
-                      Reader.advance lexer.reader;
-                      parts := !parts @ [ Token.Types.Interpolate !tokens ];
-                      contents_raw := Reader.start_rec lexer.reader;
-                      return ())
-                    else (
-                      let next_token = next lexer in
-                      if next_token.shape |> Token.Shape.is_eof
-                      then
-                        error
-                          "Unclosed string interpolation, got %a"
-                          Token.print
-                          next_token;
-                      tokens := !tokens @ [ next_token ])
-                  done
                 | '\\' -> '\\'
                 | 'n' -> '\n'
                 | 'r' -> '\r'
@@ -260,10 +259,10 @@ module DefaultRules = struct
                     Position.print
                     lexer.reader.position
               in
-              Reader.advance lexer.reader;
               result)
             else c
           in
+          Reader.advance lexer.reader;
           Buffer.add_char contents c);
         loop ())
     in
