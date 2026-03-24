@@ -8,6 +8,7 @@ use (import "./syntax_parser.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./syntax_ruleset.ks").*;
 use (import "./ast.ks").*;
+use (import "./position.ks").*;
 use (import "./span.ks").*;
 use (import "./token.ks").*;
 use (import "../deps/uri/src/lib.ks").*;
@@ -546,9 +547,41 @@ const Parser = (
                 )
             );
         );
-        skip_rule_whitespace();
-        if rule_part_idx != rule_group_parts |> ArrayList.length then (
-            panic("rule parts were not fully matched");
+        while rule_part_idx < rule_group_parts |> ArrayList.length do (
+            let rule_part = rule_group_parts^.[rule_part_idx];
+            let fail = (type_name, name, span) => Error.report_and_unwind(
+                #TODO span of report should be different
+                span,
+                () => (
+                    let output = @current Output;
+                    output.write("Rule parts were not fully matched - didn't match ");
+                    output.write(type_name);
+                    if name is :Some name then (
+                        output.write(" ");
+                        output.write(name);
+                    );
+                    output.write(" at ");
+                    Span.print(span);
+                ),
+            );
+            # TODO rule_part.span
+            let fail_span = {
+                .start = Position.beginning(),
+                .end = Position.beginning(),
+                .uri = Uri.new_path("TODO"),
+            };
+            match rule_part^ with (
+                | :Whitespace _ => ()
+                | :Group group => (
+                    match group.quantifier with (
+                        | :None => fail("group", group.name, fail_span)
+                        | :Optional => ()
+                    );
+                )
+                | :Value value => fail("value", value.name, fail_span)
+                | :Keyword keyword => fail("keyword", :Some keyword, fail_span)
+            );
+            rule_part_idx += 1;
         );
         { .children }
     );
