@@ -24,23 +24,23 @@ const Token = (
         );
     );
     
-    const StringContentPart = newtype {
+    const StringContent = newtype {
         .raw :: String,
         .contents :: String,
     };
     
-    const StringPart = newtype (
-        | :Content StringContentPart
+    const InterpolatedStringPart = newtype (
+        | :Content StringContent
         | :Interpolated {
             .tokens :: ArrayList.t[Token.t],
             .span :: Span,
         }
     );
     
-    const StringShape = newtype {
+    const InterpolatedStringShape = newtype {
         .delimiter :: String,
         .raw :: String,
-        .parts :: ArrayList.t[StringPart],
+        .parts :: ArrayList.t[InterpolatedStringPart],
     };
     
     const Shape = (
@@ -58,7 +58,11 @@ const Token = (
                 .raw :: String,
                 .name :: String,
             }
-            | :String StringShape
+            | :String {
+                .raw :: String,
+                .contents :: String,
+            }
+            | :InterpolatedString InterpolatedStringShape
             | :Number {
                 .raw :: String,
             }
@@ -73,6 +77,7 @@ const Token = (
             | :Comment { .raw, ... } => raw
             | :Ident { .raw, ... } => raw
             | :String { .raw, ... } => raw
+            | :InterpolatedString { .raw, ... } => raw
             | :Number { .raw, ... } => raw
             | :Error { .raw, ... } => raw
             | :Eof => ""
@@ -114,7 +119,13 @@ const Token = (
                         () => output.write(raw),
                     );
                 )
-                | :String { .delimiter, .parts = ref parts, ... } => (
+                | :String { .raw, ... } => (
+                    ansi.with_mode(
+                        :Green,
+                        () => output.write(raw),
+                    );
+                )
+                | :InterpolatedString { .delimiter, .parts = ref parts, ... } => (
                     ansi.with_mode(
                         :Green,
                         () => output.write(delimiter),
@@ -167,16 +178,5 @@ const Token = (
                 )
             );
         );
-    );
-    
-    ## get non-interpolated string contents
-    const get_string_contents = ({ .parts, ... } :: StringShape) -> Option.t[String] => with_return (
-        if &parts |> ArrayList.length == 1 then (
-            let part = &parts |> ArrayList.at(0);
-            if part^ is :Content { .contents, ... } then (
-                return :Some contents;
-            );
-        );
-        :None
     );
 );

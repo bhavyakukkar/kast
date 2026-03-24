@@ -301,9 +301,18 @@ impl Lexer as module = (
             if c != delim then error("Unfinished string");
             Reader.advance(reader);
             let end = reader^.position.index;
-            :Some :String {
+            let raw = String.substring(reader^.contents, start, end - start);
+            if &parts |> ArrayList.length == 1 then (
+                if (&parts |> ArrayList.at(0))^ is :Content { .contents, ... } then (
+                    return :Some :String {
+                        .raw,
+                        .contents
+                    };
+                );
+            );
+            :Some :InterpolatedString {
                 .delimiter = to_string(delim),
-                .raw = String.substring(reader^.contents, start, end - start),
+                .raw,
                 .parts,
             }
         );

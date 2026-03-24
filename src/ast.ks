@@ -15,8 +15,8 @@ const Ast = (
         .span :: Span,
     };
     
-    const StringPart = newtype (
-        | :Content Token.StringContentPart
+    const InterpolatedStringPart = newtype (
+        | :Content Token.StringContent
         | :Interpolated Ast.t
     );
     
@@ -26,9 +26,9 @@ const Ast = (
         const t = newtype (
             | :Empty
             | :Token Token.t
-            | :String {
+            | :InterpolatedString {
                 .delimiter :: String,
-                .parts :: ArrayList.t[StringPart],
+                .parts :: ArrayList.t[InterpolatedStringPart],
             }
             | :Rule {
                 .rule :: SyntaxRule.t,
@@ -91,12 +91,12 @@ const Ast = (
                 () => output.write("<empty>"),
             )
             | :Token token => Token.Shape.print(token.shape)
-            | :String { .delimiter, .parts = ref parts } => (
+            | :InterpolatedString { .delimiter, .parts = ref parts } => (
                 ansi.with_mode(
                     :Green,
                     () => (
                         output.write(delimiter);
-                        output.write("string");
+                        output.write("interpolated string");
                         output.write(delimiter);
                     ),
                 );
@@ -113,12 +113,12 @@ const Ast = (
                         | :Interpolated ref ast => (
                             ansi.with_mode(
                                 :Magenta,
-                                () => output.write("interpolate "),
+                                () => output.write("\\ "),
                             );
                             print(ast);
                         )
                     );
-                    output.write("\n");
+                    output.write(",\n");
                 );
                 output.dec_indentation();
                 output.write("}");
@@ -171,7 +171,8 @@ const Ast = (
             );
             match ast.shape with (
                 | :Empty => consumer(ast)
-                | :Token token => consumer(ast)
+                | :Token _ => consumer(ast)
+                | :InterpolatedString _ => consumer(ast)
                 | :Rule { .rule, .root = { .children, ... } } => with_return (
                     if rule.name == binary_rule_name then (
                         let { lhs, rhs } = Tuple.unwrap_unnamed_2(children);

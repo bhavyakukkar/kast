@@ -49,7 +49,7 @@ const Parser = (
         .uri :: Uri,
     };
     const Context = @context ContextT;
-
+    
     const ParsingRuleCtx = @context type {
         .print :: () -> (),
     };
@@ -132,6 +132,7 @@ const Parser = (
             | :Punct _ => false
             | :Ident { .raw, ... } => not (&ctx.ruleset.keywords |> OrdSet.contains(raw))
             | :String _ => true
+            | :InterpolatedString _ => true
             | :Number _ => true
             | :Eof => false
             | :Error _ => panic("unreachable")
@@ -140,30 +141,32 @@ const Parser = (
             Log.debug_msg("Parsed single token " + escape_string(peek_raw));
             ctx.token_stream |> TokenStream.advance;
             let parsed = match peek.shape with (
-                | :String { .delimiter, .parts = ref token_parts, .raw = _ } => (
+                | :InterpolatedString { .delimiter, .parts = ref token_parts, .raw = _ } => (
                     let mut ast_parts = ArrayList.new();
                     for token_part in token_parts |> ArrayList.iter do (
-                        let ast_part :: Ast.StringPart = match token_part^ with (
+                        let ast_part :: Ast.InterpolatedStringPart = match token_part^ with (
                             | :Content part => :Content part
                             | :Interpolated { .tokens = ref tokens, .span } => :Interpolated (
                                 let mut token_stream = (
                                     let mut i = 0;
-                                    TokenStream.from_fn(() => (
-                                        if i < tokens |> ArrayList.length then (
-                                            let token = (tokens |> ArrayList.at(i))^;
-                                            i += 1;
-                                            token
-                                        ) else (
-                                            {
-                                                .shape = :Eof,
-                                                .span = {
-                                                    .start = span.end,
-                                                    .end = span.end,
-                                                    .uri = span.uri,
-                                                },
-                                            }
+                                    TokenStream.from_fn(
+                                        () => (
+                                            if i < tokens |> ArrayList.length then (
+                                                let token = (tokens |> ArrayList.at(i))^;
+                                                i += 1;
+                                                token
+                                            ) else (
+                                                {
+                                                    .shape = :Eof,
+                                                    .span = {
+                                                        .start = span.end,
+                                                        .end = span.end,
+                                                        .uri = span.uri,
+                                                    },
+                                                }
+                                            )
                                         )
-                                    ))
+                                    )
                                 );
                                 parse(
                                     .ruleset = ctx.ruleset,
@@ -175,7 +178,7 @@ const Parser = (
                         );
                         &mut ast_parts |> ArrayList.push_back(ast_part);
                     );
-                    :String { .delimiter, .parts = ast_parts }
+                    :InterpolatedString { .delimiter, .parts = ast_parts }
                 )
                 | _ => :Token peek
             );
@@ -222,7 +225,7 @@ const Parser = (
         if starting_value is :Some value then (
             &mut parts |> ArrayList.push_back(:Value value);
         );
-
+        
         let parent_parsing_rule_context = @current ParsingRuleCtx;
         with ParsingRuleCtx = {
             .print = () => (
@@ -242,7 +245,7 @@ const Parser = (
                 parent_parsing_rule_context.print();
             ),
         };
-
+        
         loop (
             skip_comments_and_errors();
             

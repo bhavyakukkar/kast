@@ -1,3 +1,5 @@
-print("Hello, \(user.name)!");
+let user = {
+    .name = "kuviman",
+};
 
-"2 = 2 = \("2 + 2")";
+print("Hello, \(user.name)!");

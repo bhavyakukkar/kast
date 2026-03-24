@@ -57,21 +57,7 @@ const Json = (
     const ast_to_name = (ast :: Ast.t) -> String => with_return (
         if ast.shape is :Token token then (
             match token.shape with (
-                | :String { .parts, ... } => (
-                    if &parts |> ArrayList.length == 1 then (
-                        let part = &parts |> ArrayList.at(0);
-                        if part^ is :Content { .contents, ... } then (
-                            return contents;
-                        );
-                    );
-                    Error.report_and_unwind(
-                        token.span,
-                        () => (
-                            let output = @current Output;
-                            output.write("Interpolated string wasn't expected");
-                        ),
-                    )
-                )
+                | :String { .contents, ... } => return contents
                 | :Ident { .name, ... } => return name
                 | _ => ()
             );
@@ -125,18 +111,7 @@ const Json = (
             )
             | :Token token => (
                 match token.shape with (
-                    | :String s => (
-                        let contents = Token.get_string_contents(s)
-                            |> Option.unwrap_or_else(
-                                () => (
-                                    Error.report_and_unwind(
-                                        token.span,
-                                        () => (@current Output).write("no support interpolated strings here")
-                                    )
-                                )
-                            );
-                        :String contents
-                    )
+                    | :String { .contents, ... } => :String contents
                     | :Number { .raw, ... } => :Number std.String.parse[Float64](raw)
                     | _ => Error.report_and_unwind(
                         token.span,
@@ -145,6 +120,12 @@ const Json = (
                             Token.Shape.print(token.shape);
                         )
                     )
+                )
+            )
+            | :InterpolatedString _ => (
+                Error.report_and_unwind(
+                    ast.span,
+                    () => (@current Output).write("Interpolated strings aren't supported")
                 )
             )
             | :Rule { .rule, .root = { .children, ... } } => (

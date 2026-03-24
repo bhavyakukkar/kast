@@ -23,6 +23,7 @@ watch:
     wait
 
 test:
+    just build
     fd --type file --extension ks --exec-batch self-kast tokenize
     self-kast parse_syntax_rules tests/syntax/*.ks
     self-kast parse-json tests/test.json
