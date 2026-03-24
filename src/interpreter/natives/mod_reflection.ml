@@ -127,7 +127,67 @@ let init () =
                              |> Value.inferred ~span )
                        ; ("referenced", fun _ -> V_Ty referenced |> Value.inferred ~span)
                        ]))
-         | T_Variant _ -> failwith __LOC__
+         | T_Variant ty_variant ->
+           construct_variant
+             ~span
+             type_info_ty
+             "Variant"
+             (Some
+                (fun data_ty ->
+                  let data_ty =
+                    data_ty |> Ty.await_inferred |> Ty.Shape.expect_tuple |> Option.unwrap
+                  in
+                  construct_tuple ~span data_ty
+                  <| Tuple.make
+                       []
+                       [ ( "variants"
+                         , fun list_ty ->
+                             construct_list ~span list_ty (fun elem_ty ->
+                               ty_variant.variants
+                               |> Row.await_inferred_to_list
+                               |> List.map
+                                    (fun
+                                        ((variant_label, variant_data) :
+                                          Label.t * Types.ty_variant_data)
+                                       ->
+                                       let name = Label.get_name variant_label in
+                                       construct_tuple
+                                         ~span
+                                         (elem_ty
+                                          |> Ty.await_inferred
+                                          |> Ty.Shape.expect_tuple
+                                          |> Option.unwrap)
+                                       <| Tuple.make
+                                            []
+                                            [ ( "name"
+                                              , fun _ ->
+                                                  V_String name |> Value.inferred ~span )
+                                            ; ( "data"
+                                              , fun variant_data_ty ->
+                                                  let variant_data_ty =
+                                                    variant_data_ty
+                                                    |> Ty.await_inferred
+                                                    |> Ty.Shape.expect_variant
+                                                    |> Option.unwrap
+                                                  in
+                                                  match variant_data.data with
+                                                  | Some data_ty ->
+                                                    construct_variant
+                                                      ~span
+                                                      variant_data_ty
+                                                      "Some"
+                                                      (Some
+                                                         (fun _ ->
+                                                           V_Ty data_ty
+                                                           |> Value.inferred ~span))
+                                                  | None ->
+                                                    construct_variant
+                                                      ~span
+                                                      variant_data_ty
+                                                      "None"
+                                                      None )
+                                            ])) )
+                       ]))
          | T_Tuple ty_tuple ->
            construct_variant
              ~span

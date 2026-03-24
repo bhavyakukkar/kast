@@ -15,6 +15,15 @@ const TypeInfo_Tuple = newtype {
     .named :: std.collections.SList.t[type { String, Type }],
 };
 
+const TypeInfo_Variant_Variant = newtype {
+    .name :: String,
+    .data :: Option.t[Type],
+};
+
+const TypeInfo_Variant = newtype {
+    .variants :: std.collections.SList.t[TypeInfo_Variant_Variant],
+};
+
 const TypeInfo = newtype (
     | :Unit
     | :Bool
@@ -24,7 +33,7 @@ const TypeInfo = newtype (
     | :String
     | :Char
     | :Ref TypeInfo_Ref
-    | :Variant
+    | :Variant TypeInfo_Variant
     | :Tuple TypeInfo_Tuple
     | :Ty
     | :Fn
