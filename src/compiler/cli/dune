@@ -6,4 +6,8 @@
   kast_compiler
   kast_default_syntax
   kast_transpiler_javascript
-  kast_compiler_targets))
+  kast_compiler_targets)
+ (preprocessor_deps
+  (file dep_graph_styling.dot))
+ (preprocess
+  (pps ppx_include_dir)))

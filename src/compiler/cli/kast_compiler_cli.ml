@@ -13,6 +13,7 @@ module Args = struct
     ; output : string option
     ; formatter : string option
     ; no_std : bool
+    ; save_dependency_graph : string option
     }
 
   type t = args
@@ -20,7 +21,13 @@ module Args = struct
   let default_target = Target.Ir
 
   let default path =
-    { path; target = default_target; no_std = false; output = None; formatter = None }
+    { path
+    ; target = default_target
+    ; no_std = false
+    ; output = None
+    ; formatter = None
+    ; save_dependency_graph = None
+    }
   ;;
 
   let rec parse : string list -> args * rest:string list = function
@@ -30,6 +37,9 @@ module Args = struct
     | "--output" :: path :: rest ->
       let parsed, ~rest = parse rest in
       { parsed with output = Some path }, ~rest
+    | "--save-dependency-graph" :: path :: rest ->
+      let parsed, ~rest = parse rest in
+      { parsed with save_dependency_graph = Some path }, ~rest
     | "--format" :: formatter :: rest ->
       let parsed, ~rest = parse rest in
       { parsed with formatter = Some formatter }, ~rest
@@ -76,7 +86,7 @@ let run_formatter_if_needed : Args.t -> unit =
 ;;
 
 let run : Args.t -> unit =
-  fun ({ path; target; no_std; output; formatter = _ } as args) ->
+  fun ({ path; target; no_std; output; save_dependency_graph; formatter = _ } as args) ->
   let source = Source.read path in
   let compiler =
     if no_std
@@ -119,5 +129,19 @@ let run : Args.t -> unit =
      transpiled.print writer;
      writer |> Kast_transpiler_javascript.Writer.finish);
   close_out out;
-  run_formatter_if_needed args
+  run_formatter_if_needed args;
+  match save_dependency_graph with
+  | None -> ()
+  | Some path ->
+    let out = open_out path in
+    let fmt = Format.formatter_of_out_channel out in
+    fprintf fmt "digraph {\n";
+    fprintf fmt [%include_file "dep_graph_styling.dot"];
+    compiler.cache.dependents
+    |> UriMap.iter (fun dependency dependents ->
+      dependents
+      |> List.iter (fun dependent ->
+        fprintf fmt "  %S -> %S;\n" (Uri.to_string dependent) (Uri.to_string dependency)));
+    fprintf fmt "}\n";
+    close_out out
 ;;

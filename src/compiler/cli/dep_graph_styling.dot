@@ -1,0 +1,16 @@
+rankdir=LR;           // left-to-right instead of top-down
+nodesep=0.6;          // horizontal spacing
+ranksep=0.8;          // vertical spacing
+splines=true;         // curved edges
+rankdir="LR";
+node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#f8f9fa",
+    color="#adb5bd",
+    fontname="Helvetica"
+];
+edge [
+    color="#6c757d",
+    arrowsize=0.7
+];
