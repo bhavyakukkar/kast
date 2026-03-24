@@ -1,3 +1,5 @@
+use (import "./common.ks").*;
+use (import "./serialize.ks").*;
 use (import "./error.ks").*;
 use (import "./output.ks").*;
 use (import "./position.ks").*;
@@ -10,6 +12,8 @@ use (import "./syntax_ruleset.ks").*;
 use (import "./ast.ks").*;
 use (import "./parser.ks").*;
 use (import "./json.ks").*;
+
+# @eval Serialize.do_impl();
 
 with Output = stdout();
 
@@ -118,13 +122,19 @@ const Args = (
     
     const t = newtype {
         .subcommand :: Subcommand,
+        .output_mode :: (
+            | :Human
+            | :Json
+        ),
         .stop_on_error :: Bool,
     };
     
     const parse = () -> t => (
+        let mut output_mode = :Human;
         let mut stop_on_error = true;
         let subcommand = unwindable subcommand (
-            for i in 1..std.sys.argc() do (
+            let mut i = 1;
+            while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
                 if arg == "lex" or arg == "tokenize" then (
                     unwind subcommand (:Tokenize LexerArgs.parse(i + 1));
@@ -141,8 +151,22 @@ const Args = (
                 if arg == "parse-json" then (
                     unwind subcommand (:ParseJson ParseJsonArgs.parse(i + 1));
                 );
+                if arg == "--output-mode" then (
+                    let mode = std.sys.argv_at(i + 1);
+                    let mode = if mode == "human" then (
+                        :Human
+                    ) else if mode == "json" then (
+                        :Json
+                    ) else (
+                        panic("Unknown output mode " + escape_string(mode))
+                    );
+                    output_mode = mode;
+                    i += 2;
+                    continue;
+                );
                 if arg == "--continue-on-error" then (
                     stop_on_error = false;
+                    i += 1;
                     continue;
                 );
                 panic("Unexpected arg " + arg);
@@ -150,6 +174,7 @@ const Args = (
             panic("No default subcommand")
         );
         {
+            .output_mode,
             .stop_on_error,
             .subcommand,
         }
@@ -162,13 +187,29 @@ let output = @current Output;
 match args.subcommand with (
     | :Tokenize { .paths } => (
         for &path in ArrayList.iter(&paths) do (
-            ansi.with_mode(:Bold, () => output.write("Lexing " + path + "\n\n"));
-            let mut lexer = Lexer.new(Source.read_file(path));
-            loop (
-                let token = &mut lexer |> Lexer.next;
-                token |> Token.print;
-                output.write("\n");
-                if token.shape is :Eof then break;
+            match args.output_mode with (
+                | :Human => (
+                    ansi.with_mode(:Bold, () => output.write("Lexing " + path + "\n\n"));
+                    let mut lexer = Lexer.new(Source.read_file(path));
+                    loop (
+                        let token = &mut lexer |> Lexer.next;
+                        token |> Token.print;
+                        output.write("\n");
+                        if token.shape is :Eof then break;
+                    );
+                )
+                | :Json => (
+                    let mut lexer = Lexer.new(Source.read_file(path));
+                    let mut json_tokens = ArrayList.new();
+                    loop (
+                        let token = &mut lexer |> Lexer.next;
+                        &mut json_tokens |> ArrayList.push_back(Serialize.as_json(token));
+                        if token.shape is :Eof then break;
+                    );
+                    let json = :Array json_tokens;
+                    Json.print(&json);
+                    output.write("\n");
+                )
             );
         );
     )

@@ -2,8 +2,8 @@ default:
     echo Hello there!
     just --list
 
-build:
-    flock --exclusive target kast compile \
+build *args:
+    flock --exclusive target kast {{args}} compile \
         --js-ref-vars false \
         --async always \
         --use-numbers-instead-of-symbols false \

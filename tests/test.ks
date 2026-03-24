@@ -1,2 +1,1 @@
-output.write(a |> b);
-output.write(":");
+print("Hello, \(user.name)!");

@@ -29,8 +29,6 @@ const next_two_are = (reader :: &Reader, c1 :: Char, c2 :: Char) -> Bool => with
     true
 );
 
-const panic = "NO PANIC";
-
 module:
 
 const Lexer = newtype {
@@ -137,22 +135,63 @@ impl Lexer as module = (
                 error("Expected " + expected + ", got " + got)
             );
             Reader.advance(reader);
-            let mut contents = "";
+            let mut parts = ArrayList.new();
+            let reset_content_part = () => {
+                .start_index = reader^.position.index,
+                .contents = "",
+            };
+            let mut content_part = reset_content_part();
             let add_char = (c :: Char) => (
-                contents += to_string(c);
+                content_part.contents += to_string(c);
+            );
+            let finish_content_part = () => with_return (
+                if content_part.contents |> String.length == 0 then return;
+                &mut parts
+                    |> ArrayList.push_back(
+                        :Content {
+                            .raw = (
+                                let start = content_part.start_index;
+                                let end = reader^.position.index;
+                                String.substring(reader^.contents, start, end - start)
+                            ),
+                            .contents = content_part.contents,
+                        }
+                    );
+                content_part = reset_content_part();
             );
             while Reader.peek(&reader^) is :Some c do (
+                const outer_loop_body = @current std.LoopBody;
                 if c == delim then break;
                 if c == '\\' then (
-                    Reader.advance(reader);
-                    let c = match Reader.peek(&reader^) with (
+                    let c = match Reader.peek2(&reader^) with (
                         | :Some c => c
                         | :None => error("Expected escaped char")
                     );
-                    # TODO match instead
-                    let c = if c == '(' then (
-                        error("TODO interpolation")
-                    ) else if c == '\\' then (
+                    if c == '(' then (
+                        # "hello, \(user.name)"
+                        finish_content_part();
+                        Reader.advance(reader);
+                        Reader.advance(reader);
+                        let mut tokens = ArrayList.new();
+                        @loop (
+                            skip_whitespace(lexer);
+                            let c = match Reader.peek(&reader^) with (
+                                | :Some c => c
+                                | :None => error("Unfinished interpolation")
+                            );
+                            if c == ')' then (
+                                &mut parts |> ArrayList.push_back(:Interpolated {
+                                    .tokens,
+                                });
+                                Reader.advance(reader);
+                                content_part = reset_content_part();
+                                unwind (@binding outer_loop_body) ();
+                            );
+                            &mut tokens |> ArrayList.push_back(next(lexer));
+                        )
+                    );
+                    Reader.advance(reader);
+                    let c = if c == '\\' then (
                         '\\'
                     ) else if c == 'n' then (
                         '\n'
@@ -234,6 +273,16 @@ impl Lexer as module = (
                 add_char(c);
                 Reader.advance(reader);
             );
+            finish_content_part();
+            if &parts |> ArrayList.length == 0 then (
+                &mut parts
+                    |> ArrayList.push_back(
+                        :Content {
+                            .raw = "",
+                            .contents = "",
+                        }
+                    );
+            );
             let c = Reader.peek(&reader^)
                 |> Option.unwrap_or_else(
                     () => (
@@ -246,7 +295,7 @@ impl Lexer as module = (
             :Some :String {
                 .delimeter = to_string(delim),
                 .raw = String.substring(reader^.contents, start, end - start),
-                .contents,
+                .parts,
             }
         );
         
@@ -343,7 +392,7 @@ impl Lexer as module = (
                 .ty = :Line,
             }
         );
-
+        
         const read_raw_keyword :: ReadFn = lexer => with_return (
             let reader = &mut lexer^.reader;
             if not &reader^ |> next_is('@') then (
@@ -353,7 +402,7 @@ impl Lexer as module = (
             reader |> Reader.advance;
             let _ = read_ident(lexer);
             let end = reader^.position.index;
-            :Some :Punct { 
+            :Some :Punct {
                 .raw = String.substring(reader^.contents, start, end - start),
             }
         );

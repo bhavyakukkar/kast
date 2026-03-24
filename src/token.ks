@@ -23,6 +23,16 @@ const Token = (
             )
         );
     );
+
+    const StringPart = newtype (
+        | :Content {
+            .raw :: String,
+            .contents :: String,
+        }
+        | :Interpolated {
+            .tokens :: ArrayList.t[Token.t],
+        }
+    );
     
     const Shape = (
         module:
@@ -42,7 +52,7 @@ const Token = (
             | :String {
                 .delimeter :: String,
                 .raw :: String,
-                .contents :: String,
+                .parts :: ArrayList.t[StringPart],
             }
             | :Number {
                 .raw :: String,
@@ -99,19 +109,44 @@ const Token = (
                         () => output.write(raw),
                     );
                 )
-                | :String { .raw, .delimeter, .contents, ... } => (
+                | :String { .delimeter, .parts = ref parts, ... } => (
                     ansi.with_mode(
                         :Green,
-                        () => output.write(raw),
+                        () => output.write(delimeter),
                     );
-                    # ansi.with_mode(
-                    #     :Yellow,
-                    #     () => output.write(" contents="),
-                    # );
-                    # ansi.with_mode(
-                    #     :Green,
-                    #     () => output.write(escape_string_with(contents, .delimeter = "\"")),
-                    # );
+                    for part in parts |> ArrayList.iter do (
+                        match part^ with (
+                            | :Content { .raw, ... } => (
+                                ansi.with_mode(
+                                    :Green,
+                                    () => output.write(raw),
+                                );
+                            )
+                            | :Interpolated { .tokens = ref tokens, ... } => (
+                                ansi.with_mode(
+                                    :Yellow,
+                                    () => output.write("\\("),
+                                );
+                                let mut first = true;
+                                for token in tokens |> ArrayList.iter do (
+                                    if first then (
+                                        first = false;
+                                    ) else (
+                                        output.write(" ");
+                                    );
+                                    Token.Shape.print(token^.shape)
+                                );
+                                ansi.with_mode(
+                                    :Yellow,
+                                    () => output.write(")"),
+                                );
+                            )
+                        );
+                    );
+                    ansi.with_mode(
+                        :Green,
+                        () => output.write(delimeter),
+                    );
                 )
                 | :Error { .raw, ... } => (
                     ansi.with_mode(
