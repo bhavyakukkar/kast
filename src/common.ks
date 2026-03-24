@@ -2,9 +2,9 @@ module:
 
 const OrdSet = (
     use std.collections.OrdMap;
-
+    
     module:
-
+    
     const t = [T] newtype {
         .inner :: OrdMap.t[T, type ()],
     };
@@ -12,24 +12,24 @@ const OrdSet = (
     const new = [T] () -> OrdSet.t[T] => {
         .inner = OrdMap.new(),
     };
-
+    
     const clone = [T] (self :: &OrdSet.t[T]) -> OrdSet.t[T] => {
         .inner = {
             ...self^.inner
         },
     };
-
+    
     const contains = [T] (self :: &OrdSet.t[T], x :: T) -> Bool => (
         match &self^.inner |> OrdMap.get(x) with (
             | :Some _ => true
             | :None => false
         )
     );
-
+    
     const add = [T] (self :: &mut OrdSet.t[T], x :: T) => (
         &mut self^.inner |> OrdMap.add(x, ());
     );
-
+    
     const iter = [T] (self :: &OrdSet.t[T]) -> std.iter.Iterable[type (&T)] => (
         &self^.inner |> OrdMap.iter |> std.iter.map(&{ .key = ref value, .value = () } => value)
     );
@@ -40,7 +40,7 @@ const is_printable = (c :: Char) -> Bool => (
     0x20 <= code and code <= 0xffff
 );
 
-const escape_string_contents = (s :: String, .delimeter :: String) -> String => (
+const escape_string_contents = (s :: String, .delimiter :: String) -> String => (
     let mut result = "";
     for c in String.iter(s) do (
         if c == '\n' then (
@@ -85,7 +85,7 @@ const escape_string_contents = (s :: String, .delimeter :: String) -> String => 
             continue;
         );
         let cs = to_string(c);
-        if cs == delimeter then (
+        if cs == delimiter then (
             result += "\\";
         );
         result += cs;
@@ -93,8 +93,8 @@ const escape_string_contents = (s :: String, .delimeter :: String) -> String => 
     result
 );
 
-const escape_string_with = (s :: String, .delimeter :: String) -> String => (
-    delimeter + escape_string_contents(s, .delimeter) + delimeter
+const escape_string_with = (s :: String, .delimiter :: String) -> String => (
+    delimiter + escape_string_contents(s, .delimiter) + delimiter
 );
 
-const escape_string = s => escape_string_with(s, .delimeter = "\"");
+const escape_string = s => escape_string_with(s, .delimiter = "\"");

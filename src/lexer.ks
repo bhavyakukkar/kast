@@ -172,6 +172,7 @@ impl Lexer as module = (
                         finish_content_part();
                         Reader.advance(reader);
                         Reader.advance(reader);
+                        let span_start = reader^.position;
                         let mut tokens = ArrayList.new();
                         @loop (
                             skip_whitespace(lexer);
@@ -180,9 +181,17 @@ impl Lexer as module = (
                                 | :None => error("Unfinished interpolation")
                             );
                             if c == ')' then (
-                                &mut parts |> ArrayList.push_back(:Interpolated {
-                                    .tokens,
-                                });
+                                &mut parts
+                                    |> ArrayList.push_back(
+                                        :Interpolated {
+                                            .tokens,
+                                            .span = {
+                                                .start = span_start,
+                                                .end = reader^.position,
+                                                .uri = lexer^.source.uri,
+                                            }
+                                        }
+                                    );
                                 Reader.advance(reader);
                                 content_part = reset_content_part();
                                 unwind (@binding outer_loop_body) ();
@@ -293,7 +302,7 @@ impl Lexer as module = (
             Reader.advance(reader);
             let end = reader^.position.index;
             :Some :String {
-                .delimeter = to_string(delim),
+                .delimiter = to_string(delim),
                 .raw = String.substring(reader^.contents, start, end - start),
                 .parts,
             }

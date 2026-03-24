@@ -224,14 +224,26 @@ const SyntaxParser = (
                     .priority_filter,
                 };
             )
-            | :String { .contents, ... } => (
+            | :String s => (
+                let contents = Token.get_string_contents(s) |> Option.unwrap_or_else(() => (
+                    Error.report_and_unwind(
+                        peek.span,
+                        () => (@current Output).write("didnt expect interpolated string")
+                    )
+                ));
                 if String.is_whitespace(contents) then (
                     let no_wrap = contents;
                     token_stream |> TokenStream.advance;
                     let wrap = if token_stream |> peek_is("/") then (
                         token_stream |> TokenStream.advance;
                         let peek = &token_stream^ |> TokenStream.peek;
-                        if peek.shape is :String { .contents, ... } then (
+                        if peek.shape is :String s then (
+                            let contents = Token.get_string_contents(s) |> Option.unwrap_or_else(() => (
+                                Error.report_and_unwind(
+                                    peek.span,
+                                    () => (@current Output).write("didnt expect interpolated string")
+                                )
+                            ));
                             token_stream |> TokenStream.advance;
                             contents
                         ) else (
@@ -273,7 +285,15 @@ const SyntaxParser = (
         
         let name :: String = (
             let peek = &token_stream^ |> TokenStream.peek;
-            if peek.shape is :String { .contents, ... } then (
+            if peek.shape is :String s then (
+                let contents = Token.get_string_contents(s) |> Option.unwrap_or_else(
+                    () => (
+                        Error.report_and_unwind(
+                            peek.span,
+                            () => (@current Output).write("This can't be interpolated string")
+                        )
+                    )
+                );
                 token_stream |> TokenStream.advance;
                 contents
             ) else (

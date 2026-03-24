@@ -57,7 +57,21 @@ const Json = (
     const ast_to_name = (ast :: Ast.t) -> String => with_return (
         if ast.shape is :Token token then (
             match token.shape with (
-                | :String { .contents, ... } => return contents
+                | :String { .parts, ... } => (
+                    if &parts |> ArrayList.length == 1 then (
+                        let part = &parts |> ArrayList.at(0);
+                        if part^ is :Content { .contents, ... } then (
+                            return contents;
+                        );
+                    );
+                    Error.report_and_unwind(
+                        token.span,
+                        () => (
+                            let output = @current Output;
+                            output.write("Interpolated string wasn't expected");
+                        ),
+                    )
+                )
                 | :Ident { .name, ... } => return name
                 | _ => ()
             );
@@ -111,7 +125,18 @@ const Json = (
             )
             | :Token token => (
                 match token.shape with (
-                    | :String { .contents, ... } => :String contents
+                    | :String s => (
+                        let contents = Token.get_string_contents(s)
+                            |> Option.unwrap_or_else(
+                                () => (
+                                    Error.report_and_unwind(
+                                        token.span,
+                                        () => (@current Output).write("no support interpolated strings here")
+                                    )
+                                )
+                            );
+                        :String contents
+                    )
                     | :Number { .raw, ... } => :Number std.String.parse[Float64](raw)
                     | _ => Error.report_and_unwind(
                         token.span,
@@ -166,7 +191,7 @@ const Json = (
         );
         :Ok from_ast(parsed.ast)
     );
-
+    
     const print = (self :: &Json.t) => (
         match self^ with (
             | :Number value => (

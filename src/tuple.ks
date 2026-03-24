@@ -18,7 +18,7 @@ const Tuple = (
         .named = OrdMap.new(),
         .name_order = ArrayList.new(),
     };
-
+    
     const get_named = [T] (
         self :: &Tuple.t[T],
         name :: String,
@@ -52,10 +52,11 @@ const Tuple = (
     ) => (
         &mut self^.unnamed |> ArrayList.push_back(value);
     );
-
+    
     const array_to_tuple = (a :: Ast, N :: Int32) -> Ast => @cfg (
         | target.name == "interpreter" => (
             if N == 0 then `(
+                
             ) else if N == 1 then `(
                 (&$a |> ArrayList.at(0))^
             ) else `(
@@ -64,7 +65,7 @@ const Tuple = (
         )
         | true => panic("comptime only")
     );
-
+    
     const unwrap_unnamed_impl = (self :: Ast, N :: Int32) -> Ast => @cfg (
         | target.name == "interpreter" => `(
             if &$self.name_order |> ArrayList.length != 0 then (
@@ -96,7 +97,7 @@ const Tuple = (
     const print = [T] (
         self :: &Tuple.t[T],
         .open :: String,
-        .delimeter :: String,
+        .delimiter :: String,
         .before_field_name :: String,
         .after_field_name :: String,
         .print_value :: &T -> (),
@@ -108,7 +109,7 @@ const Tuple = (
         output.inc_indentation();
         for value in &self^.unnamed |> ArrayList.iter do (
             print_value(value);
-            output.write(delimeter);
+            output.write(delimiter);
             output.write("\n");
         );
         for &name in &self^.name_order |> ArrayList.iter do (
@@ -116,7 +117,7 @@ const Tuple = (
             output.write(name);
             output.write(after_field_name);
             print_value(&self^.named |> OrdMap.get(name) |> Option.unwrap);
-            output.write(delimeter);
+            output.write(delimiter);
             output.write("\n");
         );
         output.dec_indentation();

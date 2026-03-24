@@ -23,16 +23,25 @@ const Token = (
             )
         );
     );
-
+    
+    const StringContentPart = newtype {
+        .raw :: String,
+        .contents :: String,
+    };
+    
     const StringPart = newtype (
-        | :Content {
-            .raw :: String,
-            .contents :: String,
-        }
+        | :Content StringContentPart
         | :Interpolated {
             .tokens :: ArrayList.t[Token.t],
+            .span :: Span,
         }
     );
+    
+    const StringShape = newtype {
+        .delimiter :: String,
+        .raw :: String,
+        .parts :: ArrayList.t[StringPart],
+    };
     
     const Shape = (
         module:
@@ -49,11 +58,7 @@ const Token = (
                 .raw :: String,
                 .name :: String,
             }
-            | :String {
-                .delimeter :: String,
-                .raw :: String,
-                .parts :: ArrayList.t[StringPart],
-            }
+            | :String StringShape
             | :Number {
                 .raw :: String,
             }
@@ -109,10 +114,10 @@ const Token = (
                         () => output.write(raw),
                     );
                 )
-                | :String { .delimeter, .parts = ref parts, ... } => (
+                | :String { .delimiter, .parts = ref parts, ... } => (
                     ansi.with_mode(
                         :Green,
-                        () => output.write(delimeter),
+                        () => output.write(delimiter),
                     );
                     for part in parts |> ArrayList.iter do (
                         match part^ with (
@@ -145,7 +150,7 @@ const Token = (
                     );
                     ansi.with_mode(
                         :Green,
-                        () => output.write(delimeter),
+                        () => output.write(delimiter),
                     );
                 )
                 | :Error { .raw, ... } => (
@@ -162,5 +167,16 @@ const Token = (
                 )
             );
         );
+    );
+    
+    ## get non-interpolated string contents
+    const get_string_contents = ({ .parts, ... } :: StringShape) -> Option.t[String] => with_return (
+        if &parts |> ArrayList.length == 1 then (
+            let part = &parts |> ArrayList.at(0);
+            if part^ is :Content { .contents, ... } then (
+                return :Some contents;
+            );
+        );
+        :None
     );
 );

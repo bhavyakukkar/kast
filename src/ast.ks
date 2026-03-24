@@ -15,12 +15,21 @@ const Ast = (
         .span :: Span,
     };
     
+    const StringPart = newtype (
+        | :Content Token.StringContentPart
+        | :Interpolated Ast.t
+    );
+    
     const Shape = (
         module:
         
         const t = newtype (
             | :Empty
             | :Token Token.t
+            | :String {
+                .delimiter :: String,
+                .parts :: ArrayList.t[StringPart],
+            }
             | :Rule {
                 .rule :: SyntaxRule.t,
                 .root :: Group,
@@ -31,7 +40,7 @@ const Ast = (
             }
         );
     );
-
+    
     const SyntaxCommand = newtype (
         | :FromScratch
         | :Rule SyntaxRule.t
@@ -66,7 +75,7 @@ const Ast = (
         Tuple.print(
             children,
             .open = "{",
-            .delimeter = ",",
+            .delimiter = ",",
             .before_field_name = ".",
             .after_field_name = " = ",
             .print_value = print_child,
@@ -82,6 +91,38 @@ const Ast = (
                 () => output.write("<empty>"),
             )
             | :Token token => Token.Shape.print(token.shape)
+            | :String { .delimiter, .parts = ref parts } => (
+                ansi.with_mode(
+                    :Green,
+                    () => (
+                        output.write(delimiter);
+                        output.write("string");
+                        output.write(delimiter);
+                    ),
+                );
+                output.write(" {\n");
+                output.inc_indentation();
+                for part in parts |> ArrayList.iter do (
+                    match part^ with (
+                        | :Content { .contents, ... } => (
+                            ansi.with_mode(
+                                :Green,
+                                () => output.write(escape_string(contents)),
+                            );
+                        )
+                        | :Interpolated ref ast => (
+                            ansi.with_mode(
+                                :Magenta,
+                                () => output.write("interpolate "),
+                            );
+                            print(ast);
+                        )
+                    );
+                    output.write("\n");
+                );
+                output.dec_indentation();
+                output.write("}");
+            )
             | :Rule { .rule, .root = ref root } => (
                 ansi.with_mode(
                     :Magenta,
