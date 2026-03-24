@@ -4,6 +4,7 @@ use (import "./tuple.ks").*;
 use (import "./log.ks").*;
 use (import "./error.ks").*;
 use (import "./token_stream.ks").*;
+use (import "./syntax_parser.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./syntax_ruleset.ks").*;
 use (import "./ast.ks").*;
@@ -42,11 +43,16 @@ const Parser = (
     
     const ContextT = newtype {
         .ruleset :: SyntaxRuleset.t,
+        .continuation_keywords :: OrdSet.t[String],
         .token_stream :: &mut TokenStream.t,
         .entire_source_span :: Span,
         .uri :: Uri,
     };
     const Context = @context ContextT;
+
+    const ParsingRuleCtx = @context type {
+        .print :: () -> (),
+    };
     
     const ParseResult = newtype (
         | :MadeProgress Ast.t
@@ -57,8 +63,46 @@ const Parser = (
         starting_value :: Option.t[Ast.t],
         .priority_filter :: SyntaxRule.PriorityFilter,
     ) -> ParseResult => with_return (
+        let mut ctx = @current Context;
         skip_comments_and_errors();
         if starting_value is :None then (
+            let peek = &ctx.token_stream^ |> TokenStream.peek;
+            let peek_raw = peek.shape |> Token.Shape.raw;
+            if peek_raw == "@syntax" then (
+                let syntax_token_span = peek.span;
+                ctx.token_stream |> TokenStream.advance;
+                let command = SyntaxParser.parse_syntax_command(ctx.token_stream);
+                let command = match command with (
+                    | :FromScratch => (
+                        ctx.ruleset = SyntaxRuleset.new();
+                        :FromScratch
+                    )
+                    | :Rule rule => (
+                        &mut ctx.ruleset |> SyntaxRuleset.add(rule);
+                        :Rule rule
+                    )
+                );
+                let value_after = match try_parse(.priority_filter) with (
+                    | :MadeProgress ast => :Some ast
+                    | :NoProgress => :None
+                );
+                return :MadeProgress {
+                    .shape = :Syntax {
+                        .command,
+                        .value_after,
+                    },
+                    .span = {
+                        .start = syntax_token_span.start,
+                        .end = (
+                            let prev_token = &ctx.token_stream^
+                                |> TokenStream.prev
+                                |> Option.unwrap;
+                            prev_token.span.end
+                        ),
+                        .uri = syntax_token_span.uri,
+                    }
+                }
+            );
             if try_parse_single_token() is :MadeProgress ast then (
                 return :MadeProgress ast;
             );
@@ -138,13 +182,63 @@ const Parser = (
         if starting_value is :Some value then (
             &mut parts |> ArrayList.push_back(:Value value);
         );
+
+        let parent_parsing_rule_context = @current ParsingRuleCtx;
+        with ParsingRuleCtx = {
+            .print = () => (
+                let output = @current Output;
+                output.write("Parsing");
+                for part in &parts |> ArrayList.iter do (
+                    output.write(" ");
+                    match part^ with (
+                        | :Keyword token => output.write(token.shape |> Token.Shape.raw)
+                        | :Value ast => (
+                            output.write("_ at ");
+                            Span.print(ast.span);
+                        )
+                    );
+                );
+                output.write("\nwhile ");
+                parent_parsing_rule_context.print();
+            ),
+        };
+
         loop (
             skip_comments_and_errors();
             
             let peek = &ctx.token_stream^ |> TokenStream.peek;
             let peek_raw = peek.shape |> Token.Shape.raw;
             
-            let should_follow_edge = (edge :: &SyntaxRuleset.Edge) -> Bool => (
+            Log.debug(
+                () => (
+                    let output = @current Output;
+                    output.write("Looking at ");
+                    Token.print(peek);
+                    output.write("\ncontinuation keywords:");
+                    for &keyword in &ctx.continuation_keywords |> OrdSet.iter do (
+                        output.write(" ");
+                        output.write(escape_string(keyword));
+                    );
+                    output.write("\n");
+                    (@current ParsingRuleCtx).print();
+                )
+            );
+            
+            let should_follow_edge = (edge :: &SyntaxRuleset.Edge) -> Bool => with_return (
+                if edge^.key is :Keyword keyword then (
+                    if (
+                        not made_progress
+                        and &ctx.continuation_keywords
+                            |> OrdSet.contains(keyword)
+                    ) then (
+                        Log.debug_msg(
+                            "Not following keyword "
+                            + escape_string(keyword)
+                            + " because it is a continuation keyword"
+                        );
+                        return false;
+                    );
+                );
                 SyntaxRule.priority_matches(edge^.max_rule_priority, priority_filter)
             );
             
@@ -167,8 +261,26 @@ const Parser = (
                 # Try to follow with value
                 if &node^.next |> OrdMap.get(:Value) is :Some edge then (
                     if should_follow_edge(edge) then (
-                        let value = try_parse(
-                            .priority_filter = edge^.max_value_priority,
+                        let value = (
+                            with Context = {
+                                ...ctx,
+                                .continuation_keywords = (
+                                    let mut keywords = if edge^.max_value_priority is :Any then (
+                                        OrdSet.new()
+                                    ) else (
+                                        OrdSet.clone(&ctx.continuation_keywords)
+                                    );
+                                    for next_edge in &edge^.target.next |> OrdMap.iter do (
+                                        if next_edge^.key is :Keyword keyword then (
+                                            &mut keywords |> OrdSet.add(keyword);
+                                        );
+                                    );
+                                    keywords
+                                ),
+                            };
+                            try_parse(
+                                .priority_filter = edge^.max_value_priority,
+                            )
                         );
                         let value = if value is :MadeProgress ast then (
                             :Some ast
@@ -230,16 +342,17 @@ const Parser = (
             }
         );
         let shape = :Rule { .rule, .root = collect_values(parts, &rule) };
+        let ast = { .shape, .span };
         Log.debug(
             () => (
-                (@current Output).write("Parsed at ");
+                let output = @current Output;
+                output.write("Parsed at ");
                 Span.print(span);
+                output.write("\n");
+                Ast.print(&ast);
             )
         );
-        :MadeProgress {
-            .shape,
-            .span,
-        }
+        :MadeProgress ast
     );
     
     const print_parsed_parts = (parts :: &ArrayList.t[ParsedPart]) => (
@@ -301,11 +414,13 @@ const Parser = (
             let rule_part = rule_group_parts^.[rule_part_idx];
             match { parsed_part^, rule_part^ } with (
                 | { :Value ast, :Value { .name, ... } } => (
-                    Log.debug(() => (
-                        let output = @current Output;
-                        output.write("Matched value ");
-                        Span.print(ast.span);
-                    ));
+                    Log.debug(
+                        () => (
+                            let output = @current Output;
+                            output.write("Matched value ");
+                            Span.print(ast.span);
+                        )
+                    );
                     &mut children |> Tuple.add(name, :Value ast);
                     parsed_part_idx^ += 1;
                     rule_part_idx += 1;
@@ -314,11 +429,13 @@ const Parser = (
                     if token.shape |> Token.Shape.raw != keyword then (
                         panic("Incorrectly matched keyword");
                     );
-                    Log.debug(() => (
-                        let output = @current Output;
-                        output.write("Matched keyword ");
-                        Token.print(token);
-                    ));
+                    Log.debug(
+                        () => (
+                            let output = @current Output;
+                            output.write("Matched keyword ");
+                            Token.print(token);
+                        )
+                    );
                     parsed_part_idx^ += 1;
                     rule_part_idx += 1;
                 )
@@ -354,11 +471,13 @@ const Parser = (
                             );
                         )
                     );
-                    Log.debug(() => (
-                        let output = @current Output;
-                        output.write("Matching group at ");
-                        Span.print(rule_group^.span);
-                    ));
+                    Log.debug(
+                        () => (
+                            let output = @current Output;
+                            output.write("Matching group at ");
+                            Span.print(rule_group^.span);
+                        )
+                    );
                     let group = collect_values_from(
                         parsed_part_idx,
                         parsed_parts,
@@ -412,11 +531,13 @@ const Parser = (
     ) -> Parsed => (
         let ctx :: ContextT = {
             .ruleset,
+            .continuation_keywords = OrdSet.new(),
             .token_stream,
             .entire_source_span,
             .uri,
         };
         with Context = ctx;
+        with ParsingRuleCtx = { .print = () => () };
         let ast = match try_parse(.priority_filter = :Any) with (
             | :MadeProgress ast => ast
             | :NoProgress => {

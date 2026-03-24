@@ -225,6 +225,7 @@ match args.subcommand with (
             );
 
             Ast.print(&parsed.ast);
+            (@current Output).write("\n");
         );
     )
     | :ParseJson { .path } => (

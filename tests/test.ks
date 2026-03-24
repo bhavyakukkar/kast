@@ -1,1 +1,2 @@
-let { a, b } = { a, b };
+output.write(a |> b);
+output.write(":");

@@ -338,12 +338,14 @@ const SyntaxParser = (
     const parse_syntax_command = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxCommand => (
-        if token_stream |> peek_is("from_scratch") then (
+        let result = if token_stream |> peek_is("from_scratch") then (
             token_stream |> TokenStream.advance;
             :FromScratch
         ) else (
             :Rule parse_syntax_rule(token_stream)
-        )
+        );
+        token_stream |> expect_and_advance(";");
+        result
     );
     
     const parse_syntax_rules = (
@@ -378,7 +380,6 @@ const SyntaxParser = (
                     &mut result |> ArrayList.push_back(rule);
                 )
             );
-            token_stream |> expect_and_advance(";");
         );
         result
     );

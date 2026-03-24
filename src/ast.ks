@@ -1,3 +1,4 @@
+use (import "./common.ks").*;
 use (import "./output.ks").*;
 use (import "./span.ks").*;
 use (import "./token.ks").*;
@@ -24,7 +25,16 @@ const Ast = (
                 .rule :: SyntaxRule.t,
                 .root :: Group,
             }
+            | :Syntax {
+                .command :: SyntaxCommand,
+                .value_after :: Option.t[Ast.t],
+            }
         );
+    );
+
+    const SyntaxCommand = newtype (
+        | :FromScratch
+        | :Rule SyntaxRule.t
     );
     
     const Group = newtype {
@@ -79,6 +89,28 @@ const Ast = (
                 );
                 output.write(" ");
                 print_group(root);
+            )
+            | :Syntax { .command, .value_after } => (
+                if value_after is :Some _ then (
+                    output.write("{\n");
+                    output.inc_indentation();
+                );
+                ansi.with_mode(
+                    :Yellow,
+                    () => (
+                        output.write("@syntax");
+                        match command with (
+                            | :FromScratch => output.write("from_scratch")
+                            | :Rule rule => output.write(escape_string(rule.name))
+                        );
+                    ),
+                );
+                if value_after is :Some value then (
+                    print(&value);
+                    output.write("\n");
+                    output.dec_indentation();
+                    output.write("}");
+                );
             )
         );
     );
