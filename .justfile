@@ -3,6 +3,7 @@ default:
     just --list
 
 build *args:
+    mkdir -p target
     flock --exclusive target kast {{args}} compile \
         --js-ref-vars false \
         --async always \
