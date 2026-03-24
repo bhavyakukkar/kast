@@ -55,6 +55,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v5
+      - run: |
+          mkdir -p artifacts
+          cp -r artifacts-linux/* artifacts/
       - name: Upload pages artifacts
         uses: actions/upload-pages-artifact@v3
         with:
