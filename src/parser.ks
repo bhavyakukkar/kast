@@ -438,7 +438,8 @@ const Parser = (
         .rule_group :: Option.t[type (&SyntaxRule.Group)],
     ) -> Ast.Group => (
         let mut rule_part_idx = 0;
-        let skip_rule_whitespace = () => (
+        let skip_rule_whitespace = () -> Bool => (
+            let start_idx = rule_part_idx;
             while rule_part_idx < rule_group_parts |> ArrayList.length do (
                 match rule_group_parts^.[rule_part_idx]^ with (
                     | :Whitespace _ => ()
@@ -446,14 +447,15 @@ const Parser = (
                 );
                 rule_part_idx += 1;
             );
+            rule_part_idx != start_idx
         );
         let mut children = Tuple.new();
         while (
             parsed_part_idx^ < parsed_parts |> ArrayList.length
             and rule_part_idx < rule_group_parts |> ArrayList.length
         ) do (
+            if skip_rule_whitespace() then continue;
             let parsed_part = parsed_parts^.[parsed_part_idx^];
-            skip_rule_whitespace();
             let rule_part = rule_group_parts^.[rule_part_idx];
             match { parsed_part^, rule_part^ } with (
                 | { :Value ast, :Value { .name, ... } } => (
@@ -545,6 +547,9 @@ const Parser = (
             );
         );
         skip_rule_whitespace();
+        if rule_part_idx != rule_group_parts |> ArrayList.length then (
+            panic("rule parts were not fully matched");
+        );
         { .children }
     );
     
