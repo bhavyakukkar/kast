@@ -8,34 +8,20 @@ jobs:
         platform:
           - runs-on: ubuntu-latest
             name: linux
-          - runs-on: macos-latest
-            name: macos
-          # - runs-on: windows-latest
-          #   name: windows
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - uses: actions/setup-node@v6
+      - uses: cachix/install-nix-action@v31
         with:
-          node-version: 24
-      - run: npm ci
-      - name: Set-up OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: 5.4
-          dune-cache: true
-      - name: Resolve dependencies
-        run: |
-          opam exec -- dune pkg lock
-      - name: Build project
-        run: |
-          opam exec -- dune build
-        env:
-          KAST_STD: "../lib/std"
-      - name: Run tests
-        run: |
-          opam exec -- dune runtest
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+          # Mostly to avoid GitHub rate limiting
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          nix develop . --command npm install
+          nix develop . --command dune build
+          nix develop . --command dune runtest
       - name: Collect artifacts
         run: |
           mkdir -p artifacts
