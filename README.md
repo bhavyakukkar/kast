@@ -6,7 +6,8 @@ This is a rewrite #3. You can find previous versions in
 
 1. [`old-ocaml-version`](https://github.com/kast-lang/kast/tree/old-ocaml-version) branch
 2. [`old-rust-version`](https://github.com/kast-lang/kast/tree/old-rust-version) branch
-3. current version
+3. current version used as bootstrap
+4. Self hosting has started on [`self-host`](https://github.com/kast-lang/kast/tree/self-host) branch
 
 **NOT READY YET**
 
