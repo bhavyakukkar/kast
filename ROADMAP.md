@@ -18,6 +18,7 @@
 
 ## Writing code in Kast
 
+- [x] Advent of Code
 - [x] twitch bot
 - [ ] game engine
   - [x] participate in game jams

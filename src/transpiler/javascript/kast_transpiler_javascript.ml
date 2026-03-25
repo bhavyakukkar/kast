@@ -42,6 +42,7 @@ type mutable_ctx =
   { mutable captured_values : JsAst.name ValueMap.t
   ; mutable captured_places : transpiled_place Id.Map.t
   ; mutable symbols : JsAst.name Id.Map.t
+  ; mutable prepend_early : JsAst.stmt list
   ; mutable prepend : JsAst.stmt list
   ; mutable prepend_late : JsAst.stmt list
   ; mutable module_of_binding : JsAst.name Id.Map.t
@@ -435,11 +436,21 @@ module Impl = struct
       then (
         Log.trace (fun log -> log "prepend %a" Value.print value);
         with_global_scope (fun () ->
-          let_var
-            value_name
-            (match value.var |> Inference.Var.inferred_opt with
-             | None -> calculate (not_inferred value.var)
-             | Some value_shape -> value_shape |> transpile_value_shape)));
+          let create_value () =
+            let_var
+              value_name
+              (match value.var |> Inference.Var.inferred_opt with
+               | None -> calculate (not_inferred value.var)
+               | Some value_shape -> value_shape |> transpile_value_shape)
+          in
+          let early =
+            match value.var |> Inference.Var.inferred_opt with
+            | Some (V_Fn _ | V_Generic _ | V_NativeFn _) -> true
+            | _ -> false
+          in
+          if early
+          then prepend_early (scope (fun () -> create_value ()))
+          else create_value ()));
       (* TODO copy? *)
       NoEffect { shape = Var value_name; span = None }
 
@@ -856,6 +867,10 @@ module Impl = struct
       Log.error (fun log ->
         log "While transpiling place expr %a" Span.print expr.data.span);
       raise e
+
+  and prepend_early (stmts : JsAst.stmt list) : unit =
+    let ctx = Effect.perform GetCtx in
+    ctx.mut.prepend_early <- ctx.mut.prepend_early @ stmts
 
   and prepend (stmts : JsAst.stmt list) : unit =
     let ctx = Effect.perform GetCtx in
@@ -1473,6 +1488,7 @@ let with_ctx ~state ~span f =
         { captured_values = ValueMap.empty
         ; captured_places = Id.Map.empty
         ; symbols = Id.Map.empty
+        ; prepend_early = []
         ; prepend = []
         ; prepend_late = []
         ; module_of_binding = Id.Map.empty
@@ -1514,6 +1530,7 @@ let with_ctx ~state ~span f =
        }
        : JsAst.stmt)
     ]
+    @ ctx.mut.prepend_early
     @ ctx.mut.prepend
     @ ctx.mut.prepend_late
     @ user_code
