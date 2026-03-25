@@ -93,12 +93,12 @@ const Args = (
         
         const t = newtype {
             .use_kast_parser :: Bool,
-            .path :: Option.t[String],
+            .paths :: ArrayList.t[String],
         };
         
         const parse = start_index -> t => (
             let mut use_kast_parser = false;
-            let mut path = :None;
+            let mut paths = ArrayList.new();
             let mut i = start_index;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
@@ -107,15 +107,12 @@ const Args = (
                     i += 1;
                     continue;
                 );
-                if path is :Some _ then (
-                    panic("Unexpected arg " + escape_string(arg));
-                );
-                path = :Some arg;
+                &mut paths |> ArrayList.push_back(arg);
                 i += 1;
             );
             {
                 .use_kast_parser,
-                .path,
+                .paths,
             }
         );
     );
@@ -277,27 +274,25 @@ match args.subcommand with (
             (@current Output).write("\n");
         );
     )
-    | :ParseJson { .use_kast_parser, .path } => (
-        let read_stdin = () => panic("TODO read stdin");
-        let json = match path with (
-            | :Some path => std.fs.read_file(path)
-            | :None => read_stdin()
+    | :ParseJson { .use_kast_parser, .paths } => (
+        for path in paths |> ArrayList.into_iter do (
+            let json = std.fs.read_file(path);
+            let json = if use_kast_parser then (
+                let json = Json.parse(json)
+                    |> std.Result.unwrap_or_else(
+                        error => panic("TODO Error happened")
+                    );
+                json
+            ) else (
+                let mut reader = dep_json.Reader.create(&json);
+                let json = dep_json.parse(&mut reader)
+                    |> std.Result.unwrap_or_else(
+                        error => panic("TODO Error happened")
+                    );
+                Json.from_dep(json)
+            );
+            Json.print(&json);
+            (@current Output).write("\n");
         );
-        let json = if use_kast_parser then (
-            let json = Json.parse(json)
-                |> std.Result.unwrap_or_else(
-                    error => panic("TODO Error happened")
-                );
-            json
-        ) else (
-            let mut reader = dep_json.Reader.create(&json);
-            let json = dep_json.parse(&mut reader)
-                |> std.Result.unwrap_or_else(
-                    error => panic("TODO Error happened")
-                );
-            Json.from_dep(json)
-        );
-        Json.print(&json);
-        (@current Output).write("\n");
     )
 );

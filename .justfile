@@ -27,6 +27,6 @@ test:
     just build
     fd --type file --extension ks --exec-batch self-kast tokenize
     self-kast parse_syntax_rules tests/syntax/*.ks
-    self-kast parse-json tests/test.json
-    self-kast parse-json tests/lsp-init.json
+    self-kast parse-json tests/json/*.json
+    self-kast parse-json --use-kast-parser tests/json/*.json
     fd --type file --extension ks --exec-batch self-kast parse
