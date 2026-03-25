@@ -21,8 +21,14 @@ Self-hosted progress
   - [x] Error resilience
 - [x] Parser
   - [ ] Error resilience
-- [ ] LSP (syntax highlighting, formatting)
-- [ ] Interperter & Compiler
+- [ ] Interperter & Compiler to IR
+- [ ] LSP
+  - [ ] syntax highlighting
+  - [ ] formatting
+  - [ ] inlay hints
+  - [ ] hover info
+  - [ ] goto def
+  - [ ] find references
 - [ ] Compilation targets:
   - [ ] C - This is probably what we do
   - [ ] JavaScript??? - This is what bootstrap does
