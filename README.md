@@ -9,7 +9,7 @@ This is a rewrite #4. You can find previous versions in
 3. bootstrap on [`main`](https://github.com/kast-lang/kast/tree/main) branch
 4. self-hosted - current version
 
-**NOT READY YET**
+The language is not **NOT READY YET**
 
 [See more on the website](https://kast-lang.org)
 
