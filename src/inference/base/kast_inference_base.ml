@@ -16,6 +16,8 @@ module type Scope = sig
   val compare : t -> t -> int
 end
 
+module IntMap = Map.Make (Int)
+
 module Var = struct
   type ('a, 'scope) var = { mutable state : ('a, 'scope) var_state }
 
@@ -26,7 +28,7 @@ module Var = struct
   and ('a, 'scope) var_data =
     { recurse_id : id
     ; inferred : 'a option
-    ; mutable setup_default : (unit -> unit) option
+    ; mutable setup_default : (unit -> unit) IntMap.t
     ; spans : SpanSet.t
     ; mutable once_inferred : ('a -> unit) list
     ; mutable on_unite : (('a, 'scope) var_data -> unit) list
@@ -40,7 +42,7 @@ module Var = struct
           { data =
               { recurse_id = Id.gen ()
               ; inferred = None
-              ; setup_default = None
+              ; setup_default = IntMap.empty
               ; once_inferred = []
               ; on_unite = []
               ; spans = SpanSet.singleton span
@@ -56,7 +58,7 @@ module Var = struct
         Root
           { data =
               { recurse_id = Id.gen ()
-              ; setup_default = None
+              ; setup_default = IntMap.empty
               ; inferred = Some inferred
               ; once_inferred = []
               ; on_unite = []
@@ -89,10 +91,14 @@ module Var = struct
     fun var -> (find_root var).inferred
   ;;
 
-  let setup_default f var =
+  let setup_default priority f var =
     let root_var = find_root_var var in
     let root = find_root root_var in
-    root_var.state <- Root { data = { root with setup_default = Some f } }
+    root_var.state
+    <- Root
+         { data =
+             { root with setup_default = root.setup_default |> IntMap.add priority f }
+         }
   ;;
 
   type ('a, 'scope) t = ('a, 'scope) var
@@ -169,11 +175,7 @@ module Var = struct
     let data =
       { recurse_id = recurse_id_a
       ; inferred
-      ; setup_default =
-          (match default_a, default_b with
-           | None, None -> None
-           | Some x, None | None, Some x -> Some x
-           | Some a, Some _b -> Some a)
+      ; setup_default = IntMap.union (fun _ a b -> Some a) default_a default_b
       ; once_inferred
       ; on_unite = []
       ; spans = SpanSet.union spans_a spans_b
@@ -251,9 +253,9 @@ module Var = struct
     | Some _ -> ()
     | None ->
       let root = find_root var in
-      (match root.setup_default with
+      (match root.setup_default |> IntMap.max_binding_opt with
        | None -> ()
-       | Some f -> f ())
+       | Some (_priority, f) -> f ())
   ;;
 
   let inferred_or_default =

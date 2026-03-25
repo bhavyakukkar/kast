@@ -46,7 +46,7 @@ module OptionalName = struct
   let new_not_inferred ~scope ~span : optional_name =
     let name = { var = Inference.Var.new_not_inferred ~scope ~span } in
     name.var
-    |> Inference.Var.setup_default (fun () ->
+    |> Inference.Var.setup_default 0 (fun () ->
       name.var
       |> Inference.Var.infer_as
            (VarScope.of_option VarScope.of_name_shape)

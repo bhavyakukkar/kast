@@ -122,9 +122,9 @@ let rec compile : 'a. state -> 'a compiled_kind -> Ast.t -> 'a =
                  let setup_default () =
                    ty |> Inference.Ty.expect_inferred_as ~span (Ty.inferred ~span default)
                  in
-                 ty.var |> Inference.Var.setup_default setup_default;
+                 ty.var |> Inference.Var.setup_default 0 setup_default;
                  let const = Value.new_not_inferred_of_ty ~scope ~span ty in
-                 const.var |> Inference.Var.setup_default setup_default;
+                 const.var |> Inference.Var.setup_default 0 setup_default;
                  ty.var
                  |> Inference.Var.once_inferred (fun (ty : Ty.Shape.t) ->
                    let actual_const : Value.Shape.t =

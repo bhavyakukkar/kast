@@ -307,7 +307,11 @@ and cast_result_ty : span:span -> State.t -> expr -> value -> ty =
     | other -> Error.error span "can't cast into %a" Value.Shape.print other);
   ty
 
-and ignored_ty (_ : ty) = ( (* TODO maybe should be a warning? configurable *) )
+and ignored_ty span (ty : ty) =
+  (* TODO maybe should be a warning? configurable *)
+  ty.var
+  |> Inference.Var.setup_default (-10) (fun () ->
+    ty |> Inference.Ty.expect_inferred_as ~span (T_Unit |> Ty.inferred ~span))
 
 and init_expr : span -> State.t -> Expr.Shape.t -> expr =
   fun span state shape ->
@@ -343,7 +347,7 @@ and init_expr : span -> State.t -> Expr.Shape.t -> expr =
         { ty; async }
       | E_Stmt { expr } ->
         let { ty = expr_ty; async } : signature = expr.data.signature in
-        ignored_ty expr_ty;
+        ignored_ty span expr_ty;
         { ty = Ty.inferred ~span T_Unit; async }
       | E_Scope { expr } -> expr.data.signature
       | E_Fn { ty; _ } ->
@@ -557,7 +561,7 @@ and init_expr : span -> State.t -> Expr.Shape.t -> expr =
         { ty = Ty.inferred ~span T_Ast; async }
       | E_Loop { body } ->
         let { ty = body_ty; async } : signature = body.data.signature in
-        ignored_ty body_ty;
+        ignored_ty span body_ty;
         { ty = Ty.new_not_inferred ~scope ~span; async }
       | E_Error ->
         { ty = Ty.new_not_inferred ~scope ~span; async = BoolValue.inferred ~span false }
