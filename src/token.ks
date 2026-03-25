@@ -17,7 +17,7 @@ const Token = (
         .verbose :: Bool,
     ) => (
         let output = @current Output;
-        self.shape |> Shape.print_impl(.verbose);
+        self.shape |> Token.Shape.print_impl(.verbose);
         ansi.with_mode(
             :Dim,
             () => (
@@ -27,7 +27,7 @@ const Token = (
         );
     );
 
-    const print = token => print_impl(token, .verbose = false);
+    const print = token => Token.print_impl(token, .verbose = false);
     
     const StringContent = newtype {
         .raw :: String,
@@ -213,7 +213,7 @@ const Token = (
                                     output.write(" {\n");
                                     output.inc_indentation();
                                     for token in tokens |> ArrayList.iter do (
-                                        print_impl(token^.shape, .verbose);
+                                        Token.Shape.print_impl(token^.shape, .verbose);
                                         output.write("\n");
                                     );
                                     output.dec_indentation();
@@ -230,7 +230,7 @@ const Token = (
                                         ) else (
                                             output.write(" ");
                                         );
-                                        print_impl(token^.shape, .verbose);
+                                        Token.Shape.print_impl(token^.shape, .verbose);
                                     );
                                     ansi.with_mode(
                                         :Yellow,
