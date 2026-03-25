@@ -96,7 +96,7 @@ const Ast = (
                     :Green,
                     () => (
                         output.write(delimiter);
-                        output.write("interpolated string");
+                        output.write("interpolated");
                         output.write(delimiter);
                     ),
                 );
@@ -112,7 +112,7 @@ const Ast = (
                         )
                         | :Interpolated ref ast => (
                             ansi.with_mode(
-                                :Magenta,
+                                :Yellow,
                                 () => output.write("\\ "),
                             );
                             print(ast);

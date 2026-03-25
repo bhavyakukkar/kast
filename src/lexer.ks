@@ -424,6 +424,41 @@ impl Lexer as module = (
                 .raw = String.substring(reader^.contents, start, end - start),
             }
         );
+
+        const read_raw_ident :: ReadFn = lexer => with_return (
+            let reader = &mut lexer^.reader;
+            if not &reader^ |> next_is('@') then (
+                return :None;
+            );
+            match &reader^ |> Reader.peek2 with (
+                | :Some c => (
+                    if c != '"' then return :None;
+                )
+                | : None => return :None
+            );
+            let start = lexer^.reader.position;
+            reader |> Reader.advance;
+            let string_token = read_string_with_delim(lexer, '"') |> Option.unwrap;
+            let end = lexer^.reader.position;
+            let span :: Span = {
+                .start,
+                .end,
+                .uri = lexer^.source.uri,
+            };
+            let raw = String.substring(
+                reader^.contents,
+                start.index,
+                end.index - start.index,
+            );
+            let name = match string_token with (
+                | :String { .contents, ... } => contents
+                | :InterpolatedString _ => (
+                    Error.report_msg(span, "Raw idents can't use interpolated strings");
+                    return :Some :Error { .raw }
+                )
+            );
+            :Some :Ident { .raw, .name }
+        );
         
         const read_fns :: ArrayList.t[ReadFn] = (
             let mut read_fns = ArrayList.new();
@@ -431,6 +466,7 @@ impl Lexer as module = (
             &mut read_fns |> ArrayList.push_back(read_eof);
             &mut read_fns |> ArrayList.push_back(read_line_comment);
             &mut read_fns |> ArrayList.push_back(read_block_comment);
+            &mut read_fns |> ArrayList.push_back(read_raw_ident);
             &mut read_fns |> ArrayList.push_back(read_raw_keyword);
             &mut read_fns |> ArrayList.push_back(read_punct);
             &mut read_fns |> ArrayList.push_back(read_ident);

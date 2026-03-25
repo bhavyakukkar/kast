@@ -193,7 +193,7 @@ match args.subcommand with (
                     let mut lexer = Lexer.new(Source.read_file(path));
                     loop (
                         let token = &mut lexer |> Lexer.next;
-                        token |> Token.print;
+                        token |> Token.print_impl(.verbose = true);
                         output.write("\n");
                         if token.shape is :Eof then break;
                     );

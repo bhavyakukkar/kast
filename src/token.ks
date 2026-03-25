@@ -12,9 +12,12 @@ const Token = (
         .span :: Span,
     };
     
-    const print = (self :: Token.t) => (
+    const print_impl = (
+        self :: Token.t,
+        .verbose :: Bool,
+    ) => (
         let output = @current Output;
-        self.shape |> Token.Shape.print;
+        self.shape |> Shape.print_impl(.verbose);
         ansi.with_mode(
             :Dim,
             () => (
@@ -23,6 +26,8 @@ const Token = (
             )
         );
     );
+
+    const print = token => print_impl(token, .verbose = false);
     
     const StringContent = newtype {
         .raw :: String,
@@ -83,7 +88,10 @@ const Token = (
             | :Eof => ""
         );
         
-        const print = (self :: Token.Shape.t) => (
+        const print_impl = (
+            self :: Token.Shape.t,
+            .verbose :: Bool,
+        ) => (
             let output = @current Output;
             match self with (
                 | :Comment { .raw, ... } => (
@@ -103,14 +111,26 @@ const Token = (
                 )
                 | :Punct { .raw, ... } => (
                     ansi.with_mode(
-                        :Italic,
+                        :Magenta,
                         () => output.write(raw),
                     );
                 )
-                | :Ident { .raw, ... } => (
-                    ansi.with_mode(
-                        :Under,
-                        () => output.write(raw),
+                | :Ident { .raw, .name, ... } => (
+                    if not verbose or raw == name then (
+                        ansi.with_mode(
+                            :Under,
+                            () => output.write(raw),
+                        );
+                    ) else (
+                        ansi.with_mode(
+                            :Under,
+                            () => output.write(raw),
+                        );
+                        output.write(" = ");
+                        ansi.with_mode(
+                            :Green,
+                            () => output.write(escape_string(name)),
+                        );
                     );
                 )
                 | :Number { .raw, ... } => (
@@ -119,49 +139,118 @@ const Token = (
                         () => output.write(raw),
                     );
                 )
-                | :String { .raw, ... } => (
+                | :String { .raw, .contents, ... } => (
                     ansi.with_mode(
                         :Green,
                         () => output.write(raw),
                     );
+                    if verbose then (
+                        output.write(" {\n");
+                        output.inc_indentation();
+                        output.write(".contents = ");
+                        ansi.with_mode(
+                            :Green,
+                            () => output.write(escape_string(contents)),
+                        );
+                        output.write("\n");
+                        output.dec_indentation();
+                        output.write("}");
+                    );
                 )
                 | :InterpolatedString { .delimiter, .parts = ref parts, ... } => (
-                    ansi.with_mode(
-                        :Green,
-                        () => output.write(delimiter),
+                    if verbose then (
+                        ansi.with_mode(
+                            :Green,
+                            () => (
+                                output.write(delimiter);
+                                output.write("interpolated");
+                                output.write(delimiter);
+                            ),
+                        );
+                        output.write(" {\n");
+                        output.inc_indentation();
+                    ) else (
+                        ansi.with_mode(
+                            :Green,
+                            () => output.write(delimiter),
+                        );
                     );
                     for part in parts |> ArrayList.iter do (
                         match part^ with (
-                            | :Content { .raw, ... } => (
-                                ansi.with_mode(
-                                    :Green,
-                                    () => output.write(raw),
+                            | :Content { .raw, .contents, ... } => (
+                                if verbose then (
+                                    ansi.with_mode(
+                                        :Green,
+                                        () => (
+                                            output.write(delimiter);
+                                            output.write(raw);
+                                            output.write(delimiter);
+                                        ),
+                                    );
+                                    output.write(" {\n");
+                                    output.inc_indentation();
+                                    output.write(".contents = ");
+                                    ansi.with_mode(
+                                        :Green,
+                                        () => output.write(escape_string(contents)),
+                                    );
+                                    output.write("\n");
+                                    output.dec_indentation();
+                                    output.write("}");
+                                ) else (
+                                    ansi.with_mode(
+                                        :Green,
+                                        () => output.write(raw),
+                                    );
                                 );
                             )
                             | :Interpolated { .tokens = ref tokens, ... } => (
-                                ansi.with_mode(
-                                    :Yellow,
-                                    () => output.write("\\("),
-                                );
-                                let mut first = true;
-                                for token in tokens |> ArrayList.iter do (
-                                    if first then (
-                                        first = false;
-                                    ) else (
-                                        output.write(" ");
+                                if verbose then (
+                                    ansi.with_mode(
+                                        :Yellow,
+                                        () => output.write("\\"),
                                     );
-                                    Token.Shape.print(token^.shape)
-                                );
-                                ansi.with_mode(
-                                    :Yellow,
-                                    () => output.write(")"),
+                                    output.write(" {\n");
+                                    output.inc_indentation();
+                                    for token in tokens |> ArrayList.iter do (
+                                        print_impl(token^.shape, .verbose);
+                                        output.write("\n");
+                                    );
+                                    output.dec_indentation();
+                                    output.write("}");
+                                ) else (
+                                    ansi.with_mode(
+                                        :Yellow,
+                                        () => output.write("\\("),
+                                    );
+                                    let mut first = true;
+                                    for token in tokens |> ArrayList.iter do (
+                                        if first then (
+                                            first = false;
+                                        ) else (
+                                            output.write(" ");
+                                        );
+                                        print_impl(token^.shape, .verbose);
+                                    );
+                                    ansi.with_mode(
+                                        :Yellow,
+                                        () => output.write(")"),
+                                    );
                                 );
                             )
                         );
+                        if verbose then (
+                            output.write("\n");
+                        );
                     );
-                    ansi.with_mode(
-                        :Green,
-                        () => output.write(delimiter),
+                    if verbose then (
+                        output.dec_indentation();
+                        output.write("}");
+                    ) else (
+                        ansi.with_mode(
+                            :Green,
+                            () => output.write(delimiter),
+                        );
                     );
                 )
                 | :Error { .raw, ... } => (
@@ -178,5 +267,7 @@ const Token = (
                 )
             );
         );
+
+        const print = shape => print_impl(shape, .verbose = false);
     );
 );
