@@ -16,7 +16,7 @@
           packages = [
             (pkgs.writeShellScriptBin "kast" ''
               systemd-run --quiet --user --scope -p MemoryMax=5G \
-                rlwrap ${kast}/bin/kast "$@"
+                ${kast}/bin/kast "$@"
             '')
             (pkgs.writeShellScriptBin "self-kast" ''
               flock --shared target node target/main.mjs "$@"
