@@ -33,7 +33,7 @@ const Json = (
     const from_dep = (value :: dep.Value) -> Json.t => (
         match value with (
             | :Number x => (
-                let x = String.parse(String.to_string(x));
+                let x = dep.Number.into_f64(x);
                 :Number x
             )
             | :String s => :String s
