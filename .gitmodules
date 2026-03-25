@@ -1,3 +1,6 @@
 [submodule "deps/uri"]
 	path = deps/uri
 	url = https://github.com/kast-lang/uri
+[submodule "deps/json"]
+	path = deps/json
+	url = https://github.com/bhavyakukkar/kast-json

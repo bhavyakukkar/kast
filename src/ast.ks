@@ -170,7 +170,7 @@ const Ast = (
                 ).iter(consumer);
             );
             match ast.shape with (
-                | :Empty => consumer(ast)
+                | :Empty => ()
                 | :Token _ => consumer(ast)
                 | :InterpolatedString _ => consumer(ast)
                 | :Rule { .rule, .root = { .children, ... } } => with_return (

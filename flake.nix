@@ -27,6 +27,7 @@
             just
             fd
             inotify-tools
+            hyperfine
           ];
           shellHook = ''
             echo Hello from Kast dev shell

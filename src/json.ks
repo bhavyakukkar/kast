@@ -12,6 +12,7 @@ use (import "./syntax_rule.ks").*;
 use (import "./syntax_parser.ks").*;
 use (import "./ast.ks").*;
 use (import "./parser.ks").*;
+const dep = import "../deps/json/lib.ks";
 use std.collections.OrdMap;
 use std.Result;
 
@@ -27,6 +28,60 @@ const Json = (
         | :Array ArrayList.t[Json.t]
         | :Bool Bool
         | :Null
+    );
+
+    const from_dep = (value :: dep.Value) -> Json.t => (
+        match value with (
+            | :Number x => (
+                let x = String.parse(String.to_string(x));
+                :Number x
+            )
+            | :String s => :String s
+            | :Object a => (
+                let mut b = OrdMap.new();
+                for { name, value } in a |> ArrayList.into_iter do (
+                    let value = from_dep(value);
+                    &mut b |> OrdMap.add(name, value);
+                );
+                :Object b
+            )
+            | :Array a => (
+                let mut b = ArrayList.new();
+                for element in a |> ArrayList.into_iter do (
+                    &mut b |> ArrayList.push_back(from_dep(element));
+                );
+                :Array b
+            )
+            | :Bool x => :Bool x
+            | :Null => :Null
+        )
+    );
+
+    const into_dep = (value :: Json.t) -> dep.Value => (
+        match value with (
+            | :Number x => (
+                let x = dep.Number.parse(&mut dep.Reader.create(&to_string(x))) |> Option.unwrap;
+                :Number x
+            )
+            | :String s => :String s
+            | :Object a => (
+                let mut b = ArrayList.new();
+                for { .key = name, .value = value } in a |> OrdMap.into_iter do (
+                    let value = into_dep(value);
+                    &mut b |> ArrayList.push_back({ name, value });
+                );
+                :Object b
+            )
+            | :Array a => (
+                let mut b = ArrayList.new();
+                for element in a |> ArrayList.into_iter do (
+                    &mut b |> ArrayList.push_back(into_dep(element));
+                );
+                :Array b
+            )
+            | :Bool x => :Bool x
+            | :Null => :Null
+        )
     );
     
     const ParseError = newtype {
@@ -129,6 +184,19 @@ const Json = (
                 )
             )
             | :Rule { .rule, .root = { .children, ... } } => (
+                if rule.name == "negative" then (
+                    let inner = children |> Tuple.unwrap_unnamed_1 |> Ast.unwrap_child_value;
+                    let value = from_ast(inner);
+                    match value with (
+                        | :Number x => return :Number -x
+                        | _ => (
+                            Error.report_and_unwind(
+                                inner.span,
+                                () => (@current Output).write("Expected a number to be negated"),
+                            )
+                        )
+                    )
+                );
                 if rule.name == "obj" then (
                     return parse_obj(&rule, children);
                 );
