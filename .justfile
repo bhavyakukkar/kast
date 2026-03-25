@@ -4,7 +4,7 @@ default:
 
 build *args:
     mkdir -p target
-    flock --exclusive target kast {{args}} compile \
+    flock --exclusive target kast-bootstrap {{args}} compile \
         --js-ref-vars false \
         --async always \
         --use-numbers-instead-of-symbols false \
@@ -25,8 +25,8 @@ watch:
 
 test:
     just build
-    fd --type file --extension ks --exec-batch self-kast tokenize
-    self-kast parse_syntax_rules tests/syntax/*.ks
-    self-kast parse-json tests/json/*.json
-    self-kast parse-json --use-kast-parser tests/json/*.json
-    fd --type file --extension ks --exec-batch self-kast parse
+    fd --type file --extension ks --exec-batch kast tokenize
+    kast parse_syntax_rules tests/syntax/*.ks
+    kast parse-json tests/json/*.json
+    kast parse-json --use-kast-parser tests/json/*.json
+    fd --type file --extension ks --exec-batch kast parse

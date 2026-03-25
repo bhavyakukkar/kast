@@ -14,11 +14,11 @@
       in with pkgs; {
         devShells.default = mkShell {
           packages = [
-            (pkgs.writeShellScriptBin "kast" ''
+            (pkgs.writeShellScriptBin "kast-bootstrap" ''
               systemd-run --quiet --user --scope -p MemoryMax=5G \
                 ${kast}/bin/kast "$@"
             '')
-            (pkgs.writeShellScriptBin "self-kast" ''
+            (pkgs.writeShellScriptBin "kast" ''
               flock --shared target node target/main.mjs "$@"
             '')
             rlwrap
