@@ -45,7 +45,25 @@ interface Backend<isNode> {
     print: Fn<Value, void>;
   };
   io: {
+    print: Fn<[string], void>;
+    eprint: Fn<[string], void>;
     input: Fn<[string], string>;
+    stdout: isNode extends true
+      ? {
+          write: Fn<[string], void>;
+        }
+      : undefined;
+    stderr: isNode extends true
+      ? {
+          write: Fn<[string], void>;
+        }
+      : undefined;
+    stdin: isNode extends true
+      ? {
+          read_until: Fn<[Char], string>;
+          read_exactly: Fn<[number], string>;
+        }
+      : undefined;
   };
   fs: isNode extends true
     ? {
@@ -94,10 +112,6 @@ interface Backend<isNode> {
 type Char = string;
 
 interface Kast<isNode> extends Backend<isNode> {
-  io: Backend<isNode>["io"] & {
-    print: Fn<[string], void>;
-    eprint: Fn<[string], void>;
-  };
   cmp: {
     less: Fn<[Value, Value], boolean>;
     less_or_equal: Fn<[Value, Value], boolean>;
@@ -252,6 +266,16 @@ const Kast = await (async (): Promise<Kast<true> | Kast<false>> => {
         });
       }
 
+      const STDIN = 0;
+      const STDOUT = 1;
+      const STDERR = 2;
+      const stdin_buffer = Buffer.alloc(8 * 1024);
+      let stdin_unprocessed = stdin_buffer.subarray(0, 0);
+      function refill_stdin_buffer() {
+        const bytes = fs.readSync(STDIN, stdin_buffer);
+        stdin_unprocessed = stdin_buffer.subarray(0, bytes);
+      }
+
       return {
         dbg: {
           print(ctx, value: Value) {
@@ -259,8 +283,72 @@ const Kast = await (async (): Promise<Kast<true> | Kast<false>> => {
           },
         },
         io: {
+          print(ctx: Context, s: string) {
+            console.log(s);
+          },
+          eprint(ctx: Context, s: string) {
+            console.error(s);
+          },
           async input(ctx, prompt: string) {
             return await ensure_readline_interface().question(prompt);
+          },
+          stdout: {
+            write(ctx, s) {
+              fs.writeFileSync(STDOUT, s, "utf-8");
+            },
+          },
+          stderr: {
+            write(ctx, s) {
+              fs.writeFileSync(STDERR, s, "utf-8");
+            },
+          },
+          stdin: {
+            read_until(ctx, c: Char): string {
+              const chunks = [];
+              for (;;) {
+                const i = stdin_unprocessed.indexOf(c, "utf-8");
+                if (i < 0) {
+                  if (stdin_unprocessed.length != 0) {
+                    const chunk = Buffer.alloc(stdin_unprocessed.length);
+                    stdin_unprocessed.copy(chunk);
+                    chunks.push(chunk);
+                  }
+                  refill_stdin_buffer();
+                } else {
+                  if (i != 0) {
+                    const chunk = Buffer.alloc(i);
+                    const copied_bytes = stdin_unprocessed.copy(chunk);
+                    if (copied_bytes != i) {
+                      throw Error("???");
+                    }
+                    chunks.push(chunk);
+                  }
+                  stdin_unprocessed = stdin_unprocessed.subarray(
+                    i + Buffer.byteLength(c, "utf-8"),
+                  );
+                  break;
+                }
+              }
+              const buffer = Buffer.concat(chunks);
+              return buffer.toString("utf-8");
+            },
+            read_exactly(ctx, bytes: number): string {
+              const buffer = Buffer.alloc(bytes);
+              let pos = 0;
+              while (pos < bytes) {
+                const left_to_read = bytes - pos;
+                if (left_to_read <= stdin_unprocessed.length) {
+                  stdin_unprocessed.subarray(0, left_to_read).copy(buffer, pos);
+                  stdin_unprocessed = stdin_unprocessed.subarray(left_to_read);
+                  pos += left_to_read;
+                } else {
+                  stdin_unprocessed.copy(buffer, pos);
+                  pos += stdin_unprocessed.length;
+                  refill_stdin_buffer();
+                }
+              }
+              return buffer.toString("utf-8");
+            },
           },
         },
         fs: {
@@ -425,6 +513,12 @@ const Kast = await (async (): Promise<Kast<true> | Kast<false>> => {
           },
         },
         io: {
+          print(ctx: Context, s: string) {
+            console.log(s);
+          },
+          eprint(ctx: Context, s: string) {
+            console.error(s);
+          },
           async input(ctx: Context, p: string) {
             const result = prompt(p);
             if (result === null) {
@@ -432,6 +526,9 @@ const Kast = await (async (): Promise<Kast<true> | Kast<false>> => {
             }
             return result;
           },
+          stdout: undefined,
+          stderr: undefined,
+          stdin: undefined,
         },
         fs: undefined,
         net: undefined,
@@ -560,15 +657,6 @@ const Kast = await (async (): Promise<Kast<true> | Kast<false>> => {
   }
   return {
     ...backend,
-    io: {
-      ...backend.io,
-      print(ctx: Context, s: string) {
-        console.log(s);
-      },
-      eprint(ctx: Context, s: string) {
-        console.error(s);
-      },
-    },
     cmp: {
       less(ctx, lhs, rhs) {
         return lhs < rhs;
