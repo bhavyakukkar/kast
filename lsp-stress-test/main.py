@@ -11,7 +11,7 @@ didChange = open('change.json').read().replace('examples/hello.ks', filename)
 
 
 def print_req(req):
-    print(f"Content-Length: {len(req)}\n\n{req}", end='', flush=True)
+    print(f"Content-Length: {len(req)}\r\n\r\n{req}", end='', flush=True)
 
 
 print_req(initialize)
