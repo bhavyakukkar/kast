@@ -37,12 +37,16 @@ const OrdSet = (
 
 const is_printable = (c :: Char) -> Bool => (
     let code = Char.code(c);
-    0x20 <= code and code <= 0xffff
+    0x20 <= code # and code <= 0xffff
 );
 
 const escape_string_contents = (s :: String, .delimiter :: String) -> String => (
     let mut result = "";
     for c in String.iter(s) do (
+        if c == '\\' then (
+            result += "\\\\";
+            continue;
+        );
         if c == '\n' then (
             result += "\\n";
             continue;
@@ -98,3 +102,7 @@ const escape_string_with = (s :: String, .delimiter :: String) -> String => (
 );
 
 const escape_string = s => escape_string_with(s, .delimiter = "\"");
+
+const float64_to_int32 = (x :: Float64) -> Int32 => (
+    parse(to_string(x))
+);

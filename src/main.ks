@@ -12,10 +12,13 @@ use (import "./syntax_ruleset.ks").*;
 use (import "./ast.ks").*;
 use (import "./parser.ks").*;
 use (import "./json.ks").*;
+use (import "./lsp/lsp.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 
 # @eval Serialize.do_impl();
-with Output = stdout();
+with Stdout = new_output(std.io.print);
+with Stderr = new_output(std.io.eprint);
+with Output = (@current Stdout);
 
 const Args = (
     module:
@@ -123,6 +126,7 @@ const Args = (
         | :ParseSyntaxRuleset ParseSyntaxRulesArgs.t
         | :Parse ParseArgs.t
         | :ParseJson ParseJsonArgs.t
+        | :Lsp Lsp.CliArgs.t
     );
     
     const t = newtype {
@@ -132,11 +136,13 @@ const Args = (
             | :Json
         ),
         .stop_on_error :: Bool,
+        .color :: Bool,
     };
     
     const parse = () -> t => (
         let mut output_mode = :Human;
         let mut stop_on_error = true;
+        let mut color = true;
         let subcommand = unwindable subcommand (
             let mut i = 1;
             while i < std.sys.argc() do (
@@ -156,6 +162,9 @@ const Args = (
                 if arg == "parse-json" then (
                     unwind subcommand (:ParseJson ParseJsonArgs.parse(i + 1));
                 );
+                if arg == "lsp" then (
+                    unwind subcommand (:Lsp Lsp.CliArgs.parse(i + 1));
+                );
                 if arg == "--output-mode" then (
                     let mode = std.sys.argv_at(i + 1);
                     let mode = if mode == "human" then (
@@ -174,6 +183,11 @@ const Args = (
                     i += 1;
                     continue;
                 );
+                if arg == "--color" then (
+                    color = String.parse(std.sys.argv_at(i + 1));
+                    i += 2;
+                    continue;
+                );
                 panic("Unexpected arg " + arg);
             );
             panic("No default subcommand")
@@ -182,11 +196,14 @@ const Args = (
             .output_mode,
             .stop_on_error,
             .subcommand,
+            .color,
         }
     );
 );
 
 let args = Args.parse();
+(@current Stdout).color = args.color;
+(@current Stderr).color = args.color;
 with Error.HandlerContext = Error.init_handler(.stop_on_error = args.stop_on_error);
 let output = @current Output;
 match args.subcommand with (
@@ -295,4 +312,5 @@ match args.subcommand with (
             (@current Output).write("\n");
         );
     )
+    | :Lsp args => Lsp.run(args)
 );

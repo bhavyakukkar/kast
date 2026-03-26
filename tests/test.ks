@@ -2,6 +2,6 @@ let user = {
     .name = "kuviman",
 };
 
-let @"if" = ":)";
+let @"if" = "🦄";
 
 print("Hello, \(user.name)!");

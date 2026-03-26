@@ -46,20 +46,7 @@ const Error = (
     );
     
     const report_and_unwind = [T] (span :: Span, message :: () -> ()) -> T => (
-        let output = @current Output;
-        ansi.with_mode(
-            :Red,
-            () => (
-                output.write("ERROR at ");
-                span |> Span.print;
-                output.write(":\n");
-                message();
-                output.write("\n\n");
-            ),
-        );
-        if (@current HandlerContext).stop_on_error then (
-            std.sys.exit(-1);
-        );
+        (@current HandlerContext).handle(span, message);
         (@current UnwindableHandler).unwind_on_error()
     );
 );

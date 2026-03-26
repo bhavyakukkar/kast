@@ -1,0 +1,14 @@
+{
+    "capabilities": {
+        "positionEncoding": "utf-16",
+        "textDocumentSync": {
+            "openClose": true,
+            "change": 1
+        },
+        "hoverProvider": {}
+    },
+    "serverInfo": {
+        "name": "Kast language server (thats my name!)",
+        "version": "version wip"
+    }
+}

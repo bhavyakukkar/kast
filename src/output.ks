@@ -1,16 +1,20 @@
 module:
 
 const OutputT = newtype {
+    .color :: Bool,
     .write :: String -> (),
     .inc_indentation :: () -> (),
     .dec_indentation :: () -> (),
 };
 const Output = @context OutputT;
+const Stdout = @context OutputT;
+const Stderr = @context OutputT;
 
-const stdout = () -> OutputT => (
+const new_output = (print :: String -> ()) -> OutputT => (
     let mut buffer = "";
     let mut indentation = 0;
     {
+        .color = true,
         .inc_indentation = () => (
             indentation += 1;
         ),
@@ -23,12 +27,18 @@ const stdout = () -> OutputT => (
                 let i = buffer |> String.index_of('\n');
                 if i < 0 then break;
                 let line = buffer |> String.substring(0, i);
-                let mut s = "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
+                let color = (@current Output).color;
+                let mut s = "";
+                if color then (
+                    s += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
+                );
                 for _ in 0..indentation do (
                     s += ("│   ");
                 );
-                s += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
-                std.io.print(s + line);
+                if color then (
+                    s += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
+                );
+                print(s + line);
                 let i = i + 1;
                 buffer = String.substring(
                     buffer,
@@ -130,10 +140,12 @@ const ansi = (
     
     const write_code = (code :: String) => (
         let output = @current Output;
-        output.write("\x1b[");
-        output.write(code);
-        # if multiple code can separate with ";"
-        output.write("m");
+        if output.color then (
+            output.write("\x1b[");
+            output.write(code);
+            # if multiple code can separate with ";"
+            output.write("m");
+        );
     );
     
     const open = (mode :: Mode) => (

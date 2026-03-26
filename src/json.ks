@@ -240,6 +240,18 @@ const Json = (
         );
         :Ok from_ast(parsed.ast)
     );
+
+    const to_str = (self :: &Json.t) -> String => (
+        let mut result = "";
+        with Output = {
+            .color = false,
+            .write = s => (result += s),
+            .inc_indentation = () => (),
+            .dec_indentation = () => (),
+        };
+        print(self);
+        result
+    );
     
     const print = (self :: &Json.t) => (
         match self^ with (
