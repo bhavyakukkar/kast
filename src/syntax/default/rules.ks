@@ -47,6 +47,9 @@
 @syntax "while_is" 7.5 @wrap never = "while" " " value " " "is" " " pattern " " "do" " " body;
 @syntax "for" 7.5 @wrap never = "for" " " pattern " " "in" " " iterable " " "do" " " body;
 
+@syntax "return_without_value" 7.7 @wrap never = "return";
+@syntax "return_with_value" 7.7 @wrap never = "return" " " value;
+
 @syntax "range" 8 @wrap never = start ".." end;
 
 @syntax "core:import" 9 @wrap never = "import" " " path;
@@ -79,8 +82,6 @@
 @syntax "/" 17 @wrap if_any_assoc = <- _ " "/"\n" "/" " " _;
 @syntax "%" 17 @wrap if_any_assoc = <- _ " "/"\n" "%" " " _;
 
-@syntax "return_without_value" 40 @wrap never = "return";
-@syntax "return_with_value" 40 @wrap never = "return" " " value;
 @syntax "core:variant_without_value" 42 @wrap never = ":" label: >=1000;
 @syntax "core:variant" 42 @wrap never = ":" label: >=1000 " " value ->;
 @syntax "unary -" 45 @wrap never = "-" _;
