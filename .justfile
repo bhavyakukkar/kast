@@ -31,3 +31,6 @@ test:
     kast parse-json tests/json/*.json
     kast parse-json --use-kast-parser tests/json/*.json
     fd --type file --extension ks --exec-batch kast parse
+
+lsp-stress-test:
+    kast-bootstrap --target js lsp-stress-test/main.ks | kast lsp
