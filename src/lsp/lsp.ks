@@ -455,7 +455,14 @@ const Lsp = (
                 &mut c_pos |> Position.advance(c);
             );
             let hover_text = match hovered_char with (
-                | :Some c => "Hovered char: `" + to_string(c) + "`"
+                | :Some c => (
+                    "Hovered char: `"
+                    + to_string(c)
+                    + "`\n\nposition: "
+                    + to_string(position.line + 1)
+                    + ":"
+                    + to_string(position.column + 1)
+                )
                 | :None => "Not hovering a char???"
             );
             std.io.eprint(hover_text);
