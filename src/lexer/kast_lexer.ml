@@ -214,6 +214,7 @@ module DefaultRules = struct
                 | 'n' -> '\n'
                 | 'r' -> '\r'
                 | 'b' -> '\b'
+                | 'f' -> '\x0c'
                 | 't' -> '\t'
                 | '\'' -> '\''
                 | '"' -> '"'
