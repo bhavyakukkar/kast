@@ -6,6 +6,10 @@
             "uri": "file:///some-file.txt",
             "version": 1
         },
-        "contentChanges": []
+        "contentChanges": [
+            {
+                "text": "hello"
+            }
+        ]
     }
 }

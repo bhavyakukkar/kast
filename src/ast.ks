@@ -47,8 +47,15 @@ const Ast = (
     );
     
     const Group = newtype {
+        .parts :: ArrayList.t[Part],
         .children :: Tuple.t[Child],
     };
+
+    const Part = newtype (
+        | :Keyword Token.t
+        | :Value Ast.t
+        | :Group Group
+    );
     
     const Child = newtype (
         | :Value Ast.t

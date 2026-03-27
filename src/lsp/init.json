@@ -5,7 +5,13 @@
             "openClose": true,
             "change": 1
         },
-        "hoverProvider": {}
+        "hoverProvider": {},
+        "semanticTokensProvider": {
+            "legend": "THIS IS CONSTRUCTED IN CODE",
+            "full": {
+                "delta": false
+            }
+        }
     },
     "serverInfo": {
         "name": "Kast language server (thats my name!)",

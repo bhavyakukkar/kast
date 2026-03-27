@@ -19,7 +19,8 @@
                 ${kast}/bin/kast "$@"
             '')
             (pkgs.writeShellScriptBin "kast" ''
-              flock --shared target node target/main.mjs "$@"
+              # flock --shared target
+              node target/main.mjs "$@"
             '')
             rlwrap
             nixfmt-classic

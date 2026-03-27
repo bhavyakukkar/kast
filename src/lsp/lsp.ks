@@ -160,9 +160,202 @@ const Lsp = (
         .parsed_files :: OrdMap.t[String, Ast.t]
     };
 
+    const TokenType = newtype (
+        | :Type
+        | :Class
+        | :Enum
+        | :Interface
+        | :Struct
+        | :TypeParameter
+        | :Parameter
+        | :Variable
+        | :Property
+        | :EnumMember
+        | :Event
+        | :Function
+        | :Method
+        | :Macro
+        | :Keyword
+        | :Modifier
+        | :Comment
+        | :String
+        | :Number
+        | :Regexp
+        | :Operator
+        | :Decorator
+    );
+
+    impl TokenType as module = (
+        module:
+
+        const index = (self :: TokenType) -> Int32 => match self with (
+            | :Type => 0
+            | :Class => 1
+            | :Enum => 2
+            | :Interface => 3
+            | :Struct => 4
+            | :TypeParameter => 5
+            | :Parameter => 6
+            | :Variable => 7
+            | :Property => 8
+            | :EnumMember => 9
+            | :Event => 10
+            | :Function => 11
+            | :Method => 12
+            | :Macro => 13
+            | :Keyword => 14
+            | :Modifier => 15
+            | :Comment => 16
+            | :String => 17
+            | :Number => 18
+            | :Regexp => 19
+            | :Operator => 20
+            | :Decorator => 21
+        );
+
+        const to_string = (self :: TokenType) -> String => match self with (
+            | :Type => "type"
+            | :Class => "class"
+            | :Enum => "enum"
+            | :Interface => "interface"
+            | :Struct => "struct"
+            | :TypeParameter => "typeParameter"
+            | :Parameter => "parameter"
+            | :Variable => "variable"
+            | :Property => "property"
+            | :EnumMember => "enumMember"
+            | :Event => "event"
+            | :Function => "function"
+            | :Method => "method"
+            | :Macro => "macro"
+            | :Keyword => "keyword"
+            | :Modifier => "modifier"
+            | :Comment => "comment"
+            | :String => "string"
+            | :Number => "number"
+            | :Regexp => "regexp"
+            | :Operator => "operator"
+            | :Decorator => "decorator"
+        );
+
+        const variants = () -> std.iter.Iterable[TokenType] => {
+            .iter = f => (
+                f(:Type);
+                f(:Class);
+                f(:Enum);
+                f(:Interface);
+                f(:Struct);
+                f(:TypeParameter);
+                f(:Parameter);
+                f(:Variable);
+                f(:Property);
+                f(:EnumMember);
+                f(:Event);
+                f(:Function);
+                f(:Method);
+                f(:Macro);
+                f(:Keyword);
+                f(:Modifier);
+                f(:Comment);
+                f(:String);
+                f(:Number);
+                f(:Regexp);
+                f(:Operator);
+                f(:Decorator);
+            ),
+        };
+    );
+
+    const TokenModifier = newtype (
+        | :Declaration
+        | :Definition
+        | :Readonly
+        | :Static
+        | :Deprecated
+        | :Abstract
+        | :Async
+        | :Modification
+        | :Documentation
+        | :DefaultLibrary
+    );
+
+    impl TokenModifier as module = (
+        module:
+
+        const to_string = (self :: TokenModifier) -> String => match self with (
+            | :Declaration => "declaration"
+            | :Definition => "definition"
+            | :Readonly => "readonly"
+            | :Static => "static"
+            | :Deprecated => "deprecated"
+            | :Abstract => "abstract"
+            | :Async => "async"
+            | :Modification => "modification"
+            | :Documentation => "documentation"
+            | :DefaultLibrary => "defaultLibrary"
+        );
+
+        const index = (self :: TokenModifier) -> Int32 => match self with (
+            | :Declaration => 0
+            | :Definition => 1
+            | :Readonly => 2
+            | :Static => 3
+            | :Deprecated => 4
+            | :Abstract => 5
+            | :Async => 6
+            | :Modification => 7
+            | :Documentation => 8
+            | :DefaultLibrary => 9
+        );
+
+        const variants = () -> std.iter.Iterable[TokenModifier] => {
+            .iter = f => (
+                f(:Declaration);
+                f(:Definition);
+                f(:Readonly);
+                f(:Static);
+                f(:Deprecated);
+                f(:Abstract);
+                f(:Async);
+                f(:Modification);
+                f(:Documentation);
+                f(:DefaultLibrary);
+            ),
+        };
+    );
+
     const initialize = (state :: &mut State, request :: Json.t) -> Json.t => (
-        Json.parse(std.fs.read_file(std.path.dirname(__FILE__) + "/init.json"))
-            |> Result.unwrap
+        let mut response = Json.parse(std.fs.read_file(std.path.dirname(__FILE__) + "/init.json"))
+            |> Result.unwrap;
+        let :Object ref mut fields = response;
+        let &mut (:Object ref mut capabilities) = fields
+            |> OrdMap.get_mut("capabilities")
+            |> Option.unwrap;
+        let &mut (:Object ref mut semantic_tokens_provider) = capabilities
+            |> OrdMap.get_mut("semanticTokensProvider")
+            |> Option.unwrap;
+        let legend = semantic_tokens_provider
+            |> OrdMap.get_mut("legend")
+            |> Option.unwrap;
+        legend^ = (
+            let mut fields = OrdMap.new();
+            let mut token_types = ArrayList.new();
+            for token_type in TokenType.variants() do (
+                &mut token_types |> ArrayList.push_back(
+                    :String (token_type |> TokenType.to_string)
+                );
+            );
+            &mut fields |> OrdMap.add("tokenTypes", :Array token_types);
+            let mut token_modifiers = ArrayList.new();
+            for token_modifier in TokenModifier.variants() do (
+                &mut token_modifiers |> ArrayList.push_back(
+                    :String(token_modifier |> TokenModifier.to_string)
+                );
+            );
+            &mut fields |> OrdMap.add("tokenModifiers", :Array token_modifiers);
+            :Object fields
+        );
+        response
     );
 
     const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String) => (
@@ -219,7 +412,7 @@ const Lsp = (
                 let :Object fields = value;
                 let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
                 { .uri = parse(uri) }
-            );
+            ); 
             let &(:Array changes) = &params |> OrdMap.get("contentChanges") |> Option.unwrap;
             let &(:Object change) = &changes |> ArrayList.at(0);
             let &(:String text) = &change |> OrdMap.get("text") |> Option.unwrap;
@@ -272,19 +465,124 @@ const Lsp = (
                 fields
             )
         );
+
+        const semantic_tokens = (
+            module:
+
+            const walk_ast = (ast :: &Ast.t, f) => (
+                match ast^.shape with (
+                    | :Empty => ()
+                    | :Token token => (
+                        match token.shape with (
+                            | :Ident _ => ()
+                            | :Number _ => (
+                                f(token.span, :Number, ArrayList.new());
+                            )
+                            | :String _ => (
+                                f(token.span, :String, ArrayList.new());
+                            )
+                        )
+                    )
+                    | :InterpolatedString _ => ()
+                    | :Rule { .root = ref root, ... } => (
+                        walk_ast_group(root, f);
+                    )
+                    | :Syntax _ => ()
+                )
+            );
+
+            const walk_ast_group = (group :: &Ast.Group, f) => (
+                for part in &group^.parts |> ArrayList.iter do (
+                    match part^ with (
+                        | :Keyword token => (
+                            f(token.span, :Keyword, ArrayList.new());
+                        )
+                        | :Value ref ast => (
+                            walk_ast(ast, f);
+                        )
+                        | :Group ref inner_group => (
+                            walk_ast_group(inner_group, f);
+                        )
+                    );
+                );
+            );
+
+            const full = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
+                let mut data :: ArrayList.t[Int32] = ArrayList.new();
+
+                let mut prev_start :: Position = Position.beginning();
+                let add_token = (
+                    span :: Span,
+                    token_type :: TokenType,
+                    token_modifiers :: ArrayList.t[TokenModifier],
+                ) => (
+                    let delta_line = span.start.line - prev_start.line;
+                    let delta_start = if delta_line == 0 then (
+                        span.start.column - prev_start.column
+                    ) else (
+                        span.start.column
+                    );
+                    # TODO index and column use different indexing
+                    let length = span.end.index - span.start.index;
+                    let token_type = token_type |> TokenType.index;
+                    let token_modifiers = (
+                        let mut flags = 0;
+                        for mod in token_modifiers |> ArrayList.into_iter do (
+                            let index = TokenModifier.index(mod);
+                            flags = flags |> std.op.bit_or(
+                                std.op.bit_shift_left(1, index)
+                            );
+                        );
+                        flags
+                    );
+                    &mut data |> ArrayList.push_back(delta_line);
+                    &mut data |> ArrayList.push_back(delta_start);
+                    &mut data |> ArrayList.push_back(length);
+                    &mut data |> ArrayList.push_back(token_type);
+                    &mut data |> ArrayList.push_back(token_modifiers);
+                    prev_start = span.start;
+                );
+
+                let :Object fields = request;
+                let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
+                let text_document = (
+                    let &value = &params |> OrdMap.get("textDocument") |> Option.unwrap;
+                    let :Object fields = value;
+                    let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
+                    { .uri = parse(uri) }
+                );
+
+                let ast = match &state^.parsed_files |> OrdMap.get(Uri.to_string(text_document.uri)) with (
+                    | :Some ast => ast
+                    | :None => return :Null
+                );
+                walk_ast(ast, add_token);
+
+                :Object (
+                    let mut fields = OrdMap.new();
+                    let mut json_data = ArrayList.new();
+                    for x in data |> ArrayList.into_iter do (
+                        &mut json_data |> ArrayList.push_back(
+                            :Number (std.convert.int32_to_float64(x))
+                        );
+                    );
+                    &mut fields |> OrdMap.add("data", :Array json_data);
+                    fields
+                )
+            );
+        );
     );
 
     const on_request = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
+        let :Object request_fields = request;
+        let &(:String method) = &request_fields |> OrdMap.get("method") |> Option.unwrap;
         Log.info(
             () => (
                 let output = @current Output;
-                output.write("Received request:\n");
-                Json.print(&request);
-                output.write("\n");
+                output.write("Received request ");
+                output.write(method);
             )
         );
-        let :Object request_fields = request;
-        let &(:String method) = &request_fields |> OrdMap.get("method") |> Option.unwrap;
         if method == "initialize" then (
             return state |> initialize(request);
         );
@@ -294,19 +592,21 @@ const Lsp = (
         if method == "textDocument/hover" then (
             return state |> text_document.hover(request);
         );
+        if method == "textDocument/semanticTokens/full" then (
+            return state |> text_document.semantic_tokens.full(request);
+        );
         panic("TODO respond to " + method)
     );
     const on_notification = (state :: &mut State, notification :: Json.t) -> () => with_return (
+        let :Object fields = notification;
+        let &(:String method) = &fields |> OrdMap.get("method") |> Option.unwrap;
         Log.info(
             () => (
                 let output = @current Output;
-                output.write("Received notification:\n");
-                Json.print(&notification);
-                output.write("\n");
+                output.write("Received notification ");
+                output.write(method);
             )
         );
-        let :Object fields = notification;
-        let &(:String method) = &fields |> OrdMap.get("method") |> Option.unwrap;
         if method == "textDocument/didOpen" then (
             return state |> text_document.did_open(notification);
         );

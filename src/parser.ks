@@ -451,6 +451,7 @@ const Parser = (
             );
             rule_part_idx != start_idx
         );
+        let mut ast_parts = ArrayList.new();
         let mut children = Tuple.new();
         while (
             parsed_part_idx^ < parsed_parts |> ArrayList.length
@@ -468,6 +469,7 @@ const Parser = (
                             Span.print(ast.span);
                         )
                     );
+                    &mut ast_parts |> ArrayList.push_back(:Value ast);
                     &mut children |> Tuple.add(name, :Value ast);
                     parsed_part_idx^ += 1;
                     rule_part_idx += 1;
@@ -483,6 +485,7 @@ const Parser = (
                             Token.print(token);
                         )
                     );
+                    &mut ast_parts |> ArrayList.push_back(:Keyword token);
                     parsed_part_idx^ += 1;
                     rule_part_idx += 1;
                 )
@@ -532,6 +535,7 @@ const Parser = (
                         .rule_group = :Some rule_group,
                     );
                     Log.debug_msg("Group matched");
+                    &mut ast_parts |> ArrayList.push_back(:Group group);
                     &mut children |> Tuple.add(name, :Group group);
                     rule_part_idx += 1;
                 )
@@ -584,7 +588,7 @@ const Parser = (
             );
             rule_part_idx += 1;
         );
-        { .children }
+        { .parts = ast_parts, .children }
     );
     
     const try_parse = (.priority_filter :: SyntaxRule.PriorityFilter) -> ParseResult => (
