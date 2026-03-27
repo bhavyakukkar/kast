@@ -2272,7 +2272,8 @@ let ref_impl ~name ~(mut : bool) : core_syntax =
               ; referenced = C.compile TyExpr inner
               })
           |> init_ty_expr span C.state
-        | Pattern -> P_Ref (C.compile Pattern inner) |> init_pattern span C.state
+        | Pattern ->
+          P_Ref { mut; referenced = C.compile Pattern inner } |> init_pattern span C.state
         | Assignee ->
           error span "ref can not be assignee";
           init_error span C.state kind)

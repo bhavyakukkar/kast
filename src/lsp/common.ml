@@ -150,7 +150,7 @@ let inner_compiled_with_handler
      (match compiled.shape with
       | P_Placeholder -> ()
       | P_Unit -> ()
-      | P_Ref inner -> handler.handle Pattern inner
+      | P_Ref { mut : bool = _; referenced } -> handler.handle Pattern referenced
       | P_Binding _ -> ()
       | P_Tuple tuple -> inner_tuple_compiled_with_handler kind tuple handler
       | P_Variant { label = _; label_span = _; value } ->

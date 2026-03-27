@@ -64,12 +64,14 @@ let rec pattern_match : span:span -> place -> pattern -> (matched:bool * Scope.l
   | P_Unit ->
     (* TODO assert that value is unit *)
     ~matched:true, Scope.Locals.empty
-  | P_Ref inner ->
+  | P_Ref { mut; referenced } ->
     (match place |> claim ~span |> Value.expect_ref with
      | None ->
        Error.error span "Expected a ref";
        ~matched:false, Scope.Locals.empty
-     | Some ref -> pattern_match ~span ref.place inner)
+     | Some ref ->
+       if not (Bool.equal ref.mut mut) then Error.error span "Different mutability";
+       pattern_match ~span ref.place referenced)
   | P_Binding { bind_mode; binding } ->
     let ty, value =
       match bind_mode with
@@ -673,7 +675,7 @@ and pattern_bindings : pattern -> binding list =
   match pattern.shape with
   | P_Binding { bind_mode = _; binding } -> [ binding ]
   | P_Placeholder | P_Unit | P_Error -> []
-  | P_Ref referenced -> pattern_bindings referenced
+  | P_Ref { mut = _; referenced } -> pattern_bindings referenced
   | P_Tuple { guaranteed_anonymous = _; parts } ->
     parts
     |> List.map (fun (part : pattern Types.tuple_part_of) ->

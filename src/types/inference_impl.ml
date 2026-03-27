@@ -486,7 +486,10 @@ module Impl = struct
     | P_Placeholder, _ | _, P_Placeholder -> []
     | P_Unit, P_Unit -> []
     | P_Unit, _ -> fail ()
-    | P_Ref a, P_Ref b -> unite_pattern ~span a b
+    | ( P_Ref { mut = mut_a; referenced = referenced_a }
+      , P_Ref { mut = mut_b; referenced = referenced_b } )
+      when Bool.equal mut_a mut_b ->
+      unite_pattern ~span referenced_a referenced_b
     | P_Ref _, _ -> fail ()
     | ( P_Binding { bind_mode = bind_mode_a; binding = a }
       , P_Binding { bind_mode = bind_mode_b; binding = b } )

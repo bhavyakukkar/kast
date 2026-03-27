@@ -497,7 +497,8 @@ module Impl = struct
     fun ~state shape ->
     match shape with
     | P_Placeholder -> P_Placeholder
-    | P_Ref referenced -> P_Ref (sub_pattern_and_inject_replacements ~state referenced)
+    | P_Ref { mut; referenced } ->
+      P_Ref { mut; referenced = sub_pattern_and_inject_replacements ~state referenced }
     | P_Unit -> P_Unit
     | P_Binding { bind_mode; binding = old_binding } ->
       let new_binding : binding =

@@ -264,7 +264,8 @@ let rec inject_pattern_bindings
   match pattern.shape with
   | P_Placeholder -> ()
   | P_Unit -> ()
-  | P_Ref inner -> state |> inject_pattern_bindings ~only_compiler inner
+  | P_Ref { mut = _; referenced } ->
+    state |> inject_pattern_bindings ~only_compiler referenced
   | P_Binding { bind_mode = _; binding } ->
     state |> add_local ~only_compiler (Binding binding)
   | P_Tuple { guaranteed_anonymous = _; parts } ->

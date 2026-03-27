@@ -682,12 +682,13 @@ module Impl = struct
     fun ~options fmt -> function
     | P_Placeholder -> fprintf fmt "@{<magenta>_@}"
     | P_Unit -> fprintf fmt "()"
-    | P_Ref inner ->
+    | P_Ref { mut; referenced } ->
       fprintf
         fmt
-        "@{<magenta>&@}%a"
+        "@{<magenta>&%s@}%a"
+        (if mut then " mut" else "")
         (Tuple.print (print_pattern ~options))
-        (Tuple.make [ inner ] [])
+        (Tuple.make [ referenced ] [])
     | P_Binding { bind_mode; binding } ->
       (match bind_mode with
        | Claim -> ()

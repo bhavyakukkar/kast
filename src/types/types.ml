@@ -574,7 +574,10 @@ module rec TypesImpl : sig
 
   and pattern_shape =
     | P_Placeholder
-    | P_Ref of pattern
+    | P_Ref of
+        { mut : bool
+        ; referenced : pattern
+        }
     | P_Unit
     | P_Binding of pattern_binding
     | P_Tuple of pattern_tuple
@@ -1305,7 +1308,10 @@ end = struct
 
   and pattern_shape =
     | P_Placeholder
-    | P_Ref of pattern
+    | P_Ref of
+        { mut : bool
+        ; referenced : pattern
+        }
     | P_Unit
     | P_Binding of pattern_binding
     | P_Tuple of pattern_tuple

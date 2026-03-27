@@ -673,11 +673,11 @@ let init_pattern : span -> State.t -> Pattern.Shape.t -> pattern =
       match shape with
       | P_Placeholder -> Ty.new_not_inferred ~scope ~span
       | P_Unit -> Ty.inferred ~span T_Unit
-      | P_Ref inner ->
+      | P_Ref { mut; referenced } ->
         Ty.inferred ~span
         <| T_Ref
-             { mut = IsMutable.new_inferred ~span false
-             ; referenced = inner.data.signature.ty
+             { mut = IsMutable.new_inferred ~span mut
+             ; referenced = referenced.data.signature.ty
              }
       | P_Binding { bind_mode; binding } ->
         (match bind_mode with

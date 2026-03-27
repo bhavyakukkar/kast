@@ -585,7 +585,7 @@ module Impl = struct
     let span = Some pattern.data.span in
     match pattern.shape with
     | P_Placeholder -> NoEffect { shape = Bool true; span }
-    | P_Ref referenced_pattern ->
+    | P_Ref { mut = _; referenced = referenced_pattern } ->
       does_match referenced_pattern (place_from_js (read_place place))
     | P_Unit -> NoEffect { shape = Bool true; span }
     | P_Binding _ -> NoEffect { shape = Bool true; span }
@@ -707,7 +707,8 @@ module Impl = struct
     try
       match pattern.shape with
       | P_Placeholder -> ()
-      | P_Ref referenced -> pattern_match referenced (place_from_js (read_place place))
+      | P_Ref { mut = _; referenced } ->
+        pattern_match referenced (place_from_js (read_place place))
       | P_Unit -> ()
       | P_Binding { bind_mode; binding } ->
         let value =

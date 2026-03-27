@@ -257,7 +257,7 @@ module Impl = struct
   and complete_pattern_shape (shape : pattern_shape) =
     match shape with
     | P_Placeholder -> ()
-    | P_Ref referenced -> complete_pattern referenced
+    | P_Ref { mut : bool = _; referenced } -> complete_pattern referenced
     | P_Unit -> ()
     | P_Binding { bind_mode = _; binding } -> complete_binding binding
     | P_Tuple { guaranteed_anonymous : bool = _; parts } ->
