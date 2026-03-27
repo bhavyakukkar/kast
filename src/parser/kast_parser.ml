@@ -302,7 +302,7 @@ and parse_simple (context : context) : Ast.t option =
           |> List.map (function
             | Token.Types.Content { raw; contents; span } ->
               Ast.Content { raw; contents; span }
-            | Token.Types.Interpolate tokens ->
+            | Token.Types.Interpolate { open_span; tokens; close_span } ->
               let { ast = inner
                   ; trailing_comments
                   ; ruleset_with_all_new_syntax = _
@@ -316,7 +316,7 @@ and parse_simple (context : context) : Ast.t option =
                      (Lexer.source context.lexer).uri)
                   context.ruleset
               in
-              Ast.Interpolate inner)
+              Ast.Interpolate { open_span; ast = inner; close_span })
         in
         Ast.String { delimeter; open_span; close_span; parts }
       | Punct { raw = "@syntax"; _ } -> return <| Some (parse_syntax_extension context)
@@ -477,7 +477,8 @@ and collect_all_new_syntax ast =
       |> List.to_seq
       |> Seq.flat_map (function
         | Ast.Content _ -> Seq.empty
-        | Ast.Interpolate inner -> collect_ast inner)
+        | Ast.Interpolate { ast = inner; open_span = _; close_span = _ } ->
+          collect_ast inner)
     | Ast.Complex { rule = _; root } -> collect_group root
     | Ast.Syntax { comments_before = _; tokens = _; mode; value_after } ->
       let after = value_after |> Option.to_seq |> Seq.flat_map collect_ast in

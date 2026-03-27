@@ -288,7 +288,7 @@ let find_definition
   =
   let pos : position = Common.lsp_to_kast_pos pos in
   let* (Compiled (kind, compiled)) = compiled in
-  let hover_info = hover kind compiled ~evaled:None (Span.single_char pos uri) in
+  let hover_info = hover kind compiled ~evaled:None (Span.zero_length pos uri) in
   match hover_info.file with
   | Some file ->
     let location : Lsp.Types.Location.t =
@@ -318,7 +318,7 @@ let find_references
   =
   let pos : position = Common.lsp_to_kast_pos params.position in
   let* (Compiled (kind, compiled)) = compiled in
-  let hover_info = hover kind compiled ~evaled:None (Span.single_char pos uri) in
+  let hover_info = hover kind compiled ~evaled:None (Span.zero_length pos uri) in
   let* definition =
     match hover_info.rename with
     | Some { definition_mode = DefinedHere definition | DefinedNotHere definition; _ } ->
@@ -341,7 +341,7 @@ let prepare_rename
   =
   let pos : position = Common.lsp_to_kast_pos pos in
   let* (Compiled (kind, compiled)) = compiled in
-  let hover_info = hover kind compiled ~evaled:None (Span.single_char pos uri) in
+  let hover_info = hover kind compiled ~evaled:None (Span.zero_length pos uri) in
   let* rename = hover_info.rename in
   Some (rename.span |> Common.span_to_range)
 ;;
@@ -358,7 +358,7 @@ let rename
     let newText = Kast_lexer.maybe_convert_to_raw_ident newName in
     let pos : position = Common.lsp_to_kast_pos position in
     let* (Compiled (kind, compiled)) = compiled in
-    let hover_info = hover kind compiled ~evaled:None (Span.single_char pos uri) in
+    let hover_info = hover kind compiled ~evaled:None (Span.zero_length pos uri) in
     let* rename = hover_info.rename in
     let definition =
       match rename.definition_mode with
@@ -407,7 +407,7 @@ let hover (pos : Lsp.Types.Position.t) ({ uri; compiled; _ } : Processing.file_s
   let pos = Common.lsp_to_kast_pos pos in
   Log.trace (fun log -> log "Hovering %a" Position.print pos);
   let* (Compiled (kind, compiled)) = compiled in
-  let hover_info = hover kind compiled ~evaled:None (Span.single_char pos uri) in
+  let hover_info = hover kind compiled ~evaled:None (Span.zero_length pos uri) in
   let hover_text = hover_text hover_info in
   Log.trace (fun log -> log "Hover result: %a" String.print_debug hover_text);
   let* ty = hover_info.signature in

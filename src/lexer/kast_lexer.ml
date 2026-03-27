@@ -141,7 +141,7 @@ module DefaultRules = struct
   let read_string_impl lexer : Token.Shape.string =
     let c = Reader.peek lexer.reader |> Option.get in
     let delimeter = c in
-    let open_span = Span.single_char lexer.reader.position lexer.source.uri in
+    let open_span = Span.single_char delimeter lexer.reader.position lexer.source.uri in
     let raw = Reader.start_rec lexer.reader in
     Reader.advance lexer.reader;
     let contents_raw = ref (Reader.start_rec lexer.reader) in
@@ -189,15 +189,33 @@ module DefaultRules = struct
               if c = '('
               then (
                 finish_contents_part ();
+                let open_span_start = lexer.reader.position in
                 Reader.advance lexer.reader;
                 Reader.advance lexer.reader;
+                let open_span : Span.t =
+                  { start = open_span_start
+                  ; finish = lexer.reader.position
+                  ; uri = lexer.source.uri
+                  }
+                in
                 let tokens = ref [] in
                 while true do
                   ignore (read_whitespace lexer);
                   if Reader.peek lexer.reader = Some ')'
                   then (
+                    let close_span_start = lexer.reader.position in
                     Reader.advance lexer.reader;
-                    parts := !parts @ [ Token.Types.Interpolate !tokens ];
+                    let close_span : Span.t =
+                      { start = close_span_start
+                      ; finish = lexer.reader.position
+                      ; uri = lexer.source.uri
+                      }
+                    in
+                    parts
+                    := !parts
+                       @ [ Token.Types.Interpolate
+                             { open_span; tokens = !tokens; close_span }
+                         ];
                     contents_raw := Reader.start_rec lexer.reader;
                     return ())
                   else (
@@ -284,7 +302,7 @@ module DefaultRules = struct
         ]
       | parts -> parts
     in
-    let close_span = Span.single_char lexer.reader.position lexer.source.uri in
+    let close_span = Span.single_char delimeter lexer.reader.position lexer.source.uri in
     (match Reader.peek lexer.reader with
      | Some c when c = delimeter -> Reader.advance lexer.reader
      | Some c ->

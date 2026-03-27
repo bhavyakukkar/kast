@@ -46,7 +46,8 @@ module InitAst = struct
 
   and init_string_part : Kast_ast.T.str_part -> Ast.str_part = function
     | Content { raw; contents; span } -> Content { raw; contents; span }
-    | Interpolate inner -> Interpolate (init_ast inner)
+    | Interpolate { open_span; ast = inner; close_span } ->
+      Interpolate { open_span; ast = init_ast inner; close_span }
 
   and init_ast_child : Kast_ast.T.child -> Ast.child =
     fun child ->
@@ -129,7 +130,8 @@ module InitAstDefSite = struct
 
   and init_string_part : Ast.str_part -> Ast.str_part = function
     | Content s -> Content s
-    | Interpolate inner -> Interpolate (init_ast inner)
+    | Interpolate { open_span; ast = inner; close_span } ->
+      Interpolate { open_span; ast = init_ast inner; close_span }
 
   and init_ast_child : Ast.child -> Ast.child =
     fun child ->

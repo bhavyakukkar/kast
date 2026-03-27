@@ -1314,11 +1314,15 @@ and quote_ast : span:span -> state -> Expr.Shape.quote_ast -> Ast.t =
       parts
       |> List.map (function
         | Types.Content { raw; contents; span } -> Ast.Content { raw; contents; span }
-        | Types.Interpolate expr ->
+        | Types.Interpolate { open_span; expr; close_span } ->
           Ast.Interpolate
-            (match eval state expr |> Value.await_inferred with
-             | V_Ast ast -> ast
-             | other -> fail "interpolated as not ast but %a" Value.Shape.print other))
+            { open_span
+            ; ast =
+                (match eval state expr |> Value.await_inferred with
+                 | V_Ast ast -> ast
+                 | other -> fail "interpolated as not ast but %a" Value.Shape.print other)
+            ; close_span
+            })
     in
     { shape = String { delimeter; open_span; close_span; parts }
     ; data =

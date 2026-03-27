@@ -150,7 +150,8 @@ module Span = struct
   ;;
 
   let beginning_of uri = { start = Position.beginning; finish = Position.beginning; uri }
-  let single_char pos uri = { start = pos; finish = pos; uri }
+  let zero_length pos uri = { start = pos; finish = pos; uri }
+  let single_char c pos uri = { start = pos; finish = Position.advance c pos; uri }
   let fake desc = beginning_of <| Uri.fake desc
   let is_fake span = span.uri |> Uri.scheme = Some "fake"
 

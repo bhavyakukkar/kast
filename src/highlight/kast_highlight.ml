@@ -208,16 +208,26 @@ module Common (Output : Output) = struct
       comments_before |> List.iter (Output.print_comment printer);
       print_token printer Output.print_value token
     | String { delimeter; parts; open_span; close_span } ->
+      Output.move_to printer open_span.start;
       Output.print_with_str_color printer delimeter;
+      printer.position <- open_span.finish;
       parts
       |> List.iter (function
-        | Ast.Content { raw; span = _; contents = _ } ->
-          Output.print_with_str_color printer raw
-        | Ast.Interpolate inner ->
+        | Ast.Content { raw; span; contents = _ } ->
+          Output.move_to printer span.start;
+          Output.print_with_str_color printer raw;
+          printer.position <- span.finish
+        | Ast.Interpolate { open_span; ast = inner; close_span } ->
+          Output.move_to printer open_span.start;
           Output.print_with_keyword_color printer "\\(";
+          printer.position <- open_span.finish;
           print_ast printer inner;
-          Output.print_with_keyword_color printer ")");
-      Output.print_with_str_color printer delimeter
+          Output.move_to printer close_span.start;
+          Output.print_with_keyword_color printer ")";
+          printer.position <- close_span.finish);
+      Output.move_to printer close_span.start;
+      Output.print_with_str_color printer delimeter;
+      printer.position <- close_span.finish
     | Complex { root; _ } -> print_parts root.parts
     | Syntax { tokens; value_after; _ } ->
       tokens |> List.iter (print_token printer Output.print_syntax_part);

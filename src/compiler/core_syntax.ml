@@ -1137,7 +1137,7 @@ let native : core_syntax =
                 parts
                 |> List.map (function
                   | Ast.Content s -> Types.Raw s.contents
-                  | Ast.Interpolate inner ->
+                  | Ast.Interpolate { open_span = _; close_span = _; ast = inner } ->
                     let inner = C.compile Expr inner in
                     Types.Expr inner)
               | _ ->
@@ -1690,8 +1690,12 @@ let quote : core_syntax =
                          |> List.map (function
                            | Ast.Content { raw; contents; span } ->
                              Types.Content { raw; contents; span }
-                           | Ast.Interpolate inner ->
-                             Types.Interpolate (construct ~quote_level inner))
+                           | Ast.Interpolate { open_span; ast = inner; close_span } ->
+                             Types.Interpolate
+                               { open_span
+                               ; expr = construct ~quote_level inner
+                               ; close_span
+                               })
                      ; def_site
                      })
                 |> init_expr ast.data.span C.state

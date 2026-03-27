@@ -359,7 +359,11 @@ module rec TypesImpl : sig
         ; contents : string
         ; span : Span.t
         }
-    | Interpolate of expr
+    | Interpolate of
+        { open_span : Span.t
+        ; expr : expr
+        ; close_span : Span.t
+        }
 
   and expr_quote_ast_simple =
     { ast : Ast.t
@@ -1093,7 +1097,11 @@ end = struct
         ; contents : string
         ; span : Span.t
         }
-    | Interpolate of expr
+    | Interpolate of
+        { open_span : Span.t
+        ; expr : expr
+        ; close_span : Span.t
+        }
 
   and expr_quote_ast_simple =
     { ast : Ast.t

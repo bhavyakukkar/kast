@@ -20,7 +20,11 @@ module Types = struct
         ; contents : string
         ; span : Span.t
         }
-    | Interpolate of token list
+    | Interpolate of
+        { open_span : Span.t
+        ; tokens : token list
+        ; close_span : Span.t
+        }
 
   and string_shape =
     { raw : string
@@ -70,7 +74,7 @@ module Shape = struct
         if i <> 0 then fprintf fmt " ";
         match part with
         | Content { raw; _ } -> fprintf fmt "@{<green>%a@}" String.print_debug raw
-        | Interpolate tokens ->
+        | Interpolate { tokens; _ } ->
           List.print (fun fmt (token : Types.token) -> print fmt token.shape) fmt tokens)
     | Comment _ -> fprintf fmt "@{<italic><comment>@}"
     | Eof -> fprintf fmt "@{<italic><eof>@}"

@@ -363,7 +363,7 @@ module Impl = struct
       parts
       |> List.iter (function
         | Content _ -> ()
-        | Interpolate expr -> complete_expr expr)
+        | Interpolate { open_span = _; close_span = _; expr } -> complete_expr expr)
     | Complex { rule = _; root; def_site = _ } ->
       let rec complete_group ({ rule = _; children; span = _ } : expr_quote_ast_group) =
         children

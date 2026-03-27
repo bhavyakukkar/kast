@@ -87,7 +87,7 @@ let format : formatter -> Parser.result -> unit =
              parts
              |> List.iter (function
                | Ast.Content { raw; span = _; contents = _ } -> String.print fmt raw
-               | Ast.Interpolate inner ->
+               | Ast.Interpolate { open_span = _; ast = inner; close_span = _ } ->
                  fprintf fmt "\\(";
                  print_ast ~filter:(Filter Any) ~parent:None inner;
                  fprintf fmt ")");

@@ -48,7 +48,7 @@ and collect : Ast.t -> token Seq.t =
       |> List.to_seq
       |> Seq.flat_map (function
         | Ast.Content s -> Seq.empty
-        | Ast.Interpolate inner -> collect inner)
+        | Ast.Interpolate { open_span = _; ast = inner; close_span = _ } -> collect inner)
     in
     [ Seq.singleton { token = String delimeter; span = open_span }
     ; parts
