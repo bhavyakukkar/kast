@@ -12,6 +12,7 @@ use (import "../position.ks").*;
 use (import "../span.ks").*;
 use (import "../output.ks").*;
 use (import "../json.ks").*;
+use (import "../highlight.ks").*;
 use (import "../../deps/uri/src/lib.ks").*;
 const dep_json = import "../../deps/json/lib.ks";
 use std.collections.OrdMap;
@@ -489,44 +490,6 @@ const Lsp = (
         const semantic_tokens = (
             module:
             
-            const walk_ast = (ast :: &Ast.t, f) => (
-                match ast^.shape with (
-                    | :Empty => ()
-                    | :Token token => (
-                        match token.shape with (
-                            | :Ident _ => ()
-                            | :Number _ => (
-                                f(token.span, :Number, ArrayList.new());
-                            )
-                            | :String _ => (
-                                f(token.span, :String, ArrayList.new());
-                            )
-                        )
-                    )
-                    | :InterpolatedString _ => ()
-                    | :Rule { .root = ref root, ... } => (
-                        walk_ast_group(root, f);
-                    )
-                    | :Syntax _ => ()
-                )
-            );
-            
-            const walk_ast_group = (group :: &Ast.Group, f) => (
-                for part in &group^.parts |> ArrayList.iter do (
-                    match part^ with (
-                        | :Keyword token => (
-                            f(token.span, :Keyword, ArrayList.new());
-                        )
-                        | :Value ref ast => (
-                            walk_ast(ast, f);
-                        )
-                        | :Group ref inner_group => (
-                            walk_ast_group(inner_group, f);
-                        )
-                    );
-                );
-            );
-            
             const full = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
                 let mut data :: ArrayList.t[Int32] = ArrayList.new();
                 
@@ -577,7 +540,23 @@ const Lsp = (
                     | :Some ast => ast
                     | :None => return :Null
                 );
-                walk_ast(ast, add_token);
+
+                Highlight.ast(
+                    ast,
+                    {
+                        .print = (span, token_type, _) => with_return (
+                            let token_type = match token_type with (
+                                | :Regular => return
+                                | :String => :String
+                                | :Keyword => :Keyword
+                                | :Number => :Number
+                                | :Escape => :EnumMember
+                            );
+                            let token_modifiers = ArrayList.new();
+                            add_token(span, token_type, token_modifiers);
+                        )
+                    },
+                );
                 
                 :Object (
                     let mut fields = OrdMap.new();
