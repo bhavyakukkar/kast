@@ -16,16 +16,16 @@ impl Reader as module = (
     };
     
     const prev = (reader :: &Reader) -> Option.t[Char] => (
-        if reader^.position.index == 0 then (
+        if reader^.position.string_encoding_index == 0 then (
             :None
         ) else (
-            :Some (reader^.contents |> String.at(reader^.position.index - 1))
+            :Some (reader^.contents |> String.at(reader^.position.string_encoding_index - 1))
         )
     );
     
     const peek = (reader :: &Reader) -> Option.t[Char] => (
-        if reader^.position.index < reader^.contents |> String.length then (
-            :Some (reader^.contents |> String.at(reader^.position.index))
+        if reader^.position.string_encoding_index < reader^.contents |> String.length then (
+            :Some (reader^.contents |> String.at(reader^.position.string_encoding_index))
         ) else (
             :None
         )
@@ -34,7 +34,7 @@ impl Reader as module = (
     const peek2 = (reader :: &Reader) -> Option.t[Char] => (
         match peek(reader) with (
             | :Some peek => (
-                let next_index = reader^.position.index + Char.string_encoding_len(peek);
+                let next_index = reader^.position.string_encoding_index + Char.string_encoding_len(peek);
                 if next_index < reader^.contents |> String.length then (
                     :Some (reader^.contents |> String.at(next_index))
                 ) else (
@@ -51,12 +51,12 @@ impl Reader as module = (
     );
     
     const read_while = (reader :: &mut Reader, f :: Char -> Bool) -> String => (
-        let start = reader^.position.index;
+        let start = reader^.position.string_encoding_index;
         while peek(&reader^) is :Some c do (
             if not f(c) then break;
             advance(reader);
         );
-        let end = reader^.position.index;
+        let end = reader^.position.string_encoding_index;
         reader^.contents |> String.substring(start, end - start)
     );
 );

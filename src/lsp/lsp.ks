@@ -89,9 +89,10 @@ const JsonRpc = (
             );
         { .content_length }
     );
-
+    
     const write = (io :: Io, message :: Json.t) => (
-        let contents = &message |> Json.to_str; # |> Json.into_dep |> to_string;
+        let contents = &message |> Json.to_str;
+         # |> Json.into_dep |> to_string;
         std.io.eprint(contents);
         let content_length :: Int32 = @native "Buffer.byteLength(\(contents), 'utf-8')";
         io.output.write("Content-Length: ");
@@ -153,13 +154,13 @@ const Lsp = (
             {  }
         );
     );
-
+    
     const State = newtype {
         .syntax_ruleset :: SyntaxRuleset.t,
         .contents :: OrdMap.t[String, String],
         .parsed_files :: OrdMap.t[String, Ast.t]
     };
-
+    
     const TokenType = newtype (
         | :Type
         | :Class
@@ -184,10 +185,10 @@ const Lsp = (
         | :Operator
         | :Decorator
     );
-
+    
     impl TokenType as module = (
         module:
-
+        
         const index = (self :: TokenType) -> Int32 => match self with (
             | :Type => 0
             | :Class => 1
@@ -212,7 +213,7 @@ const Lsp = (
             | :Operator => 20
             | :Decorator => 21
         );
-
+        
         const to_string = (self :: TokenType) -> String => match self with (
             | :Type => "type"
             | :Class => "class"
@@ -237,7 +238,7 @@ const Lsp = (
             | :Operator => "operator"
             | :Decorator => "decorator"
         );
-
+        
         const variants = () -> std.iter.Iterable[TokenType] => {
             .iter = f => (
                 f(:Type);
@@ -265,7 +266,7 @@ const Lsp = (
             ),
         };
     );
-
+    
     const TokenModifier = newtype (
         | :Declaration
         | :Definition
@@ -278,10 +279,10 @@ const Lsp = (
         | :Documentation
         | :DefaultLibrary
     );
-
+    
     impl TokenModifier as module = (
         module:
-
+        
         const to_string = (self :: TokenModifier) -> String => match self with (
             | :Declaration => "declaration"
             | :Definition => "definition"
@@ -294,7 +295,7 @@ const Lsp = (
             | :Documentation => "documentation"
             | :DefaultLibrary => "defaultLibrary"
         );
-
+        
         const index = (self :: TokenModifier) -> Int32 => match self with (
             | :Declaration => 0
             | :Definition => 1
@@ -307,7 +308,7 @@ const Lsp = (
             | :Documentation => 8
             | :DefaultLibrary => 9
         );
-
+        
         const variants = () -> std.iter.Iterable[TokenModifier] => {
             .iter = f => (
                 f(:Declaration);
@@ -323,7 +324,7 @@ const Lsp = (
             ),
         };
     );
-
+    
     const initialize = (state :: &mut State, request :: Json.t) -> Json.t => (
         let mut response = Json.parse(std.fs.read_file(std.path.dirname(__FILE__) + "/init.json"))
             |> Result.unwrap;
@@ -341,23 +342,25 @@ const Lsp = (
             let mut fields = OrdMap.new();
             let mut token_types = ArrayList.new();
             for token_type in TokenType.variants() do (
-                &mut token_types |> ArrayList.push_back(
-                    :String (token_type |> TokenType.to_string)
-                );
+                &mut token_types
+                    |> ArrayList.push_back(
+                        :String (token_type |> TokenType.to_string)
+                    );
             );
             &mut fields |> OrdMap.add("tokenTypes", :Array token_types);
             let mut token_modifiers = ArrayList.new();
             for token_modifier in TokenModifier.variants() do (
-                &mut token_modifiers |> ArrayList.push_back(
-                    :String(token_modifier |> TokenModifier.to_string)
-                );
+                &mut token_modifiers
+                    |> ArrayList.push_back(
+                        :String (token_modifier |> TokenModifier.to_string)
+                    );
             );
             &mut fields |> OrdMap.add("tokenModifiers", :Array token_modifiers);
             :Object fields
         );
         response
     );
-
+    
     const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String) => (
         let source :: Source = { .uri, .contents };
         let entire_source_span = (
@@ -387,10 +390,10 @@ const Lsp = (
         &mut state^.parsed_files |> OrdMap.add(Uri.to_string(uri), parsed.ast);
         &mut state^.contents |> OrdMap.add(Uri.to_string(uri), contents);
     );
-
+    
     const text_document = (
         module:
-
+        
         const did_open = (state :: &mut State, n :: Json.t) -> () => (
             let :Object fields = n;
             let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
@@ -403,7 +406,7 @@ const Lsp = (
             );
             state |> open_or_change_doc(text_document.uri, text_document.text)
         );
-
+        
         const did_change = (state :: &mut State, n :: Json.t) -> () => (
             let :Object fields = n;
             let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
@@ -412,17 +415,17 @@ const Lsp = (
                 let :Object fields = value;
                 let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
                 { .uri = parse(uri) }
-            ); 
+            );
             let &(:Array changes) = &params |> OrdMap.get("contentChanges") |> Option.unwrap;
             let &(:Object change) = &changes |> ArrayList.at(0);
             let &(:String text) = &change |> OrdMap.get("text") |> Option.unwrap;
             state |> open_or_change_doc(text_document.uri, text)
         );
-
+        
         const selection_range = (state :: &mut State, request :: Json.t) -> Json.t => (
             panic("TODO")
         );
-
+        
         const hover = (state :: &mut State, request :: Json.t) -> Json.t => (
             let :Object fields = request;
             let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
@@ -439,7 +442,14 @@ const Lsp = (
                 let &(:Number column) = &fields |> OrdMap.get("character") |> Option.unwrap;
                 let line = std.convert.float64_to_int32(line);
                 let column = std.convert.float64_to_int32(column);
-                { .index = 0, .line, .column }
+                {
+                    .string_encoding_index = 0,
+                    .line,
+                    .column = {
+                        .string_encoding = column,
+                        .display_width = 0,
+                    },
+                }
             );
             let contents = &state^.contents
                 |> OrdMap.get(Uri.to_string(text_document.uri))
@@ -448,7 +458,10 @@ const Lsp = (
             let mut c_pos = Position.beginning();
             let mut hovered_char = :None;
             for c in String.iter(contents) do (
-                if c_pos.line == position.line and c_pos.column == position.column then (
+                if (
+                    c_pos.line == position.line
+                    and c_pos.column.string_encoding == position.column.string_encoding
+                ) then (
                     hovered_char = :Some c;
                     break;
                 );
@@ -461,7 +474,7 @@ const Lsp = (
                     + "`\n\nposition: "
                     + to_string(position.line + 1)
                     + ":"
-                    + to_string(position.column + 1)
+                    + to_string(position.column.string_encoding + 1)
                 )
                 | :None => "Not hovering a char???"
             );
@@ -472,10 +485,10 @@ const Lsp = (
                 fields
             )
         );
-
+        
         const semantic_tokens = (
             module:
-
+            
             const walk_ast = (ast :: &Ast.t, f) => (
                 match ast^.shape with (
                     | :Empty => ()
@@ -497,7 +510,7 @@ const Lsp = (
                     | :Syntax _ => ()
                 )
             );
-
+            
             const walk_ast_group = (group :: &Ast.Group, f) => (
                 for part in &group^.parts |> ArrayList.iter do (
                     match part^ with (
@@ -513,10 +526,10 @@ const Lsp = (
                     );
                 );
             );
-
+            
             const full = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
                 let mut data :: ArrayList.t[Int32] = ArrayList.new();
-
+                
                 let mut prev_start :: Position = Position.beginning();
                 let add_token = (
                     span :: Span,
@@ -525,20 +538,21 @@ const Lsp = (
                 ) => (
                     let delta_line = span.start.line - prev_start.line;
                     let delta_start = if delta_line == 0 then (
-                        span.start.column - prev_start.column
+                        span.start.column.string_encoding - prev_start.column.string_encoding
                     ) else (
-                        span.start.column
+                        span.start.column.string_encoding
                     );
                     # TODO index and column use different indexing
-                    let length = span.end.index - span.start.index;
+                    let length = span.end.string_encoding_index - span.start.string_encoding_index;
                     let token_type = token_type |> TokenType.index;
                     let token_modifiers = (
                         let mut flags = 0;
                         for mod in token_modifiers |> ArrayList.into_iter do (
                             let index = TokenModifier.index(mod);
-                            flags = flags |> std.op.bit_or(
-                                std.op.bit_shift_left(1, index)
-                            );
+                            flags = flags
+                                |> std.op.bit_or(
+                                    std.op.bit_shift_left(1, index)
+                                );
                         );
                         flags
                     );
@@ -549,7 +563,7 @@ const Lsp = (
                     &mut data |> ArrayList.push_back(token_modifiers);
                     prev_start = span.start;
                 );
-
+                
                 let :Object fields = request;
                 let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
                 let text_document = (
@@ -558,20 +572,21 @@ const Lsp = (
                     let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
                     { .uri = parse(uri) }
                 );
-
+                
                 let ast = match &state^.parsed_files |> OrdMap.get(Uri.to_string(text_document.uri)) with (
                     | :Some ast => ast
                     | :None => return :Null
                 );
                 walk_ast(ast, add_token);
-
+                
                 :Object (
                     let mut fields = OrdMap.new();
                     let mut json_data = ArrayList.new();
                     for x in data |> ArrayList.into_iter do (
-                        &mut json_data |> ArrayList.push_back(
-                            :Number (std.convert.int32_to_float64(x))
-                        );
+                        &mut json_data
+                            |> ArrayList.push_back(
+                                :Number (std.convert.int32_to_float64(x))
+                            );
                     );
                     &mut fields |> OrdMap.add("data", :Array json_data);
                     fields
@@ -579,7 +594,7 @@ const Lsp = (
             );
         );
     );
-
+    
     const on_request = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
         let :Object request_fields = request;
         let &(:String method) = &request_fields |> OrdMap.get("method") |> Option.unwrap;

@@ -82,12 +82,12 @@ impl Lexer as module = (
             );
             let c = Reader.peek(&reader^) |> Option.unwrap_or_else(() => return :None);
             if not is_punct(c) then return :None;
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             Reader.advance(reader);
             if not is_single_punct(c) then (
                 reader |> Reader.read_while(c => is_punct(c) and not is_single_punct(c));
             );
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             :Some :Punct {
                 .raw = String.substring(reader^.contents, start, end - start),
             }
@@ -101,10 +101,10 @@ impl Lexer as module = (
             let reader = &mut lexer^.reader;
             let c = Reader.peek(&reader^) |> Option.unwrap_or_else(() => return :None);
             if not is_ident_start(c) then return :None;
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             Reader.advance(reader);
             reader |> Reader.read_while(c => Char.is_ascii_alphanumeric(c) or c == '_');
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             let raw = String.substring(reader^.contents, start, end - start);
             :Some :Ident {
                 .raw,
@@ -116,7 +116,7 @@ impl Lexer as module = (
             let reader = &mut lexer^.reader;
             let c = Reader.peek(&reader^) |> Option.unwrap_or_else(() => return :None);
             if c != delim then return :None;
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             let error = [T] message -> T => (
                 let span = Span.single_char(
                     .position = reader^.position,
@@ -124,7 +124,7 @@ impl Lexer as module = (
                     .uri = lexer^.source.uri,
                 );
                 Error.report_msg(span, message);
-                let end = reader^.position.index;
+                let end = reader^.position.string_encoding_index;
                 return :Some :Error { .raw = String.substring(reader^.contents, start, end - start) }
             );
             let expected = [T] expected -> T => (
@@ -137,7 +137,7 @@ impl Lexer as module = (
             Reader.advance(reader);
             let mut parts = ArrayList.new();
             let reset_content_part = () => {
-                .start_index = reader^.position.index,
+                .start_index = reader^.position.string_encoding_index,
                 .contents = "",
             };
             let mut content_part = reset_content_part();
@@ -151,7 +151,7 @@ impl Lexer as module = (
                         :Content {
                             .raw = (
                                 let start = content_part.start_index;
-                                let end = reader^.position.index;
+                                let end = reader^.position.string_encoding_index;
                                 String.substring(reader^.contents, start, end - start)
                             ),
                             .contents = content_part.contents,
@@ -300,7 +300,7 @@ impl Lexer as module = (
                 );
             if c != delim then error("Unfinished string");
             Reader.advance(reader);
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             let raw = String.substring(reader^.contents, start, end - start);
             if &parts |> ArrayList.length == 1 then (
                 if (&parts |> ArrayList.at(0))^ is :Content { .contents, ... } then (
@@ -325,14 +325,14 @@ impl Lexer as module = (
         
         const read_hex_number :: ReadFn = lexer => with_return (
             let reader = &mut lexer^.reader;
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             if not next_two_are(&reader^, '0', 'x') then (
                 return :None;
             );
             Reader.advance(reader);
             Reader.advance(reader);
             reader |> Reader.read_while(is_hex_digit);
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             :Some :Number {
                 .raw = String.substring(reader^.contents, start, end - start),
             }
@@ -340,7 +340,7 @@ impl Lexer as module = (
         
         const read_number :: ReadFn = lexer => with_return (
             let reader = &mut lexer^.reader;
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             let c = Reader.peek(&reader^) |> Option.unwrap_or_else(() => return :None);
             if not Char.is_ascii_digit(c) then return :None;
             let seen_dot = match Reader.prev(&reader^) with (
@@ -361,7 +361,7 @@ impl Lexer as module = (
                 )
                 | :None => ()
             );
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             :Some :Number {
                 .raw = String.substring(reader^.contents, start, end - start),
             }
@@ -372,9 +372,9 @@ impl Lexer as module = (
             if not next_is(&reader^, '#') then (
                 return :None;
             );
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             reader |> Reader.read_while(c => c != '\n');
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             :Some :Comment {
                 .raw = String.substring(reader^.contents, start, end - start),
                 .ty = :Line,
@@ -386,7 +386,7 @@ impl Lexer as module = (
             if not next_two_are(&reader^, '(', '#') then (
                 return :None
             );
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             let mut nest_depth :: Int32 = 0;
             loop (
                 if next_two_are(&reader^, '(', '#') then (
@@ -404,7 +404,7 @@ impl Lexer as module = (
                 );
                 Reader.advance(reader);
             );
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             :Some :Comment {
                 .raw = String.substring(reader^.contents, start, end - start),
                 .ty = :Line,
@@ -416,15 +416,15 @@ impl Lexer as module = (
             if not &reader^ |> next_is('@') then (
                 return :None;
             );
-            let start = reader^.position.index;
+            let start = reader^.position.string_encoding_index;
             reader |> Reader.advance;
             let _ = read_ident(lexer);
-            let end = reader^.position.index;
+            let end = reader^.position.string_encoding_index;
             :Some :Punct {
                 .raw = String.substring(reader^.contents, start, end - start),
             }
         );
-
+        
         const read_raw_ident :: ReadFn = lexer => with_return (
             let reader = &mut lexer^.reader;
             if not &reader^ |> next_is('@') then (
@@ -434,7 +434,7 @@ impl Lexer as module = (
                 | :Some c => (
                     if c != '"' then return :None;
                 )
-                | : None => return :None
+                | :None => return :None
             );
             let start = lexer^.reader.position;
             reader |> Reader.advance;
@@ -447,8 +447,8 @@ impl Lexer as module = (
             };
             let raw = String.substring(
                 reader^.contents,
-                start.index,
-                end.index - start.index,
+                start.string_encoding_index,
+                end.string_encoding_index - start.string_encoding_index,
             );
             let name = match string_token with (
                 | :String { .contents, ... } => contents
