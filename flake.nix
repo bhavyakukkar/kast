@@ -123,7 +123,7 @@
             #     | tee >(sed -u 's/^/OUT /' >> kast.log)
             # '')
             (pkgs.writeShellScriptBin "kast" ''
-              systemd-run --user --scope -p MemoryMax=10G \
+              systemd-run --user --scope -p MemoryMax=5G \
                 dune exec kast -- "$@"
             '')
             # (pkgs.writeShellScriptBin "kast" ''
