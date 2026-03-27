@@ -12,6 +12,7 @@ use (import "./syntax_ruleset.ks").*;
 use (import "./ast.ks").*;
 use (import "./parser.ks").*;
 use (import "./json.ks").*;
+use (import "./highlight.ks").*;
 use (import "./lsp/lsp.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 
@@ -126,6 +127,7 @@ const Args = (
         | :ParseSyntaxRuleset ParseSyntaxRulesArgs.t
         | :Parse ParseArgs.t
         | :ParseJson ParseJsonArgs.t
+        | :Highlight Highlight.Cli.Args.t
         | :Lsp Lsp.CliArgs.t
     );
     
@@ -161,6 +163,9 @@ const Args = (
                 );
                 if arg == "parse-json" then (
                     unwind subcommand (:ParseJson ParseJsonArgs.parse(i + 1));
+                );
+                if arg == "highlight" then (
+                    unwind subcommand (:Highlight Highlight.Cli.Args.parse(i + 1));
                 );
                 if arg == "lsp" then (
                     unwind subcommand (:Lsp Lsp.CliArgs.parse(i + 1));
@@ -312,5 +317,6 @@ match args.subcommand with (
             (@current Output).write("\n");
         );
     )
+    | :Highlight args => Highlight.Cli.run(args)
     | :Lsp args => Lsp.run(args)
 );

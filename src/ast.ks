@@ -16,8 +16,16 @@ const Ast = (
     };
     
     const InterpolatedStringPart = newtype (
-        | :Content Token.StringContent
-        | :Interpolated Ast.t
+        | :Content {
+            .raw :: String,
+            .contents :: String,
+            .span :: Span,
+        }
+        | :Interpolated {
+            .open :: Token.t,
+            .ast :: Ast.t,
+            .close :: Token.t,
+        }
     );
     
     const Shape = (
@@ -28,7 +36,9 @@ const Ast = (
             | :Token Token.t
             | :InterpolatedString {
                 .delimiter :: String,
+                .open :: Token.t,
                 .parts :: ArrayList.t[InterpolatedStringPart],
+                .close :: Token.t,
             }
             | :Rule {
                 .rule :: SyntaxRule.t,
@@ -98,7 +108,12 @@ const Ast = (
                 () => output.write("<empty>"),
             )
             | :Token token => Token.Shape.print(token.shape)
-            | :InterpolatedString { .delimiter, .parts = ref parts } => (
+            | :InterpolatedString {
+                .delimiter,
+                .open = _,
+                .parts = ref parts,
+                .close = _,
+            } => (
                 ansi.with_mode(
                     :Green,
                     () => (
@@ -117,7 +132,7 @@ const Ast = (
                                 () => output.write(String.escape(contents)),
                             );
                         )
-                        | :Interpolated ref ast => (
+                        | :Interpolated { .open = _, .close = _, .ast = ref ast } => (
                             ansi.with_mode(
                                 :Yellow,
                                 () => output.write("\\ "),

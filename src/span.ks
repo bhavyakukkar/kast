@@ -6,6 +6,7 @@ module:
 
 const Span = newtype {
     .start :: Position,
+    ## end is exclusive
     .end :: Position,
     .uri :: Uri,
 };
@@ -22,6 +23,15 @@ impl Span as module = (
         output.write("-");
         self.end |> Position.print;
     );
+
+    const empty = (
+        .position :: Position,
+        .uri :: Uri,
+    ) -> Span => {
+        .start = position,
+        .end = position,
+        .uri,
+    };
 
     const single_char = (
         .position :: Position,

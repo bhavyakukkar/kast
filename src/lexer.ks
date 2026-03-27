@@ -1,4 +1,5 @@
 use (import "./span.ks").*;
+use (import "./position.ks").*;
 use (import "./source.ks").*;
 use (import "./reader.ks").*;
 use (import "./token.ks").*;
@@ -116,6 +117,14 @@ impl Lexer as module = (
             let reader = &mut lexer^.reader;
             let c = Reader.peek(&reader^) |> Option.unwrap_or_else(() => return :None);
             if c != delim then return :None;
+            let open_token = {
+                .shape = :Punct { .raw = to_string(delim) },
+                .span = Span.single_char(
+                    .position = reader^.position,
+                    .char = :Some delim,
+                    .uri = lexer^.source.uri,
+                ),
+            };
             let start = reader^.position.string_encoding_index;
             let error = [T] message -> T => (
                 let span = Span.single_char(
@@ -137,7 +146,7 @@ impl Lexer as module = (
             Reader.advance(reader);
             let mut parts = ArrayList.new();
             let reset_content_part = () => {
-                .start_index = reader^.position.string_encoding_index,
+                .start = reader^.position,
                 .contents = "",
             };
             let mut content_part = reset_content_part();
@@ -149,8 +158,13 @@ impl Lexer as module = (
                 &mut parts
                     |> ArrayList.push_back(
                         :Content {
+                            .span = {
+                                .start = content_part.start,
+                                .end = reader^.position,
+                                .uri = lexer^.source.uri,
+                            },
                             .raw = (
-                                let start = content_part.start_index;
+                                let start = content_part.start.string_encoding_index;
                                 let end = reader^.position.string_encoding_index;
                                 String.substring(reader^.contents, start, end - start)
                             ),
@@ -170,6 +184,19 @@ impl Lexer as module = (
                     if c == '(' then (
                         # "hello, \(user.name)"
                         finish_content_part();
+                        let open_token = {
+                            .shape = :Punct { .raw = "\\(" },
+                            .span = {
+                                .start = reader^.position,
+                                .end = (
+                                    let mut pos = reader^.position;
+                                    &mut pos |> Position.advance('\\');
+                                    &mut pos |> Position.advance('(');
+                                    pos
+                                ),
+                                .uri = lexer^.source.uri,
+                            },
+                        };
                         Reader.advance(reader);
                         Reader.advance(reader);
                         let span_start = reader^.position;
@@ -181,10 +208,20 @@ impl Lexer as module = (
                                 | :None => error("Unfinished interpolation")
                             );
                             if c == ')' then (
+                                let close_token = {
+                                    .shape = :Punct { .raw = ")" },
+                                    .span = Span.single_char(
+                                        .position = reader^.position,
+                                        .char = :Some ')',
+                                        .uri = lexer^.source.uri,
+                                    ),
+                                };
                                 &mut parts
                                     |> ArrayList.push_back(
                                         :Interpolated {
                                             .tokens,
+                                            .open = open_token,
+                                            .close = close_token,
                                             .span = {
                                                 .start = span_start,
                                                 .end = reader^.position,
@@ -287,6 +324,10 @@ impl Lexer as module = (
                 &mut parts
                     |> ArrayList.push_back(
                         :Content {
+                            .span = Span.empty(
+                                .position = reader^.position,
+                                .uri = lexer^.source.uri,
+                            ),
                             .raw = "",
                             .contents = "",
                         }
@@ -299,6 +340,14 @@ impl Lexer as module = (
                     )
                 );
             if c != delim then error("Unfinished string");
+            let close_token = {
+                .shape = :Punct { .raw = to_string(delim) },
+                .span = Span.single_char(
+                    .position = reader^.position,
+                    .char = :Some delim,
+                    .uri = lexer^.source.uri,
+                ),
+            };
             Reader.advance(reader);
             let end = reader^.position.string_encoding_index;
             let raw = String.substring(reader^.contents, start, end - start);
@@ -313,7 +362,9 @@ impl Lexer as module = (
             :Some :InterpolatedString {
                 .delimiter = to_string(delim),
                 .raw,
+                .open = open_token,
                 .parts,
+                .close = close_token,
             }
         );
         

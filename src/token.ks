@@ -29,14 +29,15 @@ const Token = (
 
     const print = token => Token.print_impl(token, .verbose = false);
     
-    const StringContent = newtype {
-        .raw :: String,
-        .contents :: String,
-    };
-    
     const InterpolatedStringPart = newtype (
-        | :Content StringContent
+        | :Content {
+            .raw :: String,
+            .contents :: String,
+            .span :: Span,
+        }
         | :Interpolated {
+            .open :: Token.t,
+            .close :: Token.t,
             .tokens :: ArrayList.t[Token.t],
             .span :: Span,
         }
@@ -45,7 +46,9 @@ const Token = (
     const InterpolatedStringShape = newtype {
         .delimiter :: String,
         .raw :: String,
+        .open :: Token.t,
         .parts :: ArrayList.t[InterpolatedStringPart],
+        .close :: Token.t,
     };
     
     const Shape = (

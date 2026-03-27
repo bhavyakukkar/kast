@@ -143,12 +143,12 @@ const Parser = (
             Log.debug_msg("Parsed single token " + String.escape(peek_raw));
             ctx.token_stream |> TokenStream.advance;
             let parsed = match peek.shape with (
-                | :InterpolatedString { .delimiter, .parts = ref token_parts, .raw = _ } => (
+                | :InterpolatedString { .delimiter, .open, .close, .parts = ref token_parts, .raw = _ } => (
                     let mut ast_parts = ArrayList.new();
                     for token_part in token_parts |> ArrayList.iter do (
                         let ast_part :: Ast.InterpolatedStringPart = match token_part^ with (
                             | :Content part => :Content part
-                            | :Interpolated { .tokens = ref tokens, .span } => :Interpolated (
+                            | :Interpolated { .open, .close, .tokens = ref tokens, .span } => :Interpolated (
                                 let mut token_stream = (
                                     let mut i = 0;
                                     TokenStream.from_fn(
@@ -170,17 +170,18 @@ const Parser = (
                                         )
                                     )
                                 );
-                                parse(
+                                let parsed = parse(
                                     .ruleset = ctx.ruleset,
                                     .token_stream = &mut token_stream,
                                     .entire_source_span = span,
                                     .uri = span.uri,
-                                ).ast
+                                );
+                                { .open, .close, .ast = parsed.ast }
                             )
                         );
                         &mut ast_parts |> ArrayList.push_back(ast_part);
                     );
-                    :InterpolatedString { .delimiter, .parts = ast_parts }
+                    :InterpolatedString { .delimiter, .open, .close, .parts = ast_parts }
                 )
                 | _ => :Token peek
             );
