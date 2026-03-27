@@ -93,7 +93,6 @@ const JsonRpc = (
     
     const write = (io :: Io, message :: Json.t) => (
         let contents = message |> Json.into_dep |> to_string;
-        std.io.eprint(contents);
         let content_length :: Int32 = @native "Buffer.byteLength(\(contents), 'utf-8')";
         io.output.write("Content-Length: ");
         io.output.write(to_string(content_length));
@@ -156,11 +155,16 @@ const Lsp = (
             {  }
         );
     );
+
+    const FileState = newtype {
+        .contents :: String,
+        .lines :: ArrayList.t[String],
+        .parsed :: Option.t[Parser.Parsed],
+    };
     
     const State = newtype {
         .syntax_ruleset :: SyntaxRuleset.t,
-        .contents :: OrdMap.t[String, String],
-        .parsed_files :: OrdMap.t[String, Ast.t]
+        .files :: OrdMap.t[String, FileState],
     };
     
     const TokenType = newtype (
@@ -328,7 +332,7 @@ const Lsp = (
     );
     
     const initialize = (state :: &mut State, request :: Json.t) -> Json.t => (
-        let mut response = Json.parse(std.fs.read_file(std.path.dirname(__FILE__) + "/init.json"))
+        let mut response = Json.parse(@eval std.fs.read_file(std.path.dirname(__FILE__) + "/init.json"))
             |> Result.unwrap;
         let :Object ref mut fields = response;
         let &mut (:Object ref mut capabilities) = fields
@@ -364,6 +368,7 @@ const Lsp = (
     );
     
     const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String) => (
+        Log.info_msg("open_or_change_doc " + Uri.to_string(uri));
         let source :: Source = { .uri, .contents };
         let entire_source_span = (
             let start = Position.beginning();
@@ -377,20 +382,32 @@ const Lsp = (
                 .uri = source.uri,
             }
         );
-        with Error.HandlerContext = {
-            .stop_on_error = false,
-            .handle = (span, msg) => (),
+        let file_state = {
+            .contents,
+            .lines = (
+                let mut lines = ArrayList.new();
+                for line in String.lines(contents) do (
+                    &mut lines |> ArrayList.push_back(line);
+                );
+                lines
+            ),
+            .parsed = (
+                with Error.HandlerContext = {
+                    .stop_on_error = false,
+                    .handle = (span, msg) => (),
+                };
+                let mut lexer = Lexer.new(source);
+                let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+                let parsed = Parser.parse(
+                    .ruleset = state^.syntax_ruleset,
+                    .entire_source_span,
+                    .uri = source.uri,
+                    .token_stream = &mut token_stream,
+                );
+                :Some parsed
+            ),
         };
-        let mut lexer = Lexer.new(source);
-        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
-        let parsed = Parser.parse(
-            .ruleset = state^.syntax_ruleset,
-            .entire_source_span,
-            .uri = source.uri,
-            .token_stream = &mut token_stream,
-        );
-        &mut state^.parsed_files |> OrdMap.add(Uri.to_string(uri), parsed.ast);
-        &mut state^.contents |> OrdMap.add(Uri.to_string(uri), contents);
+        &mut state^.files |> OrdMap.add(Uri.to_string(uri), file_state);
     );
     
     const text_document = (
@@ -428,7 +445,7 @@ const Lsp = (
             panic("TODO")
         );
         
-        const hover = (state :: &mut State, request :: Json.t) -> Json.t => (
+        const hover = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
             let :Object fields = request;
             let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
             let text_document = (
@@ -453,21 +470,23 @@ const Lsp = (
                     },
                 }
             );
-            let contents = &state^.contents
+
+            let file_state = &state^.files
                 |> OrdMap.get(Uri.to_string(text_document.uri))
-                |> Option.as_deref
-                |> Option.unwrap_or("");
-            let mut c_pos = Position.beginning();
-            let mut hovered_char = :None;
-            for c in String.iter(contents) do (
+                |> Option.unwrap_or_else(() => return :Null);
+            eprint(file_state^.contents);
+            let hovered_char = with_return (
                 if (
-                    c_pos.line == position.line
-                    and c_pos.column.string_encoding == position.column.string_encoding
+                    position.line < 0
+                    or position.line >= ArrayList.length(&file_state^.lines)
                 ) then (
-                    hovered_char = :Some c;
-                    break;
+                    return :None;
                 );
-                &mut c_pos |> Position.advance(c);
+                let line_contents = &file_state^.lines |> ArrayList.at(position.line);
+                if position.column.string_encoding >= String.length(line_contents^) then (
+                    return :None;
+                );
+                :Some String.at(line_contents^, position.column.string_encoding)
             );
             let hover_text = match hovered_char with (
                 | :Some c => (
@@ -478,9 +497,8 @@ const Lsp = (
                     + ":"
                     + to_string(position.column.string_encoding + 1)
                 )
-                | :None => "Not hovering a char???"
+                | :None => "Hovering out of range?"
             );
-            std.io.eprint(hover_text);
             :Object (
                 let mut fields = OrdMap.new();
                 &mut fields |> OrdMap.add("contents", :String hover_text);
@@ -492,8 +510,24 @@ const Lsp = (
             module:
             
             const full = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
-                let mut data :: ArrayList.t[Int32] = ArrayList.new();
+                let :Object fields = request;
+                let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
+                let text_document = (
+                    let &value = &params |> OrdMap.get("textDocument") |> Option.unwrap;
+                    let :Object fields = value;
+                    let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
+                    { .uri = parse(uri) }
+                );
                 
+                let file_state = &state^.files
+                    |> OrdMap.get(Uri.to_string(text_document.uri))
+                    |> Option.unwrap_or_else(() => return :Null);
+                let parsed = &file_state^.parsed
+                    |> Option.as_ref
+                    |> Option.unwrap_or_else(() => return :Null);
+                let ast = &parsed^.ast;
+
+                let mut data :: ArrayList.t[Int32] = ArrayList.new();
                 let mut prev_start :: Position = Position.beginning();
                 let add_token = (
                     span :: Span,
@@ -506,7 +540,6 @@ const Lsp = (
                     ) else (
                         span.start.column.string_encoding
                     );
-                    # TODO index and column use different indexing
                     let length = span.end.string_encoding_index - span.start.string_encoding_index;
                     let token_type = token_type |> TokenType.index;
                     let token_modifiers = (
@@ -527,21 +560,6 @@ const Lsp = (
                     &mut data |> ArrayList.push_back(token_modifiers);
                     prev_start = span.start;
                 );
-                
-                let :Object fields = request;
-                let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
-                let text_document = (
-                    let &value = &params |> OrdMap.get("textDocument") |> Option.unwrap;
-                    let :Object fields = value;
-                    let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
-                    { .uri = parse(uri) }
-                );
-                
-                let ast = match &state^.parsed_files |> OrdMap.get(Uri.to_string(text_document.uri)) with (
-                    | :Some ast => ast
-                    | :None => return :Null
-                );
-
                 Highlight.ast(
                     ast,
                     {
@@ -630,8 +648,7 @@ const Lsp = (
                 let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
                 SyntaxParser.parse_syntax_ruleset(&mut token_stream)
             ),
-            .parsed_files = OrdMap.new(),
-            .contents = OrdMap.new(),
+            .files = OrdMap.new(),
         };
         JsonRpc.run(
             JsonRpc.stdio(),
