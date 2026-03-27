@@ -92,8 +92,7 @@ const JsonRpc = (
     );
     
     const write = (io :: Io, message :: Json.t) => (
-        let contents = &message |> Json.to_str;
-         # |> Json.into_dep |> to_string;
+        let contents = message |> Json.into_dep |> to_string;
         std.io.eprint(contents);
         let content_length :: Int32 = @native "Buffer.byteLength(\(contents), 'utf-8')";
         io.output.write("Content-Length: ");
@@ -106,7 +105,9 @@ const JsonRpc = (
         loop (
             let { .content_length } = read_header(io);
             let content = io.input.read_exactly(content_length);
-            let json = Json.parse(content) |> std.Result.unwrap;
+            let json = dep_json.parse(&mut dep_json.Reader.create(&content))
+                |> std.Result.unwrap
+                |> Json.from_dep;
             let :Object message = json;
             let &(:String jsonrpc) = &message |> OrdMap.get("jsonrpc") |> Option.unwrap;
             if jsonrpc != "2.0" then (
