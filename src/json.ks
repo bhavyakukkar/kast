@@ -14,7 +14,6 @@ use (import "./ast.ks").*;
 use (import "./parser.ks").*;
 const dep = import "../deps/json/lib.ks";
 use std.collections.OrdMap;
-use std.Result;
 
 module:
 
@@ -264,7 +263,7 @@ const Json = (
             | :String s => (
                 ansi.with_mode(
                     :Green,
-                    () => (@current Output).write(escape_string(s)),
+                    () => (@current Output).write(String.escape(s)),
                 );
             )
             | :Object ref fields => (

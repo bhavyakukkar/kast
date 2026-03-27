@@ -15,7 +15,6 @@ use (import "../json.ks").*;
 use (import "../../deps/uri/src/lib.ks").*;
 const dep_json = import "../../deps/json/lib.ks";
 use std.collections.OrdMap;
-use std.Result;
 
 module:
 
@@ -109,7 +108,7 @@ const JsonRpc = (
             let :Object message = json;
             let &(:String jsonrpc) = &message |> OrdMap.get("jsonrpc") |> Option.unwrap;
             if jsonrpc != "2.0" then (
-                panic("jsonrpc is not 2.0 but " + escape_string(jsonrpc));
+                panic("jsonrpc is not 2.0 but " + String.escape(jsonrpc));
             );
             if &message |> OrdMap.get("id") is :Some &id then (
                 let result = handler.on_request(json);
@@ -148,7 +147,7 @@ const Lsp = (
             let mut i = start_index;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
-                panic("Unexpected arg " + escape_string(arg));
+                panic("Unexpected arg " + String.escape(arg));
                 i += 1;
             );
             {  }
@@ -245,8 +244,8 @@ const Lsp = (
                 let :Object fields = value;
                 let &(:Number line) = &fields |> OrdMap.get("line") |> Option.unwrap;
                 let &(:Number column) = &fields |> OrdMap.get("character") |> Option.unwrap;
-                let line = float64_to_int32(line);
-                let column = float64_to_int32(column);
+                let line = std.convert.float64_to_int32(line);
+                let column = std.convert.float64_to_int32(column);
                 { .index = 0, .line, .column }
             );
             let contents = &state^.contents

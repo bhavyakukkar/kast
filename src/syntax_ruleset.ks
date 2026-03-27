@@ -4,6 +4,7 @@ use (import "./output.ks").*;
 use (import "./error.ks").*;
 use (import "./syntax_rule.ks").*;
 use std.collections.OrdMap;
+use std.collections.OrdSet;
 
 module:
 
@@ -150,9 +151,9 @@ const SyntaxRuleset = (
                     Error.report_msg(
                         rule.span,
                         "Conflicting syntax rules "
-                        + escape_string(existing_rule.name)
+                        + String.escape(existing_rule.name)
                         + " and "
-                        + escape_string(rule.name),
+                        + String.escape(rule.name),
                     );
                 );
                 Log.debug_msg("Added rule " + rule.name);
@@ -170,7 +171,7 @@ const SyntaxRuleset = (
         if node^.terminal is :Some rule then (
             ansi.with_mode(
                 :Green,
-                () => output.write(escape_string(rule.name)),
+                () => output.write(String.escape(rule.name)),
             );
             output.write("\n");
         );

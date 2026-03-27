@@ -172,7 +172,7 @@ const Args = (
                     ) else if mode == "json" then (
                         :Json
                     ) else (
-                        panic("Unknown output mode " + escape_string(mode))
+                        panic("Unknown output mode " + String.escape(mode))
                     );
                     output_mode = mode;
                     i += 2;

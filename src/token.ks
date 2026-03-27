@@ -129,7 +129,7 @@ const Token = (
                         output.write(" = ");
                         ansi.with_mode(
                             :Green,
-                            () => output.write(escape_string(name)),
+                            () => output.write(String.escape(name)),
                         );
                     );
                 )
@@ -150,7 +150,7 @@ const Token = (
                         output.write(".contents = ");
                         ansi.with_mode(
                             :Green,
-                            () => output.write(escape_string(contents)),
+                            () => output.write(String.escape(contents)),
                         );
                         output.write("\n");
                         output.dec_indentation();
@@ -192,7 +192,7 @@ const Token = (
                                     output.write(".contents = ");
                                     ansi.with_mode(
                                         :Green,
-                                        () => output.write(escape_string(contents)),
+                                        () => output.write(String.escape(contents)),
                                     );
                                     output.write("\n");
                                     output.dec_indentation();

@@ -358,13 +358,13 @@ const SyntaxParser = (
             with Error.UnwindableHandler = {
                 .unwind_on_error = [T] () => (
                     if token_stream^.index == index_before then (
-                        Log.debug_msg("skipping " + escape_string(Token.Shape.raw(peek.shape)));
+                        Log.debug_msg("skipping " + String.escape(Token.Shape.raw(peek.shape)));
                         token_stream |> TokenStream.advance;
                     );
                     continue
                 ),
             };
-            Log.trace_msg("parse_syntax_rules: peek = " + escape_string(Token.Shape.raw(peek.shape)));
+            Log.trace_msg("parse_syntax_rules: peek = " + String.escape(Token.Shape.raw(peek.shape)));
             if peek.shape is :Eof then break;
             if peek.shape is :Comment _ then (
                 token_stream |> TokenStream.advance;
@@ -376,7 +376,7 @@ const SyntaxParser = (
                     Log.debug_msg("parsed from_scratch");
                 )
                 | :Rule rule => (
-                    Log.debug_msg("parsed rule " + escape_string(rule.name));
+                    Log.debug_msg("parsed rule " + String.escape(rule.name));
                     &mut result |> ArrayList.push_back(rule);
                 )
             );

@@ -107,7 +107,7 @@ const Ast = (
                         | :Content { .contents, ... } => (
                             ansi.with_mode(
                                 :Green,
-                                () => output.write(escape_string(contents)),
+                                () => output.write(String.escape(contents)),
                             );
                         )
                         | :Interpolated ref ast => (
@@ -142,7 +142,7 @@ const Ast = (
                         output.write("@syntax");
                         match command with (
                             | :FromScratch => output.write("from_scratch")
-                            | :Rule rule => output.write(escape_string(rule.name))
+                            | :Rule rule => output.write(String.escape(rule.name))
                         );
                     ),
                 );

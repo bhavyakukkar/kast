@@ -13,6 +13,7 @@ use (import "./span.ks").*;
 use (import "./token.ks").*;
 use (import "../deps/uri/src/lib.ks").*;
 use std.collections.OrdMap;
+use std.collections.OrdSet;
 
 @syntax "is" 41 @wrap never = value " " "is" " " pattern;
 impl syntax (value is pattern) = `(
@@ -139,7 +140,7 @@ const Parser = (
             | :Error _ => panic("unreachable")
         );
         if do_parse then (
-            Log.debug_msg("Parsed single token " + escape_string(peek_raw));
+            Log.debug_msg("Parsed single token " + String.escape(peek_raw));
             ctx.token_stream |> TokenStream.advance;
             let parsed = match peek.shape with (
                 | :InterpolatedString { .delimiter, .parts = ref token_parts, .raw = _ } => (
@@ -261,7 +262,7 @@ const Parser = (
                     output.write("\ncontinuation keywords:");
                     for &keyword in &ctx.continuation_keywords |> OrdSet.iter do (
                         output.write(" ");
-                        output.write(escape_string(keyword));
+                        output.write(String.escape(keyword));
                     );
                     output.write("\n");
                     (@current ParsingRuleCtx).print();
@@ -277,7 +278,7 @@ const Parser = (
                     ) then (
                         Log.debug_msg(
                             "Not following keyword "
-                            + escape_string(keyword)
+                            + String.escape(keyword)
                             + " because it is a continuation keyword"
                         );
                         return false;
@@ -290,7 +291,7 @@ const Parser = (
             if &node^.next |> OrdMap.get(:Keyword peek_raw) is :Some edge then (
                 if should_follow_edge(edge) then (
                     ctx.token_stream |> TokenStream.advance;
-                    Log.debug_msg("Following with keyword " + escape_string(peek_raw));
+                    Log.debug_msg("Following with keyword " + String.escape(peek_raw));
                     node = &edge^.target;
                     made_progress = true;
                     &mut parts |> ArrayList.push_back(:Keyword peek);
@@ -415,7 +416,7 @@ const Parser = (
         parsed_parts :: ArrayList.t[ParsedPart],
         rule :: &SyntaxRule.t,
     ) -> Ast.Group => (
-        Log.debug_msg("Collecting values for " + escape_string(rule^.name));
+        Log.debug_msg("Collecting values for " + String.escape(rule^.name));
         let mut parsed_part_idx = 0;
         let result = collect_values_from(
             &mut parsed_part_idx,
@@ -425,9 +426,9 @@ const Parser = (
         );
         if parsed_part_idx < &parsed_parts |> ArrayList.length then (
             print_parsed_parts(&parsed_parts);
-            panic("Too many values supplied for the rule " + escape_string(rule^.name))
+            panic("Too many values supplied for the rule " + String.escape(rule^.name))
         ) else (
-            Log.debug_msg("Values have been collected for " + escape_string(rule^.name));
+            Log.debug_msg("Values have been collected for " + String.escape(rule^.name));
             result
         )
     );
