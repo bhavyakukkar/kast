@@ -49,6 +49,34 @@ const get = [K, V] (map :: &OrdMap.t[K, V], key :: K) -> Option.t[type (&V)] => 
     )
 );
 
+const get_mut = [K, V] (map :: &mut OrdMap.t[K, V], key :: K) -> Option.t[type (&mut V)] => (
+    let { less, greater_or_equal } = Treap.split(
+        map^.inner,
+        data => (
+            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less then (
+                :LeftSubtree
+            ) else (
+                :RightSubtree
+            )
+        ),
+    );
+    let { mut equal, greater } = Treap.split(
+        greater_or_equal,
+        data => (
+            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less_or_equal then (
+                :LeftSubtree
+            ) else (
+                :RightSubtree
+            )
+        ),
+    );
+    if Treap.length(&equal) == 0 then (
+        :None
+    ) else (
+        :Some &mut (Treap.at_mut(&mut equal, 0))^.value
+    )
+);
+
 const get_or_init = [K, V] (
     map :: &mut OrdMap.t[K, V],
     key :: K,
