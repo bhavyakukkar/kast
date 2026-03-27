@@ -17,63 +17,52 @@ const new_with_compare = [K, V] (compare :: std.cmp.Compare[K]) -> OrdMap.t[K, V
     .compare,
 };
 
+const split_inner_at_key = [K, V](
+    map :: OrdMap.t[K, V],
+    key :: K,
+) -> {
+    .less :: Treap.t[KV[K, V]],
+    .equal :: Treap.t[KV[K, V]],
+    .greater :: Treap.t[KV[K, V]],
+} => (
+    let split_with = (treap, f) => Treap.split(
+        treap,
+        data => if map.compare(data^.value.key, key) |> f then (
+            :LeftSubtree
+        ) else (
+            :RightSubtree
+        ),
+    );
+    let { less, greater_or_equal } = split_with(
+        map.inner,
+        std.cmp.Ordering.is_less,
+    );
+    let { equal, greater } = split_with(
+        greater_or_equal,
+        std.cmp.Ordering.is_less_or_equal,
+    );
+    { .less, .equal, .greater }
+);
+
 const add = [K, V] (map :: &mut OrdMap.t[K, V], key :: K, value :: V) => (
-    get_or_init(map, key, () => value);
+    let { .less, .equal = _, .greater } = split_inner_at_key(map^, key);
+    let equal = Treap.singleton({ .key, .value });
+    map^.inner = Treap.join(less, Treap.join(equal, greater));
 );
 
 const get = [K, V] (map :: &OrdMap.t[K, V], key :: K) -> Option.t[type (&V)] => (
-    let { less, greater_or_equal } = Treap.split(
-        map^.inner,
-        data => (
-            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less then (
-                :LeftSubtree
-            ) else (
-                :RightSubtree
-            )
-        ),
-    );
-    let { equal, greater } = Treap.split(
-        greater_or_equal,
-        data => (
-            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less_or_equal then (
-                :LeftSubtree
-            ) else (
-                :RightSubtree
-            )
-        ),
-    );
-    if Treap.length(&equal) == 0 then (
-        :None
-    ) else (
-        :Some &(Treap.at(&equal, 0))^.value
+    let { .equal, ... } = split_inner_at_key(map^, key);
+    match equal with (
+        | :Empty => :None
+        | :Node data => :Some &data.value.value
     )
 );
 
 const get_mut = [K, V] (map :: &mut OrdMap.t[K, V], key :: K) -> Option.t[type (&mut V)] => (
-    let { less, greater_or_equal } = Treap.split(
-        map^.inner,
-        data => (
-            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less then (
-                :LeftSubtree
-            ) else (
-                :RightSubtree
-            )
-        ),
-    );
-    let { mut equal, greater } = Treap.split(
-        greater_or_equal,
-        data => (
-            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less_or_equal then (
-                :LeftSubtree
-            ) else (
-                :RightSubtree
-            )
-        ),
-    );
-    if Treap.length(&equal) == 0 then (
-        :None
-    ) else (
-        :Some &mut (Treap.at_mut(&mut equal, 0))^.value
+    let { .equal, ... } = split_inner_at_key(map^, key);
+    match equal with (
+        | :Empty => :None
+        | :Node mut data => :Some &mut data.value.value
     )
 );
 
@@ -82,31 +71,13 @@ const get_or_init = [K, V] (
     key :: K,
     init :: () -> V,
 ) -> &mut V => (
-    let { less, greater_or_equal } = Treap.split(
-        map^.inner,
-        data => (
-            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less then (
-                :LeftSubtree
-            ) else (
-                :RightSubtree
-            )
-        ),
-    );
-    let { mut equal, greater } = Treap.split(
-        greater_or_equal,
-        data => (
-            if map^.compare(data^.value.key, key) |> std.cmp.Ordering.is_less_or_equal then (
-                :LeftSubtree
-            ) else (
-                :RightSubtree
-            )
-        ),
-    );
-    if Treap.length(&equal) == 0 then (
-        equal = Treap.singleton({ .key, .value = init() });
+    let { .less, .equal, .greater } = split_inner_at_key(map^, key);
+    let mut equal = match equal with (
+        | :Empty => Treap.singleton({ .key, .value = init() })
+        | :Node _ => equal
     );
     map^.inner = Treap.join(less, Treap.join(equal, greater));
-    &mut (Treap.at_mut(&mut equal, 0))^.value
+    &mut Treap.at_mut(&mut equal, 0)^.value
 );
 
 const into_iter = [K, V] (map :: OrdMap.t[K, V]) -> std.iter.Iterable[KV[K, V]] => (
