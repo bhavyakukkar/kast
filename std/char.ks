@@ -78,4 +78,9 @@ impl Char as module = (
         )
     );
     const from_digit = digit => from_digit_radix(digit, 10);
+
+    const is_ascii_control = (c :: Char) -> Bool => (
+        let code = Char.code(c);
+        code <= 0x1f or code == 0x7f
+    );
 );
