@@ -1,7 +1,9 @@
 let user = {
-    .name = "kuviman",
+    .name = "kuvim\nan",
 };
 
-let @"if" = "🦄";
+let @"raw identifer\n" = "🦄";
 
-print("Hello, \(user.name)!");
+let c = '(';
+
+print("Hello, \(if true then "TROO" else user.name)!");

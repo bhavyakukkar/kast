@@ -18,6 +18,7 @@ const Ast = (
     const InterpolatedStringPart = newtype (
         | :Content {
             .raw :: String,
+            .raw_parts :: ArrayList.t[Token.RawStringPart],
             .contents :: String,
             .span :: Span,
         }

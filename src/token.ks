@@ -28,10 +28,22 @@ const Token = (
     );
 
     const print = token => Token.print_impl(token, .verbose = false);
+
+    const RawStringPart = newtype (
+        | :Escape {
+            .raw :: String,
+            .span :: Span,
+        }
+        | :Content {
+            .raw :: String,
+            .span :: Span,
+        }
+    );
     
     const InterpolatedStringPart = newtype (
         | :Content {
             .raw :: String,
+            .raw_parts :: ArrayList.t[RawStringPart],
             .contents :: String,
             .span :: Span,
         }
@@ -50,6 +62,14 @@ const Token = (
         .parts :: ArrayList.t[InterpolatedStringPart],
         .close :: Token.t,
     };
+
+    const StringToken = newtype {
+        .raw :: String,
+        .open :: Token.t,
+        .raw_parts :: ArrayList.t[RawStringPart],
+        .close :: Token.t,
+        .contents :: String,
+    };
     
     const Shape = (
         module:
@@ -64,12 +84,10 @@ const Token = (
             }
             | :Ident {
                 .raw :: String,
+                .string :: Option.t[type { StringToken, .at_token :: Token.t }],
                 .name :: String,
             }
-            | :String {
-                .raw :: String,
-                .contents :: String,
-            }
+            | :String StringToken
             | :InterpolatedString InterpolatedStringShape
             | :Number {
                 .raw :: String,
@@ -210,7 +228,7 @@ const Token = (
                             | :Interpolated { .tokens = ref tokens, ... } => (
                                 if verbose then (
                                     ansi.with_mode(
-                                        :Yellow,
+                                        :Cyan,
                                         () => output.write("\\"),
                                     );
                                     output.write(" {\n");
@@ -223,7 +241,7 @@ const Token = (
                                     output.write("}");
                                 ) else (
                                     ansi.with_mode(
-                                        :Yellow,
+                                        :Cyan,
                                         () => output.write("\\("),
                                     );
                                     let mut first = true;
@@ -236,7 +254,7 @@ const Token = (
                                         Token.Shape.print_impl(token^.shape, .verbose);
                                     );
                                     ansi.with_mode(
-                                        :Yellow,
+                                        :Cyan,
                                         () => output.write(")"),
                                     );
                                 );

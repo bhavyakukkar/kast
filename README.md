@@ -23,7 +23,7 @@ Self-hosted progress
   - [ ] Error resilience
 - [ ] Interperter & Compiler to IR
 - [ ] LSP
-  - [ ] syntax highlighting
+  - [x] syntax highlighting
   - [ ] formatting
   - [ ] inlay hints
   - [ ] hover info

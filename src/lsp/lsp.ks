@@ -547,9 +547,12 @@ const Lsp = (
                         .print = (span, token_type, _) => with_return (
                             let token_type = match token_type with (
                                 | :Regular => return
-                                | :String => :String
+                                | :StringContent => :String
+                                | :StringDelimeter => :EnumMember
                                 | :Keyword => :Keyword
                                 | :Number => :Number
+                                | :RawIdent => :Variable
+                                | :Ident => return
                                 | :Escape => :EnumMember
                             );
                             let token_modifiers = ArrayList.new();

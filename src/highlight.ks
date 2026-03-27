@@ -16,10 +16,13 @@ const Highlight = (
     module:
 
     const TokenType = newtype (
-        | :String
+        | :StringDelimeter
+        | :StringContent
         | :Escape
         | :Keyword
         | :Number
+        | :Ident
+        | :RawIdent
         | :Regular
     );
 
@@ -34,28 +37,56 @@ const Highlight = (
         walk_ast(ast);
     );
 
+    const walk_string_parts = (
+        content_token_type :: TokenType,
+        parts :: &ArrayList.t[Token.RawStringPart],
+    ) => (
+        for part in parts |> ArrayList.iter do (
+            match part^ with (
+                | :Content { .raw, .span } => (
+                    (@current Context).print(span, content_token_type, raw);
+                )
+                | :Escape { .raw, .span } => (
+                    (@current Context).print(span, :Escape, raw);
+                )
+            );
+        );
+    );
+
     const walk_ast = (ast :: &Ast.t) => (
         match ast^.shape with (
             | :Empty => ()
             | :Token token => (
                 match token.shape with (
-                    | :Ident { .raw, ... } => (
-                        (@current Context).print(token.span, :Regular, raw);
+                    | :Ident { .raw, .string, ... } => (
+                        match string with (
+                            | :None => (
+                                (@current Context).print(token.span, :Ident, raw);
+                            )
+                            | :Some { { .open, .close, .raw_parts, ... }, .at_token } => (
+                                (@current Context).print(at_token.span, :Ident, Token.Shape.raw(at_token.shape));
+                                (@current Context).print(open.span, :RawIdent, Token.Shape.raw(open.shape));
+                                walk_string_parts(:RawIdent, &raw_parts);
+                                (@current Context).print(close.span, :RawIdent, Token.Shape.raw(close.shape));
+                            )
+                        )
                     )
                     | :Number { .raw, ... } => (
                         (@current Context).print(token.span, :Number, raw);
                     )
-                    | :String { .raw, ... } => (
-                        (@current Context).print(token.span, :String, raw);
+                    | :String { .open, .close, .raw_parts, ... } => (
+                        (@current Context).print(open.span, :StringDelimeter, Token.Shape.raw(open.shape));
+                        walk_string_parts(:StringContent, &raw_parts);
+                        (@current Context).print(close.span, :StringDelimeter, Token.Shape.raw(close.shape));
                     )
                 )
             )
             | :InterpolatedString { .delimiter = _, .open, .parts, .close } => (
-                (@current Context).print(open.span, :String, Token.Shape.raw(open.shape));
+                (@current Context).print(open.span, :StringDelimeter, Token.Shape.raw(open.shape));
                 for part in &parts |> ArrayList.iter do (
                     match part^ with (
-                        | :Content { .raw, .span, .contents = _ } => (
-                            (@current Context).print(span, :String, raw);
+                        | :Content { .raw = _, .raw_parts, .span, .contents = _ } => (
+                            walk_string_parts(:StringContent, &raw_parts);
                         )
                         | :Interpolated { .open, .close, .ast = ref inner } => (
                             (@current Context).print(open.span, :Escape, Token.Shape.raw(open.shape));
@@ -64,7 +95,7 @@ const Highlight = (
                         )
                     );
                 );
-                (@current Context).print(close.span, :String, Token.Shape.raw(close.shape));
+                (@current Context).print(close.span, :StringDelimeter, Token.Shape.raw(close.shape));
             )
             | :Rule { .root = ref root, ... } => (
                 walk_ast_group(root);
@@ -140,8 +171,11 @@ const Highlight = (
                 let mode :: Option.t[ansi.Mode] = match token_type with (
                     | :Keyword => :Some :Magenta
                     | :Number => :Some :Italic
-                    | :String => :Some :Green
+                    | :StringContent => :Some :Green
+                    | :StringDelimeter => :Some :Cyan
                     | :Escape => :Some :Cyan
+                    | :RawIdent => :None
+                    | :Ident => :None
                     | :Regular => :None
                 );
                 match mode with (

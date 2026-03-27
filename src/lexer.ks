@@ -109,6 +109,7 @@ impl Lexer as module = (
             let raw = String.substring(reader^.contents, start, end - start);
             :Some :Ident {
                 .raw,
+                .string = :None,
                 .name = raw,
             }
         );
@@ -145,19 +146,44 @@ impl Lexer as module = (
             );
             Reader.advance(reader);
             let mut parts = ArrayList.new();
+            let reset_raw_content_part = () => {
+                .start = reader^.position,
+            };
             let reset_content_part = () => {
                 .start = reader^.position,
+                .raw_parts = ArrayList.new(),
+                .raw_content_part = reset_raw_content_part(),
                 .contents = "",
             };
             let mut content_part = reset_content_part();
             let add_char = (c :: Char) => (
                 content_part.contents += to_string(c);
             );
+
+            let finish_raw_content_part = () => {
+                let start = content_part.raw_content_part.start.string_encoding_index;
+                let end = reader^.position.string_encoding_index;
+                if start != end then (
+                    let part :: Token.RawStringPart = :Content {
+                        .raw = String.substring(reader^.contents, start, end - start),
+                        .span = {
+                            .start = content_part.raw_content_part.start,
+                            .end = reader^.position,
+                            .uri = lexer^.source.uri,
+                        },
+                    };
+                    &mut content_part.raw_parts |> ArrayList.push_back(part);
+                );
+                content_part.raw_content_part = reset_raw_content_part();
+            };
+
             let finish_content_part = () => with_return (
+                finish_raw_content_part();
                 if content_part.contents |> String.length == 0 then return;
                 &mut parts
                     |> ArrayList.push_back(
                         :Content {
+                            .raw_parts = content_part.raw_parts,
                             .span = {
                                 .start = content_part.start,
                                 .end = reader^.position,
@@ -177,6 +203,8 @@ impl Lexer as module = (
                 const outer_loop_body = @current std.LoopBody;
                 if c == delim then break;
                 if c == '\\' then (
+                    finish_raw_content_part();
+                    let escape_start = reader^.position;
                     let c = match Reader.peek2(&reader^) with (
                         | :Some c => c
                         | :None => error("Expected escaped char")
@@ -314,6 +342,20 @@ impl Lexer as module = (
                     );
                     add_char(c);
                     Reader.advance(reader);
+                    let escape_raw_part = :Escape {
+                        .raw = (
+                            let start = escape_start.string_encoding_index;
+                            let end = reader^.position.string_encoding_index;
+                            String.substring(reader^.contents, start, end - start)
+                        ),
+                        .span = {
+                            .start = escape_start,
+                            .end = reader^.position,
+                            .uri = lexer^.source.uri,
+                        }
+                    };
+                    &mut content_part.raw_parts |> ArrayList.push_back(escape_raw_part);
+                    content_part.raw_content_part = reset_raw_content_part();
                     continue;
                 );
                 add_char(c);
@@ -328,6 +370,7 @@ impl Lexer as module = (
                                 .position = reader^.position,
                                 .uri = lexer^.source.uri,
                             ),
+                            .raw_parts = ArrayList.new(),
                             .raw = "",
                             .contents = "",
                         }
@@ -352,10 +395,13 @@ impl Lexer as module = (
             let end = reader^.position.string_encoding_index;
             let raw = String.substring(reader^.contents, start, end - start);
             if &parts |> ArrayList.length == 1 then (
-                if (&parts |> ArrayList.at(0))^ is :Content { .contents, ... } then (
+                if (&parts |> ArrayList.at(0))^ is :Content { .raw_parts, .contents, ... } then (
                     return :Some :String {
                         .raw,
-                        .contents
+                        .raw_parts,
+                        .contents,
+                        .open = open_token,
+                        .close = close_token,
                     };
                 );
             );
@@ -481,6 +527,14 @@ impl Lexer as module = (
             if not &reader^ |> next_is('@') then (
                 return :None;
             );
+            let at_token :: Token.t = {
+                .shape = :Punct { .raw = "@" },
+                .span = Span.single_char(
+                    .position = reader^.position,
+                    .char = :Some '@',
+                    .uri = lexer^.source.uri,
+                ),
+            };
             match &reader^ |> Reader.peek2 with (
                 | :Some c => (
                     if c != '"' then return :None;
@@ -501,14 +555,21 @@ impl Lexer as module = (
                 start.string_encoding_index,
                 end.string_encoding_index - start.string_encoding_index,
             );
-            let name = match string_token with (
-                | :String { .contents, ... } => contents
+            let string = match string_token with (
+                | :String string => string
                 | :InterpolatedString _ => (
                     Error.report_msg(span, "Raw idents can't use interpolated strings");
                     return :Some :Error { .raw }
                 )
             );
-            :Some :Ident { .raw, .name }
+            :Some :Ident {
+                .raw,
+                .string = :Some {
+                    string,
+                    .at_token,
+                },
+                .name = string.contents,
+            }
         );
         
         const read_fns :: ArrayList.t[ReadFn] = (
