@@ -148,12 +148,16 @@ const SyntaxRuleset = (
             &rule.parts,
             .continuation = node => (
                 if node^.terminal is :Some existing_rule then (
-                    Error.report_msg(
+                    Error.report(
+                        :Other,
                         rule.span,
-                        "Conflicting syntax rules "
-                        + String.escape(existing_rule.name)
-                        + " and "
-                        + String.escape(rule.name),
+                        () => (
+                            let output = @current Output;
+                            output.write("Conflicting syntax rules ");
+                            output.write(String.escape(existing_rule.name));
+                            output.write(" and ");
+                            output.write(String.escape(rule.name));
+                        ),
                     );
                 );
                 Log.debug_msg("Added rule " + rule.name);

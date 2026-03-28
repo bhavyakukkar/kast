@@ -126,16 +126,20 @@ impl Lexer as module = (
                     .uri = lexer^.source.uri,
                 ),
             };
-            let start = reader^.position.string_encoding_index;
-            let error = [T] message -> T => (
+            let start = reader^.position;
+            let error_with_span = [T] (span, message) -> T => (
+                Error.report_msg(:Lexer, span, message);
+                let start = start.string_encoding_index;
+                let end = reader^.position.string_encoding_index;
+                return :Some :Error { .raw = String.substring(reader^.contents, start, end - start) }
+            );
+            const error = [T] message -> T => (
                 let span = Span.single_char(
                     .position = reader^.position,
                     .char = Reader.peek(&reader^),
                     .uri = lexer^.source.uri,
                 );
-                Error.report_msg(span, message);
-                let end = reader^.position.string_encoding_index;
-                return :Some :Error { .raw = String.substring(reader^.contents, start, end - start) }
+                error_with_span(span, message)
             );
             let expected = [T] expected -> T => (
                 let got = match Reader.peek(&reader^) with (
@@ -201,6 +205,7 @@ impl Lexer as module = (
             );
             while Reader.peek(&reader^) is :Some c do (
                 const outer_loop_body = @current std.LoopBody;
+                if c == '\n' then break;
                 if c == delim then break;
                 if c == '\\' then (
                     finish_raw_content_part();
@@ -233,7 +238,14 @@ impl Lexer as module = (
                             skip_whitespace(lexer);
                             let c = match Reader.peek(&reader^) with (
                                 | :Some c => c
-                                | :None => error("Unfinished interpolation")
+                                | :None => (
+                                    let span = {
+                                        .start = span_start,
+                                        .end = reader^.position,
+                                        .uri = lexer^.source.uri,
+                                    };
+                                    error_with_span(span, "Unfinished interpolation")
+                                )
                             );
                             if c == ')' then (
                                 let close_token = {
@@ -281,20 +293,30 @@ impl Lexer as module = (
                         '"'
                     ) else if c == 'x' then (
                         Reader.advance(reader);
-                        let c1 = Reader.peek(&reader^)
-                            |> Option.unwrap_or_else(
-                                () => (
-                                    error("Expected 2 hex digits after '\\x'")
-                                )
+                        let { c1, c2 } = unwindable chars (
+                            let error_position :: Position = with_return (
+                                let mut pos = reader^.position;
+                                let c1 = Reader.peek(&reader^)
+                                    |> Option.unwrap_or_else(
+                                        () => return pos
+                                    );
+                                &mut pos |> Position.advance(c1);
+                                let c2 = Reader.peek2(&reader^)
+                                    |> Option.unwrap_or_else(
+                                        () => return pos
+                                    );
+                                &mut pos |> Position.advance(c2);
+                                if not is_hex_digit(c1) or not is_hex_digit(c2) then (
+                                    return pos;
+                                );
+                                unwind chars { c1, c2 }
                             );
-                        let c2 = Reader.peek2(&reader^)
-                            |> Option.unwrap_or_else(
-                                () => (
-                                    error("Expected 2 hex digits after '\\x'")
-                                )
-                            );
-                        if not is_hex_digit(c1) or not is_hex_digit(c2) then (
-                            error("Expected 2 hex digits after '\\x'");
+                            let span = {
+                                .start = escape_start,
+                                .end = error_position,
+                                .uri = lexer^.source.uri,
+                            };
+                            error_with_span(span, "Expected 2 hex digits after '\\x'")
                         );
                         Reader.advance(reader);
                         Reader.advance(reader);
@@ -302,7 +324,12 @@ impl Lexer as module = (
                         let c2 = Char.to_digit_radix(c2, 16);
                         let code = c1 * 16 + c2;
                         if code > 0x7f then (
-                            error("Hex escaped char must be in range 0x00 to 0x7f");
+                            let span = {
+                                .start = escape_start,
+                                .end = reader^.position,
+                                .uri = lexer^.source.uri,
+                            };
+                            error_with_span(span, "Hex escaped char must be in range 0x00 to 0x7f");
                         );
                         add_char(Char.from_code(code));
                         continue
@@ -316,7 +343,13 @@ impl Lexer as module = (
                             expected("{")
                         );
                         Reader.advance(reader);
+                        let hex_code_start = reader^.position;
                         let hex_code = Reader.read_while(reader, is_hex_digit);
+                        let hex_code_span :: Span = {
+                            .start = hex_code_start,
+                            .end = reader^.position,
+                            .uri = lexer^.source.uri,
+                        };
                         let c = match Reader.peek(&reader^) with (
                             | :Some c => c
                             | :None => error("Expected }")
@@ -326,10 +359,10 @@ impl Lexer as module = (
                         );
                         Reader.advance(reader);
                         if hex_code |> String.length == 0 then (
-                            error("This escape must have at least 1 hex digit");
+                            error_with_span(hex_code_span, "This escape must have at least 1 hex digit");
                         );
                         if hex_code |> String.length > 6 then (
-                            error("This escape must have at most 6 hex digits");
+                            error_with_span(hex_code_span, "This escape must have at most 6 hex digits");
                         );
                         let mut code = 0;
                         for c in String.iter(hex_code) do (
@@ -376,22 +409,28 @@ impl Lexer as module = (
                         }
                     );
             );
-            let c = Reader.peek(&reader^)
-                |> Option.unwrap_or_else(
-                    () => (
-                        error("Unfinished string (eof)")
-                    )
-                );
-            if c != delim then error("Unfinished string");
-            let close_token = {
-                .shape = :Punct { .raw = to_string(delim) },
-                .span = Span.single_char(
-                    .position = reader^.position,
-                    .char = :Some delim,
+            let close_token = (
+                let span_so_far = {
+                    .start,
+                    .end = reader^.position,
                     .uri = lexer^.source.uri,
-                ),
-            };
+                };
+                let c = Reader.peek(&reader^)
+                    |> Option.unwrap_or_else(
+                        () => error_with_span(span_so_far, "Unfinished string")
+                    );
+                if c != delim then error_with_span(span_so_far, "Unfinished string");
+                {
+                    .shape = :Punct { .raw = to_string(delim) },
+                    .span = Span.single_char(
+                        .position = reader^.position,
+                        .char = :Some delim,
+                        .uri = lexer^.source.uri,
+                    ),
+                }
+            );
             Reader.advance(reader);
+            let start = start.string_encoding_index;
             let end = reader^.position.string_encoding_index;
             let raw = String.substring(reader^.contents, start, end - start);
             if &parts |> ArrayList.length == 1 then (
@@ -558,7 +597,7 @@ impl Lexer as module = (
             let string = match string_token with (
                 | :String string => string
                 | :InterpolatedString _ => (
-                    Error.report_msg(span, "Raw idents can't use interpolated strings");
+                    Error.report_msg(:Lexer, span, "Raw idents can't use interpolated strings");
                     return :Some :Error { .raw }
                 )
             );
@@ -608,7 +647,7 @@ impl Lexer as module = (
             .char,
             .uri = lexer^.source.uri,
         );
-        Error.report_msg(span, message);
+        Error.report_msg(:Lexer, span, message);
         Reader.advance(&mut lexer^.reader);
         {
             .shape = :Error {

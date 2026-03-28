@@ -70,6 +70,10 @@ const Token = (
         .close :: Token.t,
         .contents :: String,
     };
+
+    const raw = (token :: Token.t) -> String => (
+        Token.Shape.raw(token.shape)
+    );
     
     const Shape = (
         module:

@@ -5,10 +5,18 @@ module:
 
 const Error = (
     module:
+
+    const Kind = newtype (
+        | :Lexer
+        | :Parser
+        ## Internal error is a bug in the implementation of kast
+        | :Internal
+        | :Other
+    );
     
     const Handler = newtype {
         .stop_on_error :: Bool,
-        .handle :: (Span, () -> ()) -> (),
+        .handle :: (Kind, Span, () -> ()) -> (),
     };
     
     const HandlerContext = @context Handler;
@@ -19,12 +27,26 @@ const Error = (
     
     const init_handler = (.stop_on_error :: Bool) -> Handler => {
         .stop_on_error,
-        .handle = (span, message) => (
+        .handle = (kind, span, message) => (
             let output = @current Output;
             ansi.with_mode(
                 :Red,
                 () => (
-                    output.write("ERROR at ");
+                    let kind_name = match kind with (
+                        | :Internal => :Some "Internal"
+                        | :Lexer => :Some "Lexer"
+                        | :Parser => :Some "Parser"
+                        | :Other => :None
+                    );
+                    match kind_name with (
+                        | :Some kind_name => (
+                            output.write(kind_name);
+                            output.write(" error at ");
+                        )
+                        | :None => (
+                            output.write("Error at ");
+                        )
+                    );
                     span |> Span.print;
                     output.write(":\n");
                     message();
@@ -37,16 +59,16 @@ const Error = (
         )
     };
     
-    const report_msg = (span :: Span, message :: String) => (
-        report(span, () => (@current Output).write(message))
+    const report_msg = (kind :: Kind, span :: Span, message :: String) => (
+        report(kind, span, () => (@current Output).write(message))
     );
 
-    const report = (span :: Span, message :: () -> ()) => (
-        (@current HandlerContext).handle(span, message);
+    const report = (kind :: Kind, span :: Span, message :: () -> ()) => (
+        (@current HandlerContext).handle(kind, span, message);
     );
     
-    const report_and_unwind = [T] (span :: Span, message :: () -> ()) -> T => (
-        (@current HandlerContext).handle(span, message);
+    const report_and_unwind = [T] (kind :: Kind, span :: Span, message :: () -> ()) -> T => (
+        (@current HandlerContext).handle(kind, span, message);
         (@current UnwindableHandler).unwind_on_error()
     );
 );

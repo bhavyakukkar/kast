@@ -2,6 +2,8 @@ let user = {
     .name = "kuvim\nan",
 };
 
+if  true  (#comment#)then ";
+
 let @"raw identifer\n" = "🦄";
 
 let c = '(';

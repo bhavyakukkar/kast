@@ -43,14 +43,18 @@ module:
 const Parser = (
     module:
     
-    const ContextT = newtype {
-        .ruleset :: SyntaxRuleset.t,
-        .continuation_keywords :: OrdSet.t[String],
+    const StaticContextT = newtype {
         .token_stream :: &mut TokenStream.t,
         .entire_source_span :: Span,
         .uri :: Uri,
+        .ignored_tokens :: ArrayList.t[Token.t],
     };
-    const Context = @context ContextT;
+    const DynamicContextT = newtype {
+        .ruleset :: SyntaxRuleset.t,
+        .continuation_keywords :: OrdSet.t[String],
+    };
+    const StaticContext = @context StaticContextT;
+    const DynamicContext = @context DynamicContextT;
     
     const ParsingRuleCtx = @context type {
         .print :: () -> (),
@@ -65,22 +69,27 @@ const Parser = (
         starting_value :: Option.t[Ast.t],
         .priority_filter :: SyntaxRule.PriorityFilter,
     ) -> ParseResult => with_return (
-        let mut ctx = @current Context;
+        let ctx = @current StaticContext;
+        let mut dyn_ctx = @current DynamicContext;
         skip_comments_and_errors();
         if starting_value is :None then (
             let peek = &ctx.token_stream^ |> TokenStream.peek;
             let peek_raw = peek.shape |> Token.Shape.raw;
             if peek_raw == "@syntax" then (
                 let syntax_token_span = peek.span;
+                let ignored_tokens_before = claim_ignored_tokens();
                 ctx.token_stream |> TokenStream.advance;
-                let command = SyntaxParser.parse_syntax_command(ctx.token_stream);
+                let {
+                    .command,
+                    .raw_tokens = command_raw_tokens,
+                } = SyntaxParser.parse_syntax_command(ctx.token_stream);
                 let command = match command with (
                     | :FromScratch => (
-                        ctx.ruleset = SyntaxRuleset.new();
+                        dyn_ctx.ruleset = SyntaxRuleset.new();
                         :FromScratch
                     )
                     | :Rule rule => (
-                        &mut ctx.ruleset |> SyntaxRuleset.add(rule);
+                        &mut dyn_ctx.ruleset |> SyntaxRuleset.add(rule);
                         :Rule rule
                     )
                 );
@@ -90,9 +99,13 @@ const Parser = (
                 );
                 return :MadeProgress {
                     .shape = :Syntax {
-                        .command,
+                        .command = {
+                            .shape = command,
+                            .raw_tokens = command_raw_tokens,
+                        },
                         .value_after,
                     },
+                    .ignored_tokens_before,
                     .span = {
                         .start = syntax_token_span.start,
                         .end = (
@@ -113,7 +126,7 @@ const Parser = (
     );
     
     const skip_comments_and_errors = () => (
-        let ctx = @current Context;
+        let mut ctx = @current StaticContext;
         loop (
             let peek = &ctx.token_stream^ |> TokenStream.peek;
             match peek.shape with (
@@ -121,18 +134,32 @@ const Parser = (
                 | :Error _ => ()
                 | _ => break
             );
+            Log.debug(() => (
+                let output = @current Output;
+                output.write("Skipping ");
+                Token.print(peek);
+            ));
+            &mut ctx.ignored_tokens |> ArrayList.push_back(peek);
             ctx.token_stream |> TokenStream.advance;
         );
     );
+
+    const claim_ignored_tokens = () => (
+        let mut ctx = @current StaticContext;
+        let result = ctx.ignored_tokens;
+        ctx.ignored_tokens = ArrayList.new();
+        result
+    );
     
     const try_parse_single_token = () -> ParseResult => (
-        let ctx = @current Context;
+        let ctx = @current StaticContext;
+        let dyn_ctx = @current DynamicContext;
         let peek = &ctx.token_stream^ |> TokenStream.peek;
         let peek_raw = peek.shape |> Token.Shape.raw;
         let do_parse = match peek.shape with (
             | :Comment _ => panic("unreachable")
             | :Punct _ => false
-            | :Ident { .raw, ... } => not (&ctx.ruleset.keywords |> OrdSet.contains(raw))
+            | :Ident { .raw, ... } => not (&dyn_ctx.ruleset.keywords |> OrdSet.contains(raw))
             | :String _ => true
             | :InterpolatedString _ => true
             | :Number _ => true
@@ -140,6 +167,7 @@ const Parser = (
             | :Error _ => panic("unreachable")
         );
         if do_parse then (
+            let ignored_tokens_before = claim_ignored_tokens();
             Log.debug_msg("Parsed single token " + String.escape(peek_raw));
             ctx.token_stream |> TokenStream.advance;
             let parsed = match peek.shape with (
@@ -171,7 +199,7 @@ const Parser = (
                                     )
                                 );
                                 let parsed = parse(
-                                    .ruleset = ctx.ruleset,
+                                    .ruleset = dyn_ctx.ruleset,
                                     .token_stream = &mut token_stream,
                                     .entire_source_span = span,
                                     .uri = span.uri,
@@ -187,6 +215,7 @@ const Parser = (
             );
             :MadeProgress {
                 .shape = parsed,
+                .ignored_tokens_before,
                 .span = peek.span,
             }
         ) else (
@@ -195,6 +224,7 @@ const Parser = (
     );
     
     const ParsedPart = newtype (
+        | :Ignored Token.t
         | :Keyword Token.t
         | :Value Ast.t
     );
@@ -203,6 +233,7 @@ const Parser = (
         module:
         
         const span = (part :: &ParsedPart) -> Span => match part^ with (
+            | :Ignored token => token.span
             | :Keyword token => token.span
             | :Value ast => ast.span
         );
@@ -212,11 +243,12 @@ const Parser = (
         starting_value :: Option.t[Ast.t],
         .priority_filter :: SyntaxRule.PriorityFilter,
     ) -> ParseResult => with_return (
-        let ctx = @current Context;
+        let ctx = @current StaticContext;
+        let dyn_ctx = @current DynamicContext;
         let mut node :: &SyntaxRuleset.Node = match starting_value with (
-            | :None => &ctx.ruleset.root
+            | :None => &dyn_ctx.ruleset.root
             | :Some _ => (
-                match &ctx.ruleset.root.next |> OrdMap.get(:Value) with (
+                match &dyn_ctx.ruleset.root.next |> OrdMap.get(:Value) with (
                     | :Some edge => &edge^.target
                     | :None => return :NoProgress
                 )
@@ -261,7 +293,7 @@ const Parser = (
                     output.write("Looking at ");
                     Token.print(peek);
                     output.write("\ncontinuation keywords:");
-                    for &keyword in &ctx.continuation_keywords |> OrdSet.iter do (
+                    for &keyword in &dyn_ctx.continuation_keywords |> OrdSet.iter do (
                         output.write(" ");
                         output.write(String.escape(keyword));
                     );
@@ -274,7 +306,7 @@ const Parser = (
                 if edge^.key is :Keyword keyword then (
                     if (
                         not made_progress
-                        and &ctx.continuation_keywords
+                        and &dyn_ctx.continuation_keywords
                             |> OrdSet.contains(keyword)
                     ) then (
                         Log.debug_msg(
@@ -291,6 +323,9 @@ const Parser = (
             # Try to follow with keyword
             if &node^.next |> OrdMap.get(:Keyword peek_raw) is :Some edge then (
                 if should_follow_edge(edge) then (
+                    for token in claim_ignored_tokens() |> ArrayList.into_iter do (
+                        &mut parts |> ArrayList.push_back(:Ignored token);
+                    );
                     ctx.token_stream |> TokenStream.advance;
                     Log.debug_msg("Following with keyword " + String.escape(peek_raw));
                     node = &edge^.target;
@@ -308,13 +343,13 @@ const Parser = (
                 if &node^.next |> OrdMap.get(:Value) is :Some edge then (
                     if should_follow_edge(edge) then (
                         let value = (
-                            with Context = {
-                                ...ctx,
+                            with DynamicContext = {
+                                ...dyn_ctx,
                                 .continuation_keywords = (
                                     let mut keywords = if edge^.max_value_priority is :Any then (
                                         OrdSet.new()
                                     ) else (
-                                        OrdSet.clone(&ctx.continuation_keywords)
+                                        OrdSet.clone(&dyn_ctx.continuation_keywords)
                                     );
                                     for next_edge in &edge^.target.next |> OrdMap.iter do (
                                         if next_edge^.key is :Keyword keyword then (
@@ -332,6 +367,7 @@ const Parser = (
                             :Some ast
                         ) else if edge^.max_value_priority is :Any then (
                             :Some {
+                                .ignored_tokens_before = claim_ignored_tokens(),
                                 .shape = :Empty,
                                 .span = peek.span,
                             }
@@ -356,27 +392,6 @@ const Parser = (
             return :NoProgress;
         );
         
-        let rule = node^.terminal
-            |> Option.unwrap_or_else(
-                () => (
-                    let output = @current Output;
-                    Error.report_and_unwind(
-                        (&ctx.token_stream^ |> TokenStream.peek).span,
-                        () => (
-                            let output = @current Output;
-                            output.write("Can't finish parsing");
-                            for part in &parts |> ArrayList.iter do (
-                                output.write(" ");
-                                match part^ with (
-                                    | :Keyword token => output.write(token.shape |> Token.Shape.raw)
-                                    | :Value _ => output.write("_")
-                                );
-                            );
-                        )
-                    )
-                )
-            );
-        
         let span = (
             let first_span = parts.[0] |> ParsedPart.span;
             let last_index = (&parts |> ArrayList.length) - 1;
@@ -387,8 +402,61 @@ const Parser = (
                 .uri = first_span.uri,
             }
         );
-        let shape = :Rule { .rule, .root = collect_values(parts, &rule) };
-        let ast = { .shape, .span };
+        let shape = with_return (
+            with Error.UnwindableHandler = {
+                .unwind_on_error = [T] () -> T => (
+                    let mut error_parts = ArrayList.new();
+                    for part in parts |> ArrayList.into_iter do (
+                        let part = match part with (
+                            | :Ignored token => :Ignored token
+                            | :Keyword token => :Keyword token
+                            | :Value ast => :Value ast
+                        );
+                        &mut error_parts |> ArrayList.push_back(part);
+                    );
+                    return :Error { .parts = error_parts }
+                ),
+            };
+            let rule = node^.terminal
+                |> Option.unwrap_or_else(
+                    () => (
+                        let output = @current Output;
+                        Error.report_and_unwind(
+                            :Parser,
+                            span,
+                            () => (
+                                let output = @current Output;
+                                output.write("Can't finish parsing");
+                                for part in &parts |> ArrayList.iter do (
+                                    match part^ with (
+                                        | :Ignored _ => ()
+                                        | :Keyword token => (
+                                            output.write(" ");
+                                            output.write(token.shape |> Token.Shape.raw);
+                                        )
+                                        | :Value _ => output.write(" _")
+                                    );
+                                );
+                                output.write("\nUnexpected token ");
+                                Token.print(&ctx.token_stream^ |> TokenStream.peek);
+                            )
+                        )
+                    )
+                );
+            :Rule {
+                .rule,
+                .root = collect_values(
+                    parts,
+                    &rule,
+                    .error_span = span,
+                ),
+            }
+        );
+        let ast = {
+            .ignored_tokens_before = ArrayList.new(),
+            .shape,
+            .span,
+        };
         Log.debug(
             () => (
                 let output = @current Output;
@@ -406,6 +474,13 @@ const Parser = (
         for part in parts |> ArrayList.iter do (
             output.write("- ");
             match part^ with (
+                | :Ignored token => (
+                    ansi.with_mode(
+                        :Dim,
+                        () => output.write("<ignored> "),
+                    );
+                    output.write(token.shape |> Token.Shape.raw)
+                )
                 | :Keyword token => output.write(token.shape |> Token.Shape.raw)
                 | :Value ref ast => Ast.print(ast)
             );
@@ -416,6 +491,7 @@ const Parser = (
     const collect_values = (
         parsed_parts :: ArrayList.t[ParsedPart],
         rule :: &SyntaxRule.t,
+        .error_span :: Span,
     ) -> Ast.Group => (
         Log.debug_msg("Collecting values for " + String.escape(rule^.name));
         let mut parsed_part_idx = 0;
@@ -424,6 +500,7 @@ const Parser = (
             &parsed_parts,
             &rule^.parts,
             .rule_group = :None,
+            .error_span,
         );
         if parsed_part_idx < &parsed_parts |> ArrayList.length then (
             print_parsed_parts(&parsed_parts);
@@ -439,6 +516,7 @@ const Parser = (
         parsed_parts :: &ArrayList.t[ParsedPart],
         rule_group_parts :: &ArrayList.t[SyntaxRule.Part],
         .rule_group :: Option.t[type (&SyntaxRule.Group)],
+        .error_span :: Span,
     ) -> Ast.Group => (
         let mut rule_part_idx = 0;
         let skip_rule_whitespace = () -> Bool => (
@@ -458,8 +536,13 @@ const Parser = (
             parsed_part_idx^ < parsed_parts |> ArrayList.length
             and rule_part_idx < rule_group_parts |> ArrayList.length
         ) do (
-            if skip_rule_whitespace() then continue;
             let parsed_part = parsed_parts^.[parsed_part_idx^];
+            if parsed_part^ is :Ignored token then (
+                &mut ast_parts |> ArrayList.push_back(:Ignored token);
+                parsed_part_idx^ += 1;
+                continue;
+            );
+            if skip_rule_whitespace() then continue;
             let rule_part = rule_group_parts^.[rule_part_idx];
             match { parsed_part^, rule_part^ } with (
                 | { :Value ast, :Value { .name, ... } } => (
@@ -477,7 +560,11 @@ const Parser = (
                 )
                 | { :Keyword token, :Keyword keyword } => (
                     if token.shape |> Token.Shape.raw != keyword then (
-                        panic("Incorrectly matched keyword");
+                        Error.report_and_unwind(
+                            :Internal,
+                            error_span,
+                            () => (@current Output).write("Incorrectly matched keyword")
+                        );
                     );
                     Log.debug(
                         () => (
@@ -534,6 +621,7 @@ const Parser = (
                         parsed_parts,
                         rule_group_parts,
                         .rule_group = :Some rule_group,
+                        .error_span,
                     );
                     Log.debug_msg("Group matched");
                     &mut ast_parts |> ArrayList.push_back(:Group group);
@@ -544,11 +632,16 @@ const Parser = (
                     # dbg.print(parsed_part^);
                     dbg.print({ .rule_part = rule_part^ });
                     print_parsed_parts(parsed_parts);
-                    panic(
-                        "mismatch matching parsed part #"
-                        + to_string(parsed_part_idx^)
-                        + " and rule_group_part #"
-                        + to_string(rule_part_idx)
+                    Error.report_and_unwind(
+                        :Internal,
+                        error_span,
+                        () => (
+                            let output = @current Output;
+                            output.write("mismatch matching parsed part #");
+                            output.write(to_string(parsed_part_idx^));
+                            output.write(" and rule_group_part #");
+                            output.write(to_string(rule_part_idx));
+                        ),
                     );
                 )
             );
@@ -556,8 +649,8 @@ const Parser = (
         while rule_part_idx < rule_group_parts |> ArrayList.length do (
             let rule_part = rule_group_parts^.[rule_part_idx];
             let fail = (type_name, name, span) => Error.report_and_unwind(
-                #TODO span of report should be different
-                span,
+                :Internal,
+                error_span,
                 () => (
                     let output = @current Output;
                     output.write("Rule parts were not fully matched - didn't match ");
@@ -608,6 +701,7 @@ const Parser = (
     
     const Parsed = newtype {
         .ast :: Ast.t,
+        .ignored_trailing_tokens :: ArrayList.t[Token.t],
     };
     
     const parse = (
@@ -616,28 +710,50 @@ const Parser = (
         .entire_source_span :: Span,
         .uri :: Uri,
     ) -> Parsed => (
-        let ctx :: ContextT = {
-            .ruleset,
-            .continuation_keywords = OrdSet.new(),
+        let mut ctx :: StaticContextT = {
             .token_stream,
             .entire_source_span,
             .uri,
+            .ignored_tokens = ArrayList.new(),
         };
-        with Context = ctx;
+        with StaticContext = ctx;
+        let mut dyn_ctx :: DynamicContextT = {
+            .ruleset,
+            .continuation_keywords = OrdSet.new(),
+        };
+        with DynamicContext = dyn_ctx;
         with ParsingRuleCtx = { .print = () => () };
         let ast = match try_parse(.priority_filter = :Any) with (
             | :MadeProgress ast => ast
             | :NoProgress => {
+                .ignored_tokens_before = claim_ignored_tokens(),
                 .shape = :Empty,
-                .span = (@current Context).entire_source_span,
+                .span = (@current StaticContext).entire_source_span,
             }
         );
-        let peek = &ctx.token_stream^ |> TokenStream.peek;
-        if peek.shape is :Eof then () else (
-            Error.report_msg(peek.span, "Expected eof");
+        let mut reported_expected_eof = false;
+        loop (
+            let peek = &ctx.token_stream^ |> TokenStream.peek;
+            if peek.shape is :Eof then (
+                break;
+            );
+            if not reported_expected_eof then (
+                Error.report(
+                    :Parser,
+                    peek.span,
+                    () => (
+                        (@current Output).write("Expected eof, got ");
+                        Token.Shape.print_impl(peek.shape, .verbose = false);
+                    ),
+                );
+                reported_expected_eof = true;
+            );
+            &mut ctx.ignored_tokens |> ArrayList.push_back(peek);
+            ctx.token_stream |> TokenStream.advance;
         );
         {
-            .ast
+            .ast,
+            .ignored_trailing_tokens = claim_ignored_tokens(),
         }
     );
 );

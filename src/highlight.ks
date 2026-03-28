@@ -24,6 +24,9 @@ const Highlight = (
         | :Ident
         | :RawIdent
         | :Regular
+        | :Error
+        | :Comment
+        | :SyntaxCommand
     );
 
     const OutputT = newtype {
@@ -32,9 +35,14 @@ const Highlight = (
 
     const Context = @context OutputT;
 
-    const ast = (ast :: &Ast.t, output :: OutputT) => (
+    const highlight = (parsed :: &Parser.Parsed, output :: OutputT) => (
         with Context = output;
+        let {
+            .ast = ref ast,
+            .ignored_trailing_tokens = ref ignored_trailing_tokens,
+        } = parsed^;
         walk_ast(ast);
+        walk_ignored_tokens(ignored_trailing_tokens);
     );
 
     const walk_string_parts = (
@@ -54,7 +62,13 @@ const Highlight = (
     );
 
     const walk_ast = (ast :: &Ast.t) => (
-        match ast^.shape with (
+        let {
+            .ignored_tokens_before = ref ignored_tokens_before,
+            .shape = ref shape,
+            .span = _,
+        } = ast^;
+        walk_ignored_tokens(ignored_tokens_before);
+        match shape^ with (
             | :Empty => ()
             | :Token token => (
                 match token.shape with (
@@ -64,10 +78,10 @@ const Highlight = (
                                 (@current Context).print(token.span, :Ident, raw);
                             )
                             | :Some { { .open, .close, .raw_parts, ... }, .at_token } => (
-                                (@current Context).print(at_token.span, :Ident, Token.Shape.raw(at_token.shape));
-                                (@current Context).print(open.span, :RawIdent, Token.Shape.raw(open.shape));
+                                (@current Context).print(at_token.span, :Ident, Token.raw(at_token));
+                                (@current Context).print(open.span, :RawIdent, Token.raw(open));
                                 walk_string_parts(:RawIdent, &raw_parts);
-                                (@current Context).print(close.span, :RawIdent, Token.Shape.raw(close.shape));
+                                (@current Context).print(close.span, :RawIdent, Token.raw(close));
                             )
                         )
                     )
@@ -75,40 +89,54 @@ const Highlight = (
                         (@current Context).print(token.span, :Number, raw);
                     )
                     | :String { .open, .close, .raw_parts, ... } => (
-                        (@current Context).print(open.span, :StringDelimeter, Token.Shape.raw(open.shape));
+                        (@current Context).print(open.span, :StringDelimeter, Token.raw(open));
                         walk_string_parts(:StringContent, &raw_parts);
-                        (@current Context).print(close.span, :StringDelimeter, Token.Shape.raw(close.shape));
+                        (@current Context).print(close.span, :StringDelimeter, Token.raw(close));
                     )
                 )
             )
             | :InterpolatedString { .delimiter = _, .open, .parts, .close } => (
-                (@current Context).print(open.span, :StringDelimeter, Token.Shape.raw(open.shape));
+                (@current Context).print(open.span, :StringDelimeter, Token.raw(open));
                 for part in &parts |> ArrayList.iter do (
                     match part^ with (
                         | :Content { .raw = _, .raw_parts, .span, .contents = _ } => (
                             walk_string_parts(:StringContent, &raw_parts);
                         )
                         | :Interpolated { .open, .close, .ast = ref inner } => (
-                            (@current Context).print(open.span, :Escape, Token.Shape.raw(open.shape));
+                            (@current Context).print(open.span, :Escape, Token.raw(open));
                             walk_ast(inner);
-                            (@current Context).print(close.span, :Escape, Token.Shape.raw(close.shape));
+                            (@current Context).print(close.span, :Escape, Token.raw(close));
                         )
                     );
                 );
-                (@current Context).print(close.span, :StringDelimeter, Token.Shape.raw(close.shape));
+                (@current Context).print(close.span, :StringDelimeter, Token.raw(close));
             )
             | :Rule { .root = ref root, ... } => (
                 walk_ast_group(root);
             )
-            | :Syntax _ => ()
+            | :Syntax { .command, .value_after } => (
+                for token in &command.raw_tokens |> ArrayList.iter do (
+                    (@current Context).print(token^.span, :SyntaxCommand, Token.raw(token^));
+                );
+                if value_after is :Some ref ast then (
+                    walk_ast(ast);
+                );
+            )
+            | :Error { .parts = ref parts } => (
+                walk_ast_parts(parts)
+            )
         )
     );
     
     const walk_ast_group = (group :: &Ast.Group) => (
-        for part in &group^.parts |> ArrayList.iter do (
+        walk_ast_parts(&group^.parts);
+    );
+
+    const walk_ast_parts = (parts :: &ArrayList.t[Ast.Part]) => (
+        for part in parts |> ArrayList.iter do (
             match part^ with (
                 | :Keyword token => (
-                    (@current Context).print(token.span, :Keyword, Token.Shape.raw(token.shape));
+                    (@current Context).print(token.span, :Keyword, Token.raw(token));
                 )
                 | :Value ref ast => (
                     walk_ast(ast);
@@ -116,7 +144,25 @@ const Highlight = (
                 | :Group ref inner_group => (
                     walk_ast_group(inner_group);
                 )
+                | :Ignored ref token => (
+                    walk_ignored_token(token);
+                )
             );
+        );
+    );
+
+    const walk_ignored_token = (token :: &Token.t) => (
+        if token^.shape is :Comment { .raw, ... } then (
+            (@current Context).print(token^.span, :Comment, raw);
+        ) else (
+            # ignored because of error
+            (@current Context).print(token^.span, :Error, Token.raw(token^));
+        )
+    );
+
+    const walk_ignored_tokens = (tokens :: &ArrayList.t[Token.t]) => (
+        for token in tokens |> ArrayList.iter do (
+            walk_ignored_token(token);
         );
     );
 
@@ -177,6 +223,9 @@ const Highlight = (
                     | :RawIdent => :None
                     | :Ident => :None
                     | :Regular => :None
+                    | :Error => :Some :Red
+                    | :Comment => :Some :Gray
+                    | :SyntaxCommand => :Some :Yellow
                 );
                 match mode with (
                     | :Some mode => ansi.with_mode(mode, () => (@current Output).write(s))
@@ -210,7 +259,7 @@ const Highlight = (
                     .token_stream = &mut token_stream,
                 );
                 
-                Highlight.ast(&parsed.ast, output);
+                Highlight.highlight(&parsed, output);
                 (@current Output).write("\n");
                 state = init_state();
             );

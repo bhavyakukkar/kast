@@ -12,6 +12,16 @@ module:
 
 const SyntaxParser = (
     module:
+
+    const Context = @context newtype {
+        .raw_tokens :: ArrayList.t[Token.t],
+    };
+
+    const advance = (tokens :: &mut TokenStream.t) => (
+        let token = &tokens^ |> TokenStream.peek;
+        &mut (@current Context).raw_tokens |> ArrayList.push_back(token);
+        tokens |> TokenStream.advance;
+    );
     
     const expect_and_advance = (
         tokens :: &mut TokenStream.t,
@@ -21,6 +31,7 @@ const SyntaxParser = (
         let actual_raw = actual.shape |> Token.Shape.raw;
         if actual_raw != expected_raw then (
             Error.report_and_unwind(
+                :Parser,
                 actual.span,
                 () => (
                     let output = @current Output;
@@ -34,7 +45,7 @@ const SyntaxParser = (
                 ),
             );
         ) else (
-            tokens |> TokenStream.advance;
+            tokens |> advance;
         );
     );
     
@@ -55,23 +66,24 @@ const SyntaxParser = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxRule.WrapMode => with_return (
         if token_stream |> peek_is("if_any") then (
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             return :IfAnyNonAssoc;
         );
         if token_stream |> peek_is("if_any_assoc") then (
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             return :IfAnyAssoc;
         );
         if token_stream |> peek_is("never") then (
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             return :Never;
         );
         if token_stream |> peek_is("always") then (
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             return :Always;
         );
         let peek = &token_stream^ |> TokenStream.peek;
         Error.report_and_unwind(
+            :Parser,
             peek.span,
             () => (
                 let output = @current Output;
@@ -90,7 +102,7 @@ const SyntaxParser = (
         token_stream |> expect_and_advance("(");
         let mut parts = ArrayList.new[SyntaxRule.Part]();
         let wrap_mode :: Option.t[SyntaxRule.WrapMode] = if token_stream |> peek_is("@wrap") then (
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             :Some read_wrap_mode(token_stream)
         ) else (
             :None
@@ -103,7 +115,7 @@ const SyntaxParser = (
         token_stream |> expect_and_advance(")");
         let quantifier = if token_stream |> peek_is("?") then (
             last_token = &token_stream^ |> TokenStream.peek;
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             :Optional
         ) else (
             :None
@@ -131,10 +143,11 @@ const SyntaxParser = (
     ) -> SyntaxRule.Priority => (
         let peek = &token_stream^ |> TokenStream.peek;
         if peek.shape is :Number { .raw, ... } then (
-            token_stream |> TokenStream.advance;
+            token_stream |> advance;
             raw |> parse
         ) else (
             Error.report_and_unwind(
+                :Parser,
                 peek.span,
                 () => (
                     let output = @current Output;
@@ -157,6 +170,7 @@ const SyntaxParser = (
                 if not top_level^.first then (
                     let peek = &token_stream^ |> TokenStream.peek;
                     Error.report_and_unwind(
+                        :Parser,
                         peek.span,
                         () => (
                             let output = @current Output;
@@ -165,7 +179,7 @@ const SyntaxParser = (
                     );
                 );
                 left_assoc = true;
-                token_stream |> TokenStream.advance;
+                token_stream |> advance;
             );
         );
         let peek = &token_stream^ |> TokenStream.peek;
@@ -176,10 +190,10 @@ const SyntaxParser = (
                 ) else (
                     :Some name
                 );
-                token_stream |> TokenStream.advance;
+                token_stream |> advance;
                 
                 if token_stream |> peek_is("=") then (
-                    token_stream |> TokenStream.advance;
+                    token_stream |> advance;
                     return :Group read_group(token_stream, .name, .rule_priority);
                 );
                 
@@ -188,24 +202,25 @@ const SyntaxParser = (
                     if token_stream |> peek_is("->") then (
                         top_level^.right_assoc = true;
                         right_assoc = true;
-                        token_stream |> TokenStream.advance;
+                        token_stream |> advance;
                     );
                 );
                 
                 let priority_filter = if token_stream |> peek_is(":") then (
-                    token_stream |> TokenStream.advance;
+                    token_stream |> advance;
                     if token_stream |> peek_is("any") then (
-                        token_stream |> TokenStream.advance;
+                        token_stream |> advance;
                         :Any
                     ) else if token_stream |> peek_is(">") then (
-                        token_stream |> TokenStream.advance;
+                        token_stream |> advance;
                         :Greater read_priority(token_stream)
                     ) else if token_stream |> peek_is(">=") then (
-                        token_stream |> TokenStream.advance;
+                        token_stream |> advance;
                         :GreaterOrEqual read_priority(token_stream)
                     ) else (
                         let peek = &token_stream^ |> TokenStream.peek;
                         Error.report_and_unwind(
+                            :Parser,
                             peek.span,
                             () => (
                                 let output = @current Output;
@@ -227,15 +242,16 @@ const SyntaxParser = (
             | :String { .contents, ... } => (
                 if String.is_whitespace(contents) then (
                     let no_wrap = contents;
-                    token_stream |> TokenStream.advance;
+                    token_stream |> advance;
                     let wrap = if token_stream |> peek_is("/") then (
-                        token_stream |> TokenStream.advance;
+                        token_stream |> advance;
                         let peek = &token_stream^ |> TokenStream.peek;
                         if peek.shape is :String { .contents, ... } then (
-                            token_stream |> TokenStream.advance;
+                            token_stream |> advance;
                             contents
                         ) else (
                             Error.report_and_unwind(
+                                :Parser,
                                 peek.span,
                                 () => (
                                     let output = @current Output;
@@ -247,12 +263,13 @@ const SyntaxParser = (
                     ) else no_wrap;
                     return :Whitespace { .no_wrap, .wrap };
                 ) else (
-                    token_stream |> TokenStream.advance;
+                    token_stream |> advance;
                     return :Keyword contents;
                 )
             )
             | _ => (
                 Error.report_and_unwind(
+                    :Parser,
                     peek.span,
                     () => (
                         let output = @current Output;
@@ -274,10 +291,11 @@ const SyntaxParser = (
         let name :: String = (
             let peek = &token_stream^ |> TokenStream.peek;
             if peek.shape is :String { .contents, ... } then (
-                token_stream |> TokenStream.advance;
+                token_stream |> advance;
                 contents
             ) else (
                 Error.report_and_unwind(
+                    :Parser,
                     peek.span,
                     () => (
                         let output = @current Output;
@@ -304,6 +322,7 @@ const SyntaxParser = (
             if top_level.right_assoc then (
                 let peek = &token_stream^ |> TokenStream.peek;
                 Error.report_and_unwind(
+                    :Parser,
                     peek.span,
                     () => (
                         let output = @current Output;
@@ -337,20 +356,28 @@ const SyntaxParser = (
     
     const parse_syntax_command = (
         token_stream :: &mut TokenStream.t,
-    ) -> SyntaxCommand => (
-        let result = if token_stream |> peek_is("from_scratch") then (
-            token_stream |> TokenStream.advance;
+    ) -> {
+        .command :: SyntaxCommand,
+        .raw_tokens :: ArrayList.t[Token.t],
+    } => (
+        let ctx = {
+            .raw_tokens = ArrayList.new(),
+        };
+        with Context = ctx;
+        let command = if token_stream |> peek_is("from_scratch") then (
+            token_stream |> advance;
             :FromScratch
         ) else (
             :Rule parse_syntax_rule(token_stream)
         );
         token_stream |> expect_and_advance(";");
-        result
+        { .command, .raw_tokens = ctx.raw_tokens }
     );
     
     const parse_syntax_rules = (
         token_stream :: &mut TokenStream.t,
     ) -> ArrayList.t[SyntaxRule.t] => (
+        with Context = { .raw_tokens = ArrayList.new() };
         let mut result = ArrayList.new();
         loop (
             let peek = &token_stream^ |> TokenStream.peek;
@@ -358,20 +385,20 @@ const SyntaxParser = (
             with Error.UnwindableHandler = {
                 .unwind_on_error = [T] () => (
                     if token_stream^.index == index_before then (
-                        Log.debug_msg("skipping " + String.escape(Token.Shape.raw(peek.shape)));
-                        token_stream |> TokenStream.advance;
+                        Log.debug_msg("skipping " + String.escape(Token.raw(peek)));
+                        token_stream |> advance;
                     );
                     continue
                 ),
             };
-            Log.trace_msg("parse_syntax_rules: peek = " + String.escape(Token.Shape.raw(peek.shape)));
+            Log.trace_msg("parse_syntax_rules: peek = " + String.escape(Token.raw(peek)));
             if peek.shape is :Eof then break;
             if peek.shape is :Comment _ then (
-                token_stream |> TokenStream.advance;
+                token_stream |> advance;
                 continue;
             );
             token_stream |> expect_and_advance("@syntax");
-            match parse_syntax_command(token_stream) with (
+            match parse_syntax_command(token_stream).command with (
                 | :FromScratch => (
                     Log.debug_msg("parsed from_scratch");
                 )

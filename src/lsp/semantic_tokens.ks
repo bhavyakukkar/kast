@@ -202,7 +202,6 @@ const semantic_tokens = (
         let parsed = &file_state^.parsed
             |> Option.as_ref
             |> Option.unwrap_or_else(() => return :Null);
-        let ast = &parsed^.ast;
 
         let mut data :: ArrayList.t[Int32] = ArrayList.new();
         let mut prev_start :: Position = Position.beginning();
@@ -237,8 +236,8 @@ const semantic_tokens = (
             &mut data |> ArrayList.push_back(token_modifiers);
             prev_start = span.start;
         );
-        Highlight.ast(
-            ast,
+        Highlight.highlight(
+            parsed,
             {
                 .print = (span, token_type, _) => with_return (
                     let token_type = match token_type with (
@@ -250,6 +249,9 @@ const semantic_tokens = (
                         | :RawIdent => :Variable
                         | :Ident => return
                         | :Escape => :EnumMember
+                        | :Comment => :Comment
+                        | :Error => return
+                        | :SyntaxCommand => :Modifier
                     );
                     let token_modifiers = ArrayList.new();
                     add_token(span, token_type, token_modifiers);

@@ -117,6 +117,7 @@ const Json = (
             );
         );
         Error.report_and_unwind(
+            :Parser,
             ast.span,
             () => (
                 let output = @current Output;
@@ -146,6 +147,7 @@ const Json = (
                 );
             );
             Error.report_and_unwind(
+                :Parser,
                 field.span,
                 () => (
                     let output = @current Output;
@@ -160,6 +162,7 @@ const Json = (
     const from_ast = (ast :: Ast.t) -> Json.t => with_return (
         match ast.shape with (
             | :Empty => Error.report_and_unwind(
+                :Parser,
                 ast.span,
                 () => (@current Output).write("json can't be empty"),
             )
@@ -168,6 +171,7 @@ const Json = (
                     | :String { .contents, ... } => :String contents
                     | :Number { .raw, ... } => :Number std.String.parse[Float64](raw)
                     | _ => Error.report_and_unwind(
+                        :Parser,
                         token.span,
                         () => (
                             (@current Output).write("json can't be ");
@@ -178,6 +182,7 @@ const Json = (
             )
             | :InterpolatedString _ => (
                 Error.report_and_unwind(
+                    :Parser,
                     ast.span,
                     () => (@current Output).write("Interpolated strings aren't supported")
                 )
@@ -190,6 +195,7 @@ const Json = (
                         | :Number x => return :Number -x
                         | _ => (
                             Error.report_and_unwind(
+                                :Parser,
                                 inner.span,
                                 () => (@current Output).write("Expected a number to be negated"),
                             )
@@ -212,6 +218,7 @@ const Json = (
                     return :Bool false;
                 );
                 Error.report_and_unwind(
+                    :Parser,
                     ast.span,
                     () => (
                         let output = @current Output;

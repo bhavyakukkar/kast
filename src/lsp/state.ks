@@ -36,7 +36,9 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
         .parsed = (
             with Error.HandlerContext = {
                 .stop_on_error = false,
-                .handle = (span, msg) => (),
+                .handle = (kind, span, msg) => (
+                    # TODO add to diagnostics
+                ),
             };
             let mut lexer = Lexer.new(source);
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));

@@ -12,9 +12,10 @@ const Ast = (
     
     const t = newtype {
         .shape :: Shape.t,
+        .ignored_tokens_before :: ArrayList.t[Token.t],
         .span :: Span,
     };
-    
+
     const InterpolatedStringPart = newtype (
         | :Content {
             .raw :: String,
@@ -49,13 +50,21 @@ const Ast = (
                 .command :: SyntaxCommand,
                 .value_after :: Option.t[Ast.t],
             }
+            | :Error {
+                .parts :: ArrayList.t[Part],
+            }
         );
     );
     
-    const SyntaxCommand = newtype (
+    const SyntaxCommandShape = newtype (
         | :FromScratch
         | :Rule SyntaxRule.t
     );
+    
+    const SyntaxCommand = newtype {
+        .shape :: SyntaxCommandShape,
+        .raw_tokens :: ArrayList.t[Token.t],
+    };
     
     const Group = newtype {
         .parts :: ArrayList.t[Part],
@@ -63,6 +72,7 @@ const Ast = (
     };
 
     const Part = newtype (
+        | :Ignored Token.t
         | :Keyword Token.t
         | :Value Ast.t
         | :Group Group
@@ -163,7 +173,7 @@ const Ast = (
                     :Yellow,
                     () => (
                         output.write("@syntax");
-                        match command with (
+                        match command.shape with (
                             | :FromScratch => output.write("from_scratch")
                             | :Rule rule => output.write(String.escape(rule.name))
                         );
@@ -175,6 +185,37 @@ const Ast = (
                     output.dec_indentation();
                     output.write("}");
                 );
+            )
+            | :Error { .parts = ref parts } => (
+                ansi.with_mode(
+                    :Red,
+                    () => output.write("<error>"),
+                );
+                output.write("{\n");
+                output.inc_indentation();
+                for part in parts |> ArrayList.iter do (
+                    match part^ with (
+                        | :Ignored token => (
+                            ansi.with_mode(
+                                :Dim,
+                                () => output.write("<ignored> "),
+                            );
+                            Token.Shape.print_impl(token.shape, .verbose = false);
+                        )
+                        | :Keyword token => (
+                            ansi.with_mode(
+                                :Magenta,
+                                () => output.write(Token.raw(token)),
+                            );
+                        )
+                        | :Value ref ast => (
+                            print(ast);
+                        )
+                    );
+                    output.write(",\n");
+                );
+                output.dec_indentation();
+                output.write("}");
             )
         );
     );
