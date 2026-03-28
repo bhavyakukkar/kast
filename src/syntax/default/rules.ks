@@ -47,8 +47,12 @@
 @syntax "while_is" 7.5 @wrap never = "while" " " value " " "is" " " pattern " " "do" " " body;
 @syntax "for" 7.5 @wrap never = "for" " " pattern " " "in" " " iterable " " "do" " " body;
 
+@syntax "break" 7.7 @wrap never = "break";
+@syntax "continue" 7.7 @wrap never = "continue";
 @syntax "return_without_value" 7.7 @wrap never = "return";
 @syntax "return_with_value" 7.7 @wrap never = "return" " " value;
+@syntax "core:unwindable" 7.7 @wrap never = "unwindable" " " token: >=1000 " " body;
+@syntax "core:unwind" 7.7 @wrap never = "unwind" " " token: >=1000 " " value;
 
 @syntax "range" 8 @wrap never = start ".." end;
 
@@ -95,8 +99,6 @@
 @syntax "core:deref" 70 @wrap never = <- _ "^";
 @syntax "core:apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" arg:any ""/"\\\n" ")");
 @syntax "invoke_macro" 70 @wrap never = <- macro "!" _=(@wrap if_any "(" ""/"\n\t" ast:any ""/"\\\n" ")");
-@syntax "core:unwindable" 80 @wrap never = "unwindable" " " token " " body;
-@syntax "core:unwind" 80 @wrap never = "unwind" " " token " " value;
 @syntax "core:mut" 500 @wrap never = "mut" " " _;
 @syntax "core:type expr" 500 @wrap never = "type" " " _;
 @syntax "core:newtype" 500 @wrap never = "newtype" " " _;
@@ -105,8 +107,6 @@
 @syntax "core:true" 500 @wrap never = "true";
 @syntax "core:false" 500 @wrap never = "false";
 @syntax "loop" 500 @wrap if_any = "loop" " " "(" " "/"\n\t" _:any " "/"\\\n" ")";
-@syntax "break" 500 @wrap never = "break";
-@syntax "continue" 500 @wrap never = "continue";
 @syntax "core:by_ref" 500 @wrap never = "ref" " " _;
 @syntax "core:by_ref_mut" 500 @wrap never = "ref" " " "mut" " " _;
 @syntax "opaque_type" 500 @wrap never = "@opaque_type";
