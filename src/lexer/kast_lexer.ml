@@ -170,7 +170,7 @@ module DefaultRules = struct
     let rec loop =
       fun () ->
       let/ c = Reader.peek lexer.reader in
-      if c = delimeter
+      if c = delimeter || c = '\n'
       then ()
       else (
         with_return (fun { return } ->
