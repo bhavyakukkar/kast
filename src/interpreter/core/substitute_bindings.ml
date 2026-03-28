@@ -673,7 +673,7 @@ module Impl = struct
           Print.print_var_scope
           state.result_scope);
       original_value)
-    else if ctx.depth > 32
+    else if ctx.depth > 128
     then fail "Went too deep" ~span
     else (
       match ctx |> find_sub ~state var with
