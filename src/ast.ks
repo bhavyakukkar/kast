@@ -69,6 +69,7 @@ const Ast = (
     const Group = newtype {
         .parts :: ArrayList.t[Part],
         .children :: Tuple.t[Child],
+        .span :: Span,
     };
 
     const Part = newtype (
@@ -76,6 +77,13 @@ const Ast = (
         | :Keyword Token.t
         | :Value Ast.t
         | :Group Group
+    );
+
+    const part_span = (self :: &Part) -> Span => match self^ with (
+        | :Ignored token => token.span
+        | :Keyword token => token.span
+        | :Value ast => ast.span
+        | :Group group => group.span
     );
     
     const Child = newtype (

@@ -133,7 +133,7 @@ impl Lexer as module = (
                 let end = reader^.position.string_encoding_index;
                 return :Some :Error { .raw = String.substring(reader^.contents, start, end - start) }
             );
-            const error = [T] message -> T => (
+            let error = [T] message -> T => (
                 let span = Span.single_char(
                     .position = reader^.position,
                     .char = Reader.peek(&reader^),

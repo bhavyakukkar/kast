@@ -67,11 +67,11 @@ const SyntaxParser = (
     ) -> SyntaxRule.WrapMode => with_return (
         if token_stream |> peek_is("if_any") then (
             token_stream |> advance;
-            return :IfAnyNonAssoc;
+            return :IfAnyNonAssociative;
         );
         if token_stream |> peek_is("if_any_assoc") then (
             token_stream |> advance;
-            return :IfAnyAssoc;
+            return :IfAnyAssociative;
         );
         if token_stream |> peek_is("never") then (
             token_stream |> advance;

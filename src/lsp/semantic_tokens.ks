@@ -24,6 +24,7 @@ const semantic_tokens = (
         | :Regexp
         | :Operator
         | :Decorator
+        | :Namespace
     );
 
     impl TokenType as module = (
@@ -52,6 +53,7 @@ const semantic_tokens = (
             | :Regexp => 19
             | :Operator => 20
             | :Decorator => 21
+            | :Namespace => 22
         );
         
         const to_string = (self :: TokenType) -> String => match self with (
@@ -77,6 +79,7 @@ const semantic_tokens = (
             | :Regexp => "regexp"
             | :Operator => "operator"
             | :Decorator => "decorator"
+            | :Namespace => "namespace"
         );
         
         const variants = () -> std.iter.Iterable[TokenType] => {
@@ -103,6 +106,7 @@ const semantic_tokens = (
                 f(:Regexp);
                 f(:Operator);
                 f(:Decorator);
+                f(:Namespace);
             ),
         };
     );
@@ -251,7 +255,7 @@ const semantic_tokens = (
                         | :Escape => :EnumMember
                         | :Comment => :Comment
                         | :Error => return
-                        | :SyntaxCommand => :Modifier
+                        | :SyntaxCommand => :Macro
                     );
                     let token_modifiers = ArrayList.new();
                     add_token(span, token_type, token_modifiers);

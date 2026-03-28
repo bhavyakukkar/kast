@@ -76,7 +76,7 @@ const Parser = (
             let peek = &ctx.token_stream^ |> TokenStream.peek;
             let peek_raw = peek.shape |> Token.Shape.raw;
             if peek_raw == "@syntax" then (
-                let syntax_token_span = peek.span;
+                let syntax_token = peek;
                 let ignored_tokens_before = claim_ignored_tokens();
                 ctx.token_stream |> TokenStream.advance;
                 let {
@@ -101,20 +101,27 @@ const Parser = (
                     .shape = :Syntax {
                         .command = {
                             .shape = command,
-                            .raw_tokens = command_raw_tokens,
+                            .raw_tokens = (
+                                let mut tokens = ArrayList.new();
+                                &mut tokens |> ArrayList.push_back(syntax_token);
+                                for token in command_raw_tokens |> ArrayList.into_iter do (
+                                    &mut tokens |> ArrayList.push_back(token);
+                                );
+                                tokens
+                            ),
                         },
                         .value_after,
                     },
                     .ignored_tokens_before,
                     .span = {
-                        .start = syntax_token_span.start,
+                        .start = syntax_token.span.start,
                         .end = (
                             let prev_token = &ctx.token_stream^
                                 |> TokenStream.prev
                                 |> Option.unwrap;
                             prev_token.span.end
                         ),
-                        .uri = syntax_token_span.uri,
+                        .uri = syntax_token.span.uri,
                     }
                 }
             );
@@ -682,7 +689,27 @@ const Parser = (
             );
             rule_part_idx += 1;
         );
-        { .parts = ast_parts, .children }
+        let span = (
+            let parts_len = &ast_parts |> ArrayList.length;
+            if parts_len == 0 then (
+                Error.report_and_unwind(
+                    :Internal,
+                    error_span,
+                    () => (
+                        let output = @current Output;
+                        output.write("Collected zero parts?");
+                    ),
+                );
+            );
+            let first_part = &ast_parts |> ArrayList.at(0);
+            let last_part = &ast_parts |> ArrayList.at(parts_len - 1);
+            {
+                .start = (first_part |> Ast.part_span).start,
+                .end = (last_part |> Ast.part_span).end,
+                .uri = (first_part |> Ast.part_span).uri,
+            }
+        );
+        { .parts = ast_parts, .children, .span }
     );
     
     const try_parse = (.priority_filter :: SyntaxRule.PriorityFilter) -> ParseResult => (

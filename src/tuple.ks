@@ -18,7 +18,33 @@ const Tuple = (
         .named = OrdMap.new(),
         .name_order = ArrayList.new(),
     };
+
+    const Member = newtype (
+        | :Index Int32
+        | :Name String
+    );
+
+    const get = [T] (
+        self :: &Tuple.t[T],
+        member :: Member,
+    ) -> Option.t[type (&T)] => (
+        match member with (
+            | :Index i => get_unnamed(self, i)
+            | :Name name => get_named(self, name)
+        )
+    );
     
+    const get_unnamed = [T] (
+        self :: &Tuple.t[T],
+        idx :: Int32,
+    ) -> Option.t[type (&T)] => (
+        if idx < ArrayList.length(&self^.unnamed) then (
+            :Some ArrayList.at(&self^.unnamed, idx)
+        ) else (
+            :None
+        )
+    );
+
     const get_named = [T] (
         self :: &Tuple.t[T],
         name :: String,

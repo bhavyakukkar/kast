@@ -84,7 +84,7 @@ const SyntaxRule = (
     const WrapMode = newtype (
         | :Never
         | :Always
-        | :IfAnyNonAssoc
-        | :IfAnyAssoc
+        | :IfAnyNonAssociative
+        | :IfAnyAssociative
     );
 );
