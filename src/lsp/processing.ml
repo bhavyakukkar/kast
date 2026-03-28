@@ -142,7 +142,7 @@ let process_file (global : global_state) (source : source) : file_state =
     let compiled =
       Option.bind ast (fun ast ->
         let ast = Kast_ast_init.init_ast ast in
-        try Some (Compiler.compile compiler Expr ast) with
+        try Some (Compiler.compile ~prelude:true compiler Expr ast) with
         | Cancel -> raise Cancel
         | e ->
           Log.error (fun log -> log "Unexpected exc: %s" (Printexc.to_string e));

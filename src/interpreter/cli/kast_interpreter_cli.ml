@@ -72,7 +72,7 @@ let eval_and : 'a. (evaled option -> 'a) -> Args.t -> 'a =
       Parser.parse source Kast_default_syntax.ruleset)
   in
   let ast = parsed.ast |> Kast_ast_init.init_ast in
-  let expr : expr = Compiler.compile compiler Expr ast in
+  let expr : expr = Compiler.compile ~prelude:(not no_std) compiler Expr ast in
   let value : value = Interpreter.eval interpreter expr in
   f (Some { compiler; interpreter; value })
 ;;
@@ -128,24 +128,27 @@ let repl
     | Some { compiler; interpreter; value = _ } -> compiler, interpreter
     | None -> init_compiler_interpreter ~no_std (Str "<repl>")
   in
+  let eval_line ~prelude line =
+    let source : source = { contents = line; uri = Uri.stdin } in
+    let parsed = Parser.parse source Kast_default_syntax.ruleset in
+    let ast = parsed.ast |> Kast_ast_init.init_ast in
+    let expr : expr = Compiler.compile ~prelude compiler Expr ast in
+    try
+      let value : value = Interpreter.eval interpreter expr in
+      value.var |> Kast_inference_base.Var.setup_default_if_needed;
+      value |> Kast_inference_completion.complete_value;
+      match value.var |> Kast_inference.Var.inferred_opt with
+      | Some V_Unit -> ()
+      | _ -> println "%a @{<italic>:: %a@}" Value.print value Ty.print (Value.ty_of value)
+    with
+    | Interpreter.Natives.Panic s -> eprintln "@{<red>panic: %s@}" s
+  in
+  eval_line ~prelude:true "";
   let rec loop () =
     print_string "> ";
     flush stdout;
     let line = input_line stdin in
-    let source : source = { contents = line; uri = Uri.stdin } in
-    let parsed = Parser.parse source Kast_default_syntax.ruleset in
-    let ast = parsed.ast |> Kast_ast_init.init_ast in
-    let expr : expr = Compiler.compile compiler Expr ast in
-    (try
-       let value : value = Interpreter.eval interpreter expr in
-       value.var |> Kast_inference_base.Var.setup_default_if_needed;
-       value |> Kast_inference_completion.complete_value;
-       match value.var |> Kast_inference.Var.inferred_opt with
-       | Some V_Unit -> ()
-       | _ ->
-         println "%a @{<italic>:: %a@}" Value.print value Ty.print (Value.ty_of value)
-     with
-     | Interpreter.Natives.Panic s -> eprintln "@{<red>panic: %s@}" s);
+    eval_line ~prelude:false line;
     loop ()
   in
   loop ()

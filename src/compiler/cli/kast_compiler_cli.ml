@@ -110,7 +110,7 @@ let run : Args.t -> unit =
   let fmt = Format.formatter_of_out_channel out in
   Format.setup_tty_if_needed fmt out;
   let ast = parsed.ast |> Kast_ast_init.init_ast in
-  let expr : expr = Compiler.compile compiler Expr ast in
+  let expr : expr = Compiler.compile ~prelude:(not no_std) compiler Expr ast in
   (match target with
    | Ir -> fprintf fmt "%a" Expr.print_with_types expr
    | JavaScript ->

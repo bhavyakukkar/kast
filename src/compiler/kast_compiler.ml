@@ -312,36 +312,45 @@ and make_compiler (original_state : state) : (module Compiler.S) =
 let rec default name_part ?(cache : Cache.t option) () : state =
   let cache = cache |> Option.unwrap_or_else (fun () -> Cache.init ()) in
   let state = init ~cache ~compile_for:(Interpreter.default name_part) in
-  let prelude = [%include_file "prelude.ks"] in
-  let prelude_parsed =
-    try
-      Kast_parser.parse
-        { contents = prelude; uri = Uri.fake "prelude" }
-        Kast_default_syntax.ruleset
-    with
-    | effect Kast_parser.Import _, k -> Std.Effect.continue k Kast_parser.Ruleset.empty
-  in
-  let prelude_span = Span.of_ocaml __POS__ in
-  let _prelude_value, _prelude_expr =
-    Compiler.eval
-      ~ty:(T_Unit |> Ty.inferred ~span:prelude_span)
-      (make_compiler state)
-      (prelude_parsed.ast |> Kast_ast_init.init_ast)
-  in
   (State.default := fun name_part ~cache -> default name_part ~cache ());
   state
 ;;
 
 let handle_parser_imports f state = Compiler.handle_parser_imports f (make_compiler state)
 
-let compile : 'a. state -> 'a compiled_kind -> Ast.t -> 'a =
-  fun state kind ast ->
+let compile : 'a. prelude:bool -> state -> 'a compiled_kind -> Ast.t -> 'a =
+  fun (type a)
+    ~(prelude : bool)
+    (state : state)
+    (kind : a compiled_kind)
+    (ast : Ast.t)
+    : a ->
   state
   |> handle_parser_imports (fun () ->
     Fun.protect
       (fun () ->
          state.currently_compiled_file <- Some ast.data.span.uri;
-         let result = compile state kind ast in
+         let result : a =
+           match kind with
+           | Expr when prelude ->
+             let prelude = [%include_file "prelude.ks"] in
+             let prelude_parsed =
+               try
+                 Kast_parser.parse
+                   { contents = prelude; uri = Uri.fake "prelude" }
+                   Kast_default_syntax.ruleset
+               with
+               | effect Kast_parser.Import _, k ->
+                 Std.Effect.continue k Kast_parser.Ruleset.empty
+             in
+             let prelude =
+               compile state Expr (prelude_parsed.ast |> Kast_ast_init.init_ast)
+             in
+             let user_code_expr = compile state Expr ast in
+             E_Then { list = [ prelude; user_code_expr ] }
+             |> Init.init_expr user_code_expr.data.span state
+           | _ -> compile state kind ast
+         in
          Log.trace (fun log -> log "Completing inference");
          Kast_inference_completion.complete_compiled kind result;
          result)

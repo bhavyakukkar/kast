@@ -43,10 +43,8 @@ const sys = include "./sys.ks";
 const random = include "./random.ks";
 const collections = include "./collections/_mod.ks";
 
-const panic = [T] (s :: String) -> T => @cfg (
-    | target.name == "interpreter" => (@native "panic")(s)
-    | target.name == "javascript" => (@native "Kast.panic")(s)
-);
+include "./panic.ks";
+
 const type_of_value = [T] (x :: T) -> Type => T;
 
 const prelude = include "./prelude.ks";
