@@ -234,6 +234,7 @@ impl Lexer as module = (
                         Reader.advance(reader);
                         let span_start = reader^.position;
                         let mut tokens = ArrayList.new();
+                        let mut bracket_balance :: Int32 = 0;
                         @loop (
                             skip_whitespace(lexer);
                             let c = match Reader.peek(&reader^) with (
@@ -247,7 +248,7 @@ impl Lexer as module = (
                                     error_with_span(span, "Unfinished interpolation")
                                 )
                             );
-                            if c == ')' then (
+                            if c == ')' and bracket_balance == 0 then (
                                 let close_token = {
                                     .shape = :Punct { .raw = ")" },
                                     .span = Span.single_char(
@@ -273,7 +274,14 @@ impl Lexer as module = (
                                 content_part = reset_content_part();
                                 unwind (@binding outer_loop_body) ();
                             );
-                            &mut tokens |> ArrayList.push_back(next(lexer));
+                            let token = next(lexer);
+                            let token_raw = Token.raw(token);
+                            if token_raw == "(" then (
+                                bracket_balance += 1;
+                            ) else if token_raw == ")" then (
+                                bracket_balance -= 1;
+                            );
+                            &mut tokens |> ArrayList.push_back(token);
                         )
                     );
                     Reader.advance(reader);
