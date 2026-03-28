@@ -146,7 +146,7 @@ let () =
           let compiler = Compiler.default (Str "<js>") () in
           (* TODO *)
           let interpreter = compiler.interpreter in
-          let expr : expr = Compiler.compile compiler Expr ast in
+          let expr : expr = Compiler.compile ~prelude:true compiler Expr ast in
           let value : value = Interpreter.eval interpreter expr in
           ignore value)
 

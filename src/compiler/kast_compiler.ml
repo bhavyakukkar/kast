@@ -312,6 +312,13 @@ and make_compiler (original_state : state) : (module Compiler.S) =
 let rec default name_part ?(cache : Cache.t option) () : state =
   let cache = cache |> Option.unwrap_or_else (fun () -> Cache.init ()) in
   let state = init ~cache ~compile_for:(Interpreter.default name_part) in
+  let _ : State.imported =
+    Compiler.import
+      ~prelude:false
+      ~span:(Span.fake "prelude")
+      (make_compiler state)
+      (Core_syntax.resolve_uri ~from:(Uri.fake "prelude") (Uri.of_string "std:lib.ks"))
+  in
   (State.default := fun name_part ~cache -> default name_part ~cache ());
   state
 ;;
@@ -333,19 +340,7 @@ let compile : 'a. prelude:bool -> state -> 'a compiled_kind -> Ast.t -> 'a =
          let result : a =
            match kind with
            | Expr when prelude ->
-             let prelude = [%include_file "prelude.ks"] in
-             let prelude_parsed =
-               try
-                 Kast_parser.parse
-                   { contents = prelude; uri = Uri.fake "prelude" }
-                   Kast_default_syntax.ruleset
-               with
-               | effect Kast_parser.Import _, k ->
-                 Std.Effect.continue k Kast_parser.Ruleset.empty
-             in
-             let prelude =
-               compile state Expr (prelude_parsed.ast |> Kast_ast_init.init_ast)
-             in
+             let prelude = Compiler.prelude_expr (make_compiler state) in
              let user_code_expr = compile state Expr ast in
              E_Then { list = [ prelude; user_code_expr ] }
              |> Init.init_expr user_code_expr.data.span state

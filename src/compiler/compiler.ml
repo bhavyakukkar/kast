@@ -123,7 +123,21 @@ let rec handle_parser_imports : 'a. (unit -> 'a) -> (module S) -> 'a =
       log "Imported ruleset: %a" Kast_parser.Ruleset.print imported.parser_ruleset);
     Std.Effect.continue k imported.parser_ruleset
 
-and calculate_import ~(span : span) (module C : S) (uri : Uri.t) : State.imported =
+and prelude_expr (module C : S) : expr =
+  let prelude = [%include_file "prelude.ks"] in
+  let prelude_parsed =
+    try
+      Kast_parser.parse
+        { contents = prelude; uri = Uri.fake "prelude" }
+        Kast_default_syntax.ruleset
+    with
+    | effect Kast_parser.Import _, k -> Std.Effect.continue k Kast_parser.Ruleset.empty
+  in
+  C.compile Expr (prelude_parsed.ast |> Kast_ast_init.init_ast)
+
+and calculate_import ?(prelude : bool = true) ~(span : span) (module C : S) (uri : Uri.t)
+  : State.imported
+  =
   let cache = C.state.cache in
   match UriMap.find_opt uri cache.imported with
   | None ->
@@ -134,15 +148,22 @@ and calculate_import ~(span : span) (module C : S) (uri : Uri.t) : State.importe
       Fun.protect
         ~finally:(fun () -> cache.imported <- UriMap.remove uri cache.imported)
         (fun () ->
-           let state : State.t = !State.default (Uri uri) ~cache in
+           let state = !State.default (Uri uri) ~cache in
+           let (module C : S) = update_module (module C) state in
            state.currently_compiled_file <- Some uri;
+           if prelude
+           then (
+             let _ : value =
+               Kast_interpreter.eval C.state.interpreter (prelude_expr (module C))
+             in
+             ());
            let source = Source.read uri in
            let parsed =
              (module C)
              |> handle_parser_imports (fun () ->
                Kast_parser.parse source Kast_default_syntax.ruleset)
            in
-           let expr = C.compile ~state Expr (parsed.ast |> Kast_ast_init.init_ast) in
+           let expr = C.compile Expr (parsed.ast |> Kast_ast_init.init_ast) in
            let value : value = Kast_interpreter.eval state.interpreter expr in
            Effect.perform
              (CompilerEffect.FileImported { uri; parsed; compiled = expr; value });
@@ -192,9 +213,11 @@ and calculate_import ~(span : span) (module C : S) (uri : Uri.t) : State.importe
     }
 ;;
 
-let rec import ~(span : span) (module C : S) (uri : Uri.t) : State.imported =
+let rec import ?(prelude : bool = true) ~(span : span) (module C : S) (uri : Uri.t)
+  : State.imported
+  =
   C.state.cache |> State.Cache.add_dependency ~dependent:span.uri ~dependency:uri;
-  let result : State.imported = calculate_import ~span (module C) uri in
+  let result : State.imported = calculate_import ~prelude ~span (module C) uri in
   Log.trace (fun log -> log "imported (maybe cached) %a" Uri.print uri);
   Hashtbl.add_seq C.state.custom_syntax_impls (Hashtbl.to_seq result.custom_syntax_impls);
   (* TODO what if its going to be evaluated in a different interpreter? *)

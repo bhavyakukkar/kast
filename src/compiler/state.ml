@@ -335,7 +335,7 @@ type t =
 
 type state = t
 
-let blank name_part ~cache =
+let blank ~prelude name_part ~cache =
   { scopes = Scopes.init ~span:(Span.fake "<blank>") ~recursive:false
   ; currently_compiled_file = None
   ; cache
