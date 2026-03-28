@@ -287,6 +287,8 @@ impl Lexer as module = (
                         '\b'
                     ) else if c == 't' then (
                         '\t'
+                    ) else if c == 'f' then (
+                        '\f'
                     ) else if c == '\'' then (
                         '\''
                     ) else if c == '"' then (
