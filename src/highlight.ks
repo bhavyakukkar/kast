@@ -41,6 +41,7 @@ const Highlight = (
         let {
             .ast = ref ast,
             .ignored_trailing_tokens = ref ignored_trailing_tokens,
+            .eof = _,
         } = parsed^;
         walk_ast(ast);
         walk_ignored_tokens(ignored_trailing_tokens);

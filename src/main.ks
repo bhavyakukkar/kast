@@ -1,6 +1,7 @@
 use (import "./common.ks").*;
 use (import "./serialize.ks").*;
 use (import "./error.ks").*;
+use (import "./log.ks").*;
 use (import "./output.ks").*;
 use (import "./position.ks").*;
 use (import "./source.ks").*;
@@ -19,8 +20,8 @@ use (import "./format.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 
 # @eval Serialize.do_impl();
-with Stdout = new_output(std.io.print);
-with Stderr = new_output(std.io.eprint);
+with Stdout = new_std_output(std.io.print);
+with Stderr = new_std_output(std.io.eprint);
 with Output = (@current Stdout);
 
 const Args = (
@@ -220,9 +221,14 @@ let output = @current Output;
 match args.subcommand with (
     | :Tokenize { .paths } => (
         let process = (path :: SourcePath) => (
+            Log.info(
+                () => ansi.with_mode(
+                    :Bold,
+                    () => output.write("Lexing " + to_string(path) + "\n\n"),
+                ),
+            );
             match args.output_mode with (
                 | :Human => (
-                    ansi.with_mode(:Bold, () => output.write("Lexing " + to_string(path) + "\n\n"));
                     let mut lexer = Lexer.new(Source.read(path));
                     loop (
                         let token = &mut lexer |> Lexer.next;

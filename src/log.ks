@@ -35,8 +35,8 @@ const Log = (
         ansi.with_mode(
             mode,
             () => (
-                with Output = (@current Stderr);
-                let output = @current Output;
+                let output = @current Stderr;
+                with Output = output;
                 output.write("[");
                 output.write(level_text);
                 output.write("] ");

@@ -14,6 +14,7 @@ use (import "../span.ks").*;
 use (import "../output.ks").*;
 use (import "../json.ks").*;
 use (import "../highlight.ks").*;
+use (import "../format.ks").*;
 use (import "../json_rpc.ks").*;
 use (import "../../deps/uri/src/lib.ks").*;
 use std.collections.OrdMap;
@@ -28,6 +29,7 @@ const Lsp = (
     include "./hover.ks";
     include "./selection_range.ks";
     include "./semantic_tokens.ks";
+    include "./formatting.ks";
     
     const CliArgs = (
         module:
@@ -66,6 +68,9 @@ const Lsp = (
         );
         if method == "textDocument/semanticTokens/full" then (
             return state |> semantic_tokens.full(request);
+        );
+        if method == "textDocument/formatting" then (
+            return state |> formatting.format(request);
         );
         panic("TODO respond to " + method)
     );

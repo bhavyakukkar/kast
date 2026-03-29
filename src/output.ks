@@ -10,11 +10,19 @@ const Output = @context OutputT;
 const Stdout = @context OutputT;
 const Stderr = @context OutputT;
 
-const new_output = (print :: String -> ()) -> OutputT => (
+const new_std_output = (write_line :: String -> ()) -> OutputT => (
+    new_output(.write_line, .indentation_string = "│   ", .color = true)
+);
+
+const new_output = (
+    .write_line :: String -> (),
+    .indentation_string :: String,
+    .color :: Bool,
+) -> OutputT => (
     let mut buffer = "";
     let mut indentation = 0;
     {
-        .color = true,
+        .color,
         .inc_indentation = () => (
             indentation += 1;
         ),
@@ -33,12 +41,12 @@ const new_output = (print :: String -> ()) -> OutputT => (
                     s += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
                 );
                 for _ in 0..indentation do (
-                    s += ("│   ");
+                    s += (indentation_string);
                 );
                 if color then (
                     s += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
                 );
-                print(s + line);
+                write_line(s + line);
                 let i = i + 1;
                 buffer = String.substring(
                     buffer,

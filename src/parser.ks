@@ -730,6 +730,7 @@ const Parser = (
     const Parsed = newtype {
         .ast :: Ast.t,
         .ignored_trailing_tokens :: ArrayList.t[Token.t],
+        .eof :: Position,
     };
     
     const parse = (
@@ -760,10 +761,10 @@ const Parser = (
             }
         );
         let mut reported_expected_eof = false;
-        loop (
+        let eof = unwindable eof @loop (
             let peek = &ctx.token_stream^ |> TokenStream.peek;
             if peek.shape is :Eof then (
-                break;
+                unwind eof peek.span.start;
             );
             if not reported_expected_eof then (
                 Error.report(
@@ -782,6 +783,7 @@ const Parser = (
         {
             .ast,
             .ignored_trailing_tokens = claim_ignored_tokens(),
+            .eof,
         }
     );
 );

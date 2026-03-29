@@ -22,7 +22,12 @@ impl SourcePath as module = (
 impl SourcePath as ToString = {
     .to_string = (self :: SourcePath) => match self with (
         | :Stdin => "<stdin>"
-        | :Uri uri => Uri.to_string(uri)
+        | :Uri uri => if uri.scheme == "path" then (
+            # TODO relative to cwd?
+            uri.path
+        ) else (
+            Uri.to_string(uri)
+        )
         | :Special name => name
     ),
 };

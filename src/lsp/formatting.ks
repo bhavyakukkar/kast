@@ -1,0 +1,72 @@
+const position_to_lsp = (position :: Position) -> Json.t => (
+    let mut fields = OrdMap.new();
+    let line :: Json.t = :Number (
+        std.convert.int32_to_float64(position.line)
+    );
+    &mut fields |> OrdMap.add("line", line);
+    let character :: Json.t = :Number (
+        std.convert.int32_to_float64(position.column.string_encoding)
+    );
+    &mut fields |> OrdMap.add("character", character);
+    :Object fields
+);
+
+const span_to_lsp = (span :: Span) -> Json.t => (
+    let mut fields = OrdMap.new();
+    &mut fields |> OrdMap.add("start", position_to_lsp(span.start));
+    &mut fields |> OrdMap.add("end", position_to_lsp(span.end));
+    :Object fields
+);
+
+const formatting = (
+    module:
+    
+    const format = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
+        let :Object fields = request;
+        let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
+        let text_document = (
+            let &value = &params |> OrdMap.get("textDocument") |> Option.unwrap;
+            let :Object fields = value;
+            let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
+            { .uri = parse(uri) }
+        );
+        
+        let file_state = &state^.files
+            |> OrdMap.get(Uri.to_string(text_document.uri))
+            |> Option.unwrap_or_else(() => return :Null);
+        let parsed = &file_state^.parsed
+            |> Option.as_ref
+            |> Option.unwrap_or_else(() => return :Null);
+
+        let new_text = (
+            let mut result = "";
+            let output = new_output(
+                .write_line = s => (
+                    result += s;
+                    result += "\n"
+                ),
+                .indentation_string = "    ", # should depend on user setting
+                .color = false,
+            );
+            Format.format(parsed, output);
+            result
+        );
+
+        let edit = :Object (
+            let mut fields = OrdMap.new();
+            &mut fields |> OrdMap.add("range", span_to_lsp({
+                .start = Position.beginning(),
+                .end = parsed^.eof,
+                .path = parsed^.ast.span.path,
+            }));
+            &mut fields |> OrdMap.add("newText", :String new_text);
+            fields
+        );
+        
+        :Array (
+            let mut edits = ArrayList.new();
+            &mut edits |> ArrayList.push_back(edit);
+            edits
+        )
+    );
+);

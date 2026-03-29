@@ -11,6 +11,9 @@
             "full": {
                 "delta": false
             }
+        },
+        "documentFormattingProvider": {
+            "workDoneProgress": false
         }
     },
     "serverInfo": {
