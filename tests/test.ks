@@ -1,25 +1,5 @@
-(
-    module:
+print("Hello f\(to_string("2 + 2 = \((# comment#) nested interpolation + 2)"))rom private fn");
 
-    const private = (
-        module:
+hello world
 
-        const f = () => (
-            print("Hello from private fn");
-            public.recurse();
-        );
-    );
-
-    const public = (
-        module:
-
-        const recurse = () => (
-            print("Hello from public recurse");
-        );
-
-        const f = () => (
-            print("Hello from public fn");
-            private.f();
-        );
-    );
-).public
+# hello

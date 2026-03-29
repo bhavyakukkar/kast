@@ -22,7 +22,7 @@ impl SourcePath as module = (
 impl SourcePath as ToString = {
     .to_string = (self :: SourcePath) => match self with (
         | :Stdin => "<stdin>"
-        | :Uri uri => if uri.scheme == "path" then (
+        | :Uri uri => if uri.scheme == "file" then (
             # TODO relative to cwd?
             uri.path
         ) else (

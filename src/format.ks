@@ -66,12 +66,17 @@ const Format = (
     const print_token = (token :: Token.t) => (
         let output = @current Output;
         let mut ctx = @current Context;
-        if ctx.just_printed_newline and token.span.start.line - ctx.prev_span.end.line > 1 then (
-            print_newline();
+        let flush_before = () => ( 
+            flush();
+            if ctx.just_printed_newline and token.span.start.line - ctx.prev_span.end.line > 1 then (
+                print_newline();
+            );
         );
         if token.shape is :Comment { .raw, .ty } then (
             if ctx.prev_span.end.line == token.span.start.line then (
                 output.write(" ");
+            ) else (
+                flush_before();
             );
             output.write(raw);
             ctx.just_printed_newline = false;
@@ -83,7 +88,7 @@ const Format = (
                 | :Block => ()
             );
         ) else (
-            flush();
+            flush_before();
             print_raw(Token.raw(token));
         );
         ctx.prev_span = token.span;
