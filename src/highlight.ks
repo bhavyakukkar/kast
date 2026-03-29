@@ -32,6 +32,70 @@ const Highlight = (
 
     const OutputT = newtype {
         .print :: (Span, TokenType, String) -> (),
+        .reset :: () -> (), # TODO remove this
+    };
+
+    const new_output = (mode :: OutputMode) -> OutputT => match mode with (
+        | :Terminal => (
+            let init_state = () => {
+                .position = Position.beginning(),
+            };
+            let mut state = init_state();
+            let print_token = (span, token_type, s) => (
+                while state.position.line < span.start.line do (
+                    # TODO fix copy
+                    state.position = { ...state.position };
+                    state.position.line += 1;
+                    state.position.column = PositionColumn.zero();
+                    (@current Output).write("\n");
+                );
+                for _ in state.position.column.string_encoding..span.start.column.string_encoding do (
+                    (@current Output).write(" ");
+                );
+                let mode :: Option.t[ansi.Mode] = match token_type with (
+                    | :Keyword => :Some :Magenta
+                    | :Number => :Some :Italic
+                    | :StringContent => :Some :Green
+                    | :StringDelimeter => :Some :Cyan
+                    | :Escape => :Some :Cyan
+                    | :RawIdent => :None
+                    | :Ident => :None
+                    | :Regular => :None
+                    | :Error => :Some :Red
+                    | :Comment => :Some :Gray
+                    | :SyntaxCommand => :Some :Yellow
+                );
+                match mode with (
+                    | :Some mode => ansi.with_mode(mode, () => (@current Output).write(s))
+                    | :None => (@current Output).write(s)
+                );
+                state.position = span.end;
+            );
+            {
+                .print = print_token,
+                .reset = () => (
+                    state = init_state();
+                ),
+            }
+        )
+    );
+
+    const OutputMode = newtype (
+        | :Terminal
+        # TODO | :Html
+    );
+
+    impl OutputMode as FromString = {
+        .from_string = s => (
+            if s == "terminal" then (
+                :Terminal
+            ) else if s == "html" then (
+                # :Html
+                panic("TODO html mode")
+            ) else (
+                panic("Unknown highlight mode " + String.escape(s))
+            )
+        ),
     };
 
     const Context = @context OutputT;
@@ -183,11 +247,13 @@ const Highlight = (
             const t = newtype {
                 .ruleset :: Option.t[String],
                 .paths :: ArrayList.t[String],
+                .mode :: OutputMode,
             };
             
             const parse = start_index -> t => (
                 let mut ruleset = :None;
                 let mut paths = ArrayList.new();
+                let mut mode = :Terminal;
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
@@ -196,10 +262,15 @@ const Highlight = (
                         i += 2;
                         continue;
                     );
+                    if arg == "--mode" then (
+                        mode = String.parse(std.sys.argv_at(i + 1));
+                        i += 2;
+                        continue;
+                    );
                     &mut paths |> ArrayList.push_back(arg);
                     i += 1;
                 );
-                { .ruleset, .paths }
+                { .ruleset, .paths, .mode }
             );
         );
 
@@ -209,43 +280,7 @@ const Highlight = (
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
             let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
 
-            let init_state = () => {
-                .position = Position.beginning(),
-            };
-            let mut state = init_state();
-            let print_token = (span, token_type, s) => (
-                while state.position.line < span.start.line do (
-                    # TODO fix copy
-                    state.position = { ...state.position };
-                    state.position.line += 1;
-                    state.position.column = PositionColumn.zero();
-                    (@current Output).write("\n");
-                );
-                for _ in state.position.column.string_encoding..span.start.column.string_encoding do (
-                    (@current Output).write(" ");
-                );
-                let mode :: Option.t[ansi.Mode] = match token_type with (
-                    | :Keyword => :Some :Magenta
-                    | :Number => :Some :Italic
-                    | :StringContent => :Some :Green
-                    | :StringDelimeter => :Some :Cyan
-                    | :Escape => :Some :Cyan
-                    | :RawIdent => :None
-                    | :Ident => :None
-                    | :Regular => :None
-                    | :Error => :Some :Red
-                    | :Comment => :Some :Gray
-                    | :SyntaxCommand => :Some :Yellow
-                );
-                match mode with (
-                    | :Some mode => ansi.with_mode(mode, () => (@current Output).write(s))
-                    | :None => (@current Output).write(s)
-                );
-                state.position = span.end;
-            );
-            let output :: OutputT = {
-                .print = print_token,
-            };
+            let output :: OutputT = new_output(args.mode);
             let process = (path :: SourcePath) => (
                 let source = Source.read(path);
                 let entire_source_span = (
@@ -271,7 +306,7 @@ const Highlight = (
                 
                 Highlight.highlight(&parsed, output);
                 (@current Output).write("\n");
-                state = init_state();
+                output.reset();
             );
             if &args.paths |> ArrayList.length == 0 then (
                 process(:Stdin);

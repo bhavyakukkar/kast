@@ -12,6 +12,7 @@ use (import "./ast.ks").*;
 use (import "./span.ks").*;
 use (import "./position.ks").*;
 use (import "./token.ks").*;
+use (import "./highlight.ks").*;
 
 module:
 
@@ -92,6 +93,20 @@ const Format = (
             print_raw(Token.raw(token));
         );
         ctx.prev_span = token.span;
+    );
+
+    const format_to_string = (parsed :: &Parser.Parsed) -> String => (
+        let mut result = "";
+        let output = new_output(
+            .write_line = s => (
+                result += s;
+                result += "\n"
+            ),
+            .indentation_string = "    ", # should depend on user setting
+            .color = false,
+        );
+        format(parsed, output);
+        result
     );
 
     const format = (parsed :: &Parser.Parsed, output :: OutputT) => (
@@ -331,12 +346,14 @@ const Format = (
             const t = newtype {
                 .ruleset :: Option.t[String],
                 .paths :: ArrayList.t[String],
+                .highlight :: Option.t[Highlight.OutputMode],
             };
             
             const parse = start_index -> t => (
                 let mut ruleset = :None;
                 let mut paths = ArrayList.new();
                 let mut i = start_index;
+                let mut highlight = :Some :Terminal;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
                     if arg == "--ruleset" then (
@@ -344,10 +361,20 @@ const Format = (
                         i += 2;
                         continue;
                     );
+                    if arg == "--highlight" then (
+                        let mode = std.sys.argv_at(i + 1);
+                        if mode == "none" then (
+                            highlight = :None;
+                        ) else (
+                            highlight = :Some String.parse(mode);
+                        );
+                        i += 2;
+                        continue;
+                    );
                     &mut paths |> ArrayList.push_back(arg);
                     i += 1;
                 );
-                { .ruleset, .paths }
+                { .ruleset, .paths, .highlight }
             );
         );
 
@@ -358,28 +385,33 @@ const Format = (
             let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
             let process = (path :: SourcePath) => (
                 let source = Source.read(path);
-                let entire_source_span = (
-                    let start = Position.beginning();
-                    let mut end = start;
-                    for c in source.contents |> String.iter do (
-                        &mut end |> Position.advance(c);
-                    );
-                    {
-                        .start,
-                        .end,
-                        .path = source.path,
-                    }
-                );
                 let mut lexer = Lexer.new(source);
                 let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
                 let parsed = Parser.parse(
                     .ruleset,
-                    .entire_source_span,
+                    .entire_source_span = Source.entire_span(&source),
                     .path = source.path,
                     .token_stream = &mut token_stream,
                 );
 
-                format(&parsed, @current Output);
+                match args.highlight with (
+                    | :None => format(&parsed, @current Output)
+                    | :Some highlight_mode => (
+                        let source = {
+                            .contents = format_to_string(&parsed),
+                            .path = :Special "<formatted>",
+                        };
+                        let mut lexer = Lexer.new(source);
+                        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+                        let parsed = Parser.parse(
+                            .ruleset,
+                            .entire_source_span = Source.entire_span(&source),
+                            .path = source.path,
+                            .token_stream = &mut token_stream,
+                        );
+                        Highlight.highlight(&parsed, Highlight.new_output(highlight_mode));
+                    )
+                );
             );
             if &args.paths |> ArrayList.length == 0 then (
                 process(:Stdin);

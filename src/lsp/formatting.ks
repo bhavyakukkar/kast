@@ -22,6 +22,8 @@ const formatting = (
     module:
     
     const format = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
+        return :Null;
+        # TODO fix formatting
         let :Object fields = request;
         let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
         let text_document = (
@@ -38,19 +40,7 @@ const formatting = (
             |> Option.as_ref
             |> Option.unwrap_or_else(() => return :Null);
 
-        let new_text = (
-            let mut result = "";
-            let output = new_output(
-                .write_line = s => (
-                    result += s;
-                    result += "\n"
-                ),
-                .indentation_string = "    ", # should depend on user setting
-                .color = false,
-            );
-            Format.format(parsed, output);
-            result
-        );
+        let new_text = Format.format_to_string(parsed);
 
         let edit = :Object (
             let mut fields = OrdMap.new();

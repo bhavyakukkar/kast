@@ -259,7 +259,8 @@ const semantic_tokens = (
                     );
                     let token_modifiers = ArrayList.new();
                     add_token(span, token_type, token_modifiers);
-                )
+                ),
+                .reset = () => panic("NO RESET, THIS SHOULD BE DELETED"),
             },
         );
         
