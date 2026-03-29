@@ -211,11 +211,12 @@ const Parser = (
                                         )
                                     )
                                 );
-                                let parsed = parse(
+                                let parsed = parse_with(
                                     .ruleset = dyn_ctx.ruleset,
                                     .token_stream = &mut token_stream,
                                     .entire_source_span = span,
                                     .path = span.path,
+                                    .eof_name = ")",
                                 );
                                 {
                                     .open,
@@ -742,12 +743,28 @@ const Parser = (
         .ignored_trailing_tokens :: ArrayList.t[Token.t],
         .eof :: Position,
     };
-    
+
     const parse = (
         .ruleset :: SyntaxRuleset.t,
         .token_stream :: &mut TokenStream.t,
         .entire_source_span :: Span,
         .path :: SourcePath,
+    ) -> Parsed => (
+        parse_with(
+            .ruleset,
+            .token_stream,
+            .entire_source_span,
+            .path,
+            .eof_name = "EOF",
+        )
+    );
+    
+    const parse_with = (
+        .ruleset :: SyntaxRuleset.t,
+        .token_stream :: &mut TokenStream.t,
+        .entire_source_span :: Span,
+        .path :: SourcePath,
+        .eof_name :: String,
     ) -> Parsed => (
         let mut ctx :: StaticContextT = {
             .token_stream,
@@ -781,7 +798,10 @@ const Parser = (
                     :Parser,
                     peek.span,
                     () => (
-                        (@current Output).write("Expected eof, got ");
+                        let output = @current Output;
+                        output.write("Expected ");
+                        output.write(eof_name);
+                        output.write(", got ");
                         Token.Shape.print_impl(peek.shape, .verbose = false);
                     ),
                 );
