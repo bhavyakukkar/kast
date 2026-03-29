@@ -4,6 +4,7 @@ use (import "./error.ks").*;
 use (import "./output.ks").*;
 use (import "./position.ks").*;
 use (import "./source.ks").*;
+use (import "./source_path.ks").*;
 use (import "./lexer.ks").*;
 use (import "./token.ks").*;
 use (import "./token_stream.ks").*;
@@ -218,7 +219,7 @@ with Error.HandlerContext = Error.init_handler(.stop_on_error = args.stop_on_err
 let output = @current Output;
 match args.subcommand with (
     | :Tokenize { .paths } => (
-        let process = (path :: FileOrStdin) => (
+        let process = (path :: SourcePath) => (
             match args.output_mode with (
                 | :Human => (
                     ansi.with_mode(:Bold, () => output.write("Lexing " + to_string(path) + "\n\n"));
@@ -248,11 +249,11 @@ match args.subcommand with (
             process(:Stdin);
         );
         for path in paths |> ArrayList.into_iter do (
-            process(:File path);
+            process(SourcePath.file(path));
         );
     )
     | :ParseSyntaxRules { .paths } => (
-        let process = (path :: FileOrStdin) => (
+        let process = (path :: SourcePath) => (
             ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + to_string(path) + "\n\n"));
             let mut lexer = Lexer.new(Source.read(path));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
@@ -263,12 +264,12 @@ match args.subcommand with (
             process(:Stdin);
         );
         for path in paths |> ArrayList.into_iter do (
-            process(:File path);
+            process(SourcePath.file(path));
         );
     )
     | :ParseSyntaxRuleset { .paths } => (
         let mut ruleset = SyntaxRuleset.new();
-        let process = (path :: FileOrStdin) => (
+        let process = (path :: SourcePath) => (
             ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + to_string(path) + "\n\n"));
             let mut lexer = Lexer.new(Source.read(path));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
@@ -281,17 +282,17 @@ match args.subcommand with (
             process(:Stdin);
         );
         for path in paths |> ArrayList.into_iter do (
-            process(:File path);
+            process(SourcePath.file(path));
         );
         SyntaxRuleset.print(&ruleset);
     )
     | :Parse { .ruleset_path, .paths } => (
         let ruleset_path = ruleset_path |> Option.unwrap_or("tests/syntax/kast.ks");
         ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + ruleset_path + "\n\n"));
-        let mut lexer = Lexer.new(Source.read_file(ruleset_path));
+        let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
-        let process = (path :: FileOrStdin) => (
+        let process = (path :: SourcePath) => (
             ansi.with_mode(:Bold, () => output.write("Parsing " + to_string(path) + "\n\n"));
             let source = Source.read(path);
             let entire_source_span = (
@@ -303,7 +304,7 @@ match args.subcommand with (
                 {
                     .start,
                     .end,
-                    .uri = source.uri,
+                    .path = source.path,
                 }
             );
             let mut lexer = Lexer.new(source);
@@ -311,7 +312,7 @@ match args.subcommand with (
             let parsed = Parser.parse(
                 .ruleset,
                 .entire_source_span,
-                .uri = source.uri,
+                .path = source.path,
                 .token_stream = &mut token_stream,
             );
             
@@ -322,11 +323,11 @@ match args.subcommand with (
             process(:Stdin);
         );
         for path in paths |> ArrayList.into_iter do (
-            process(:File path);
+            process(SourcePath.file(path));
         );
     )
     | :ParseJson { .use_kast_parser, .paths } => (
-        let process = (path :: FileOrStdin) => (
+        let process = (path :: SourcePath) => (
             let source = Source.read(path);
             let json = if use_kast_parser then (
                 let json = Json.parse(source.contents)
@@ -349,7 +350,7 @@ match args.subcommand with (
             process(:Stdin);
         );
         for path in paths |> ArrayList.into_iter do (
-            process(:File path);
+            process(SourcePath.file(path));
         );
     )
     | :Highlight args => Highlight.Cli.run(args)

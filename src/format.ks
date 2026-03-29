@@ -3,6 +3,7 @@ use (import "./tuple.ks").*;
 use (import "./output.ks").*;
 use (import "./parser.ks").*;
 use (import "./source.ks").*;
+use (import "./source_path.ks").*;
 use (import "./lexer.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./syntax_parser.ks").*;
@@ -95,7 +96,7 @@ const Format = (
             .just_printed_newline = true,
             .prev_span = Span.empty(
                 .position = Position.beginning(),
-                .uri = parsed^.ast.span.uri,
+                .path = parsed^.ast.span.path,
             ),
         };
         with Output = output;
@@ -340,10 +341,10 @@ const Format = (
 
         const run = (args :: Args.t) => (
             let ruleset_path = args.ruleset |> Option.unwrap_or("tests/syntax/kast.ks");
-            let mut lexer = Lexer.new(Source.read_file(ruleset_path));
+            let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
             let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
-            let process = (path :: FileOrStdin) => (
+            let process = (path :: SourcePath) => (
                 let source = Source.read(path);
                 let entire_source_span = (
                     let start = Position.beginning();
@@ -354,7 +355,7 @@ const Format = (
                     {
                         .start,
                         .end,
-                        .uri = source.uri,
+                        .path = source.path,
                     }
                 );
                 let mut lexer = Lexer.new(source);
@@ -362,7 +363,7 @@ const Format = (
                 let parsed = Parser.parse(
                     .ruleset,
                     .entire_source_span,
-                    .uri = source.uri,
+                    .path = source.path,
                     .token_stream = &mut token_stream,
                 );
 
@@ -372,7 +373,7 @@ const Format = (
                 process(:Stdin);
             );
             for path in args.paths |> ArrayList.into_iter do (
-                process(:File path);
+                process(SourcePath.file(path));
             );
         );
     );

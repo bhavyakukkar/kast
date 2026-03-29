@@ -11,7 +11,7 @@ const State = newtype {
     
 const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String) => (
     Log.info_msg("open_or_change_doc " + Uri.to_string(uri));
-    let source :: Source = { .uri, .contents };
+    let source :: Source = { .path = :Uri uri, .contents };
     let entire_source_span = (
         let start = Position.beginning();
         let mut end = start;
@@ -21,7 +21,7 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
         {
             .start,
             .end,
-            .uri = source.uri,
+            .path = source.path,
         }
     );
     let file_state = {
@@ -45,7 +45,7 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
             let parsed = Parser.parse(
                 .ruleset = state^.syntax_ruleset,
                 .entire_source_span,
-                .uri = source.uri,
+                .path = source.path,
                 .token_stream = &mut token_stream,
             );
             :Some parsed

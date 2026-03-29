@@ -8,6 +8,7 @@ use (import "../syntax_ruleset.ks").*;
 use (import "../syntax_parser.ks").*;
 use (import "../parser.ks").*;
 use (import "../source.ks").*;
+use (import "../source_path.ks").*;
 use (import "../position.ks").*;
 use (import "../span.ks").*;
 use (import "../output.ks").*;
@@ -92,7 +93,7 @@ const Lsp = (
         let mut state :: State = {
             .syntax_ruleset = (
                 let ruleset_path = "tests/syntax/kast.ks";
-                let mut lexer = Lexer.new(Source.read_file(ruleset_path));
+                let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
                 let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
                 SyntaxParser.parse_syntax_ruleset(&mut token_stream)
             ),

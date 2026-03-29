@@ -128,7 +128,7 @@ const SyntaxParser = (
             .span = {
                 .start = first_token.span.start,
                 .end = last_token.span.end,
-                .uri = first_token.span.uri,
+                .path = first_token.span.path,
             },
         }
     );
@@ -286,7 +286,7 @@ const SyntaxParser = (
     const parse_syntax_rule = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxRule.t => (
-        let { .start = span_start, .uri, ... } = (&token_stream^ |> TokenStream.peek).span;
+        let { .start = span_start, .path, ... } = (&token_stream^ |> TokenStream.peek).span;
         
         let name :: String = (
             let peek = &token_stream^ |> TokenStream.peek;
@@ -349,7 +349,7 @@ const SyntaxParser = (
             .span = {
                 .start = span_start,
                 .end = span_end,
-                .uri,
+                .path,
             }
         }
     );

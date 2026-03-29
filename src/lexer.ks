@@ -123,7 +123,7 @@ impl Lexer as module = (
                 .span = Span.single_char(
                     .position = reader^.position,
                     .char = :Some delim,
-                    .uri = lexer^.source.uri,
+                    .path = lexer^.source.path,
                 ),
             };
             let start = reader^.position;
@@ -137,7 +137,7 @@ impl Lexer as module = (
                 let span = Span.single_char(
                     .position = reader^.position,
                     .char = Reader.peek(&reader^),
-                    .uri = lexer^.source.uri,
+                    .path = lexer^.source.path,
                 );
                 error_with_span(span, message)
             );
@@ -173,7 +173,7 @@ impl Lexer as module = (
                         .span = {
                             .start = content_part.raw_content_part.start,
                             .end = reader^.position,
-                            .uri = lexer^.source.uri,
+                            .path = lexer^.source.path,
                         },
                     };
                     &mut content_part.raw_parts |> ArrayList.push_back(part);
@@ -191,7 +191,7 @@ impl Lexer as module = (
                             .span = {
                                 .start = content_part.start,
                                 .end = reader^.position,
-                                .uri = lexer^.source.uri,
+                                .path = lexer^.source.path,
                             },
                             .raw = (
                                 let start = content_part.start.string_encoding_index;
@@ -227,7 +227,7 @@ impl Lexer as module = (
                                     &mut pos |> Position.advance('(');
                                     pos
                                 ),
-                                .uri = lexer^.source.uri,
+                                .path = lexer^.source.path,
                             },
                         };
                         Reader.advance(reader);
@@ -243,7 +243,7 @@ impl Lexer as module = (
                                     let span = {
                                         .start = span_start,
                                         .end = reader^.position,
-                                        .uri = lexer^.source.uri,
+                                        .path = lexer^.source.path,
                                     };
                                     error_with_span(span, "Unfinished interpolation")
                                 )
@@ -254,7 +254,7 @@ impl Lexer as module = (
                                     .span = Span.single_char(
                                         .position = reader^.position,
                                         .char = :Some ')',
-                                        .uri = lexer^.source.uri,
+                                        .path = lexer^.source.path,
                                     ),
                                 };
                                 &mut parts
@@ -266,7 +266,7 @@ impl Lexer as module = (
                                             .span = {
                                                 .start = span_start,
                                                 .end = reader^.position,
-                                                .uri = lexer^.source.uri,
+                                                .path = lexer^.source.path,
                                             }
                                         }
                                     );
@@ -324,7 +324,7 @@ impl Lexer as module = (
                             let span = {
                                 .start = escape_start,
                                 .end = error_position,
-                                .uri = lexer^.source.uri,
+                                .path = lexer^.source.path,
                             };
                             error_with_span(span, "Expected 2 hex digits after '\\x'")
                         );
@@ -337,7 +337,7 @@ impl Lexer as module = (
                             let span = {
                                 .start = escape_start,
                                 .end = reader^.position,
-                                .uri = lexer^.source.uri,
+                                .path = lexer^.source.path,
                             };
                             error_with_span(span, "Hex escaped char must be in range 0x00 to 0x7f");
                         );
@@ -358,7 +358,7 @@ impl Lexer as module = (
                         let hex_code_span :: Span = {
                             .start = hex_code_start,
                             .end = reader^.position,
-                            .uri = lexer^.source.uri,
+                            .path = lexer^.source.path,
                         };
                         let c = match Reader.peek(&reader^) with (
                             | :Some c => c
@@ -394,7 +394,7 @@ impl Lexer as module = (
                         .span = {
                             .start = escape_start,
                             .end = reader^.position,
-                            .uri = lexer^.source.uri,
+                            .path = lexer^.source.path,
                         }
                     };
                     &mut content_part.raw_parts |> ArrayList.push_back(escape_raw_part);
@@ -411,7 +411,7 @@ impl Lexer as module = (
                         :Content {
                             .span = Span.empty(
                                 .position = reader^.position,
-                                .uri = lexer^.source.uri,
+                                .path = lexer^.source.path,
                             ),
                             .raw_parts = ArrayList.new(),
                             .raw = "",
@@ -423,7 +423,7 @@ impl Lexer as module = (
                 let span_so_far = {
                     .start,
                     .end = reader^.position,
-                    .uri = lexer^.source.uri,
+                    .path = lexer^.source.path,
                 };
                 let c = Reader.peek(&reader^)
                     |> Option.unwrap_or_else(
@@ -435,7 +435,7 @@ impl Lexer as module = (
                     .span = Span.single_char(
                         .position = reader^.position,
                         .char = :Some delim,
-                        .uri = lexer^.source.uri,
+                        .path = lexer^.source.path,
                     ),
                 }
             );
@@ -581,7 +581,7 @@ impl Lexer as module = (
                 .span = Span.single_char(
                     .position = reader^.position,
                     .char = :Some '@',
-                    .uri = lexer^.source.uri,
+                    .path = lexer^.source.path,
                 ),
             };
             match &reader^ |> Reader.peek2 with (
@@ -597,7 +597,7 @@ impl Lexer as module = (
             let span :: Span = {
                 .start,
                 .end,
-                .uri = lexer^.source.uri,
+                .path = lexer^.source.path,
             };
             let raw = String.substring(
                 reader^.contents,
@@ -643,7 +643,7 @@ impl Lexer as module = (
                 let end = lexer^.reader.position;
                 return {
                     .shape,
-                    .span = { .start, .end, .uri = lexer^.source.uri },
+                    .span = { .start, .end, .path = lexer^.source.path },
                 };
             );
         );
@@ -655,7 +655,7 @@ impl Lexer as module = (
         let span = Span.single_char(
             .position = lexer^.reader.position,
             .char,
-            .uri = lexer^.source.uri,
+            .path = lexer^.source.path,
         );
         Error.report_msg(:Lexer, span, message);
         Reader.advance(&mut lexer^.reader);

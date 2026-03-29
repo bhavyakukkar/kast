@@ -9,6 +9,7 @@ use (import "./syntax_rule.ks").*;
 use (import "./syntax_ruleset.ks").*;
 use (import "./ast.ks").*;
 use (import "./position.ks").*;
+use (import "./source_path.ks").*;
 use (import "./span.ks").*;
 use (import "./token.ks").*;
 use (import "../deps/uri/src/lib.ks").*;
@@ -46,7 +47,7 @@ const Parser = (
     const StaticContextT = newtype {
         .token_stream :: &mut TokenStream.t,
         .entire_source_span :: Span,
-        .uri :: Uri,
+        .path :: SourcePath,
         .ignored_tokens :: ArrayList.t[Token.t],
     };
     const DynamicContextT = newtype {
@@ -121,7 +122,7 @@ const Parser = (
                                 |> Option.unwrap;
                             prev_token.span.end
                         ),
-                        .uri = syntax_token.span.uri,
+                        .path = syntax_token.span.path,
                     }
                 }
             );
@@ -198,7 +199,7 @@ const Parser = (
                                                     .span = {
                                                         .start = span.end,
                                                         .end = span.end,
-                                                        .uri = span.uri,
+                                                        .path = span.path,
                                                     },
                                                 }
                                             )
@@ -209,7 +210,7 @@ const Parser = (
                                     .ruleset = dyn_ctx.ruleset,
                                     .token_stream = &mut token_stream,
                                     .entire_source_span = span,
-                                    .uri = span.uri,
+                                    .path = span.path,
                                 );
                                 { .open, .close, .ast = parsed.ast }
                             )
@@ -406,7 +407,7 @@ const Parser = (
             {
                 .start = first_span.start,
                 .end = last_span.end,
-                .uri = first_span.uri,
+                .path = first_span.path,
             }
         );
         let shape = with_return (
@@ -674,7 +675,7 @@ const Parser = (
             let fail_span = {
                 .start = Position.beginning(),
                 .end = Position.beginning(),
-                .uri = Uri.new_path("TODO"),
+                .path = :Special "<TODO>",
             };
             match rule_part^ with (
                 | :Whitespace _ => ()
@@ -706,7 +707,7 @@ const Parser = (
             {
                 .start = (first_part |> Ast.part_span).start,
                 .end = (last_part |> Ast.part_span).end,
-                .uri = (first_part |> Ast.part_span).uri,
+                .path = (first_part |> Ast.part_span).path,
             }
         );
         { .parts = ast_parts, .children, .span }
@@ -735,12 +736,12 @@ const Parser = (
         .ruleset :: SyntaxRuleset.t,
         .token_stream :: &mut TokenStream.t,
         .entire_source_span :: Span,
-        .uri :: Uri,
+        .path :: SourcePath,
     ) -> Parsed => (
         let mut ctx :: StaticContextT = {
             .token_stream,
             .entire_source_span,
-            .uri,
+            .path,
             .ignored_tokens = ArrayList.new(),
         };
         with StaticContext = ctx;

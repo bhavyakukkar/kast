@@ -3,6 +3,7 @@ use (import "./output.ks").*;
 use (import "./error.ks").*;
 use (import "./tuple.ks").*;
 use (import "./source.ks").*;
+use (import "./source_path.ks").*;
 use (import "../deps/uri/src/lib.ks").*;
 use (import "./lexer.ks").*;
 use (import "./token.ks").*;
@@ -90,7 +91,7 @@ const Json = (
     
     const ruleset = () => (
         let path = std.path.dirname(__FILE__) + "/../tests/syntax/json.ks";
-        let mut lexer = Lexer.new(Source.read_file(path));
+        let mut lexer = Lexer.new(Source.read(SourcePath.file(path)));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         SyntaxParser.parse_syntax_ruleset(&mut token_stream)
     );
@@ -231,10 +232,10 @@ const Json = (
     );
     
     const parse = (json :: String) -> Result.t[Json.t, ParseError] => (
-        let uri :: Uri = Uri.new_path("<json>");
+        let path :: SourcePath = :Special "<json>";
         let source :: Source = {
             .contents = json,
-            .uri,
+            .path,
         };
         let mut lexer = Lexer.new(source);
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
@@ -242,7 +243,7 @@ const Json = (
             .ruleset = ruleset(),
             .token_stream = &mut token_stream,
             .entire_source_span = Source.entire_span(&source),
-            .uri,
+            .path,
         );
         :Ok from_ast(parsed.ast)
     );
