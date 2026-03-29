@@ -75,8 +75,7 @@ impl Lexer as module = (
         error_with_span(span, message)
     );
 
-    const ReadFn = type (&mut Lexer -> Option.t[Token.Shape.t]);
-    const skip_whitespace :: ReadFn = lexer => (
+    const skip_whitespace = (lexer :: &mut Lexer) => (
         let reader = &mut lexer^.reader;
         while Reader.peek(&reader^) is :Some c do (
             if Char.is_whitespace(c) then (
@@ -87,6 +86,8 @@ impl Lexer as module = (
         );
         :None
     );
+
+    const ReadFn = type (&mut Lexer -> Option.t[Token.Shape.t]);
     const read_eof :: ReadFn = lexer => (
         let reader = &mut lexer^.reader;
         match Reader.peek(&reader^) with (
@@ -641,7 +642,6 @@ impl Lexer as module = (
         
         const read_fns :: ArrayList.t[ReadFn] = (
             let mut read_fns = ArrayList.new();
-            &mut read_fns |> ArrayList.push_back(skip_whitespace);
             &mut read_fns |> ArrayList.push_back(read_eof);
             &mut read_fns |> ArrayList.push_back(read_line_comment);
             &mut read_fns |> ArrayList.push_back(read_block_comment);
@@ -656,6 +656,7 @@ impl Lexer as module = (
         );
     
     const next = (lexer :: &mut Lexer) -> Token.t => (
+        skip_whitespace(lexer);
         let reader = &mut lexer^.reader;
         with Context = {
             .lexer,

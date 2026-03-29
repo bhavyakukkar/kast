@@ -104,9 +104,15 @@ const Highlight = (
                         | :Content { .raw = _, .raw_parts, .span, .contents = _ } => (
                             walk_string_parts(:StringContent, &raw_parts);
                         )
-                        | :Interpolated { .open, .close, .ast = ref inner } => (
+                        | :Interpolated {
+                            .open,
+                            .close,
+                            .ast = ref inner,
+                            .ignored_trailing_tokens = ref ignored_trailing_tokens,
+                        } => (
                             (@current Context).print(open.span, :Escape, Token.raw(open));
                             walk_ast(inner);
+                            walk_ignored_tokens(ignored_trailing_tokens);
                             (@current Context).print(close.span, :Escape, Token.raw(close));
                         )
                     );
@@ -209,6 +215,8 @@ const Highlight = (
             let mut state = init_state();
             let print_token = (span, token_type, s) => (
                 while state.position.line < span.start.line do (
+                    # TODO fix copy
+                    state.position = { ...state.position };
                     state.position.line += 1;
                     state.position.column = PositionColumn.zero();
                     (@current Output).write("\n");

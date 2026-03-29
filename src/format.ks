@@ -135,9 +135,15 @@ const Format = (
                         | :Content { .raw, ... } => (
                             print_raw(raw);
                         )
-                        | :Interpolated { .open, .close, .ast = ref inner } => (
+                        | :Interpolated {
+                            .open,
+                            .close,
+                            .ast = ref inner,
+                            .ignored_trailing_tokens = ref ignored_trailing_tokens,
+                        } => (
                             print_token(open);
                             walk_ast(inner, .parent = :None);
+                            walk_ignored_tokens(ignored_trailing_tokens);
                             print_token(close);
                         )
                     );

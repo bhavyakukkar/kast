@@ -4,18 +4,14 @@ use (import "./span.ks").*;
 use (import "./token.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./tuple.ks").*;
-
 module:
-
 const Ast = (
     module:
-    
     const t = newtype {
         .shape :: Shape.t,
         .ignored_tokens_before :: ArrayList.t[Token.t],
         .span :: Span,
     };
-
     const InterpolatedStringPart = newtype (
         | :Content {
             .raw :: String,
@@ -26,13 +22,12 @@ const Ast = (
         | :Interpolated {
             .open :: Token.t,
             .ast :: Ast.t,
+            .ignored_trailing_tokens :: ArrayList.t[Token.t],
             .close :: Token.t,
         }
     );
-    
     const Shape = (
         module:
-        
         const t = newtype (
             | :Empty
             | :Token Token.t
@@ -55,58 +50,48 @@ const Ast = (
             }
         );
     );
-    
     const SyntaxCommandShape = newtype (
         | :FromScratch
         | :Rule SyntaxRule.t
     );
-    
     const SyntaxCommand = newtype {
         .shape :: SyntaxCommandShape,
         .raw_tokens :: ArrayList.t[Token.t],
     };
-    
     const Group = newtype {
         .parts :: ArrayList.t[Part],
         .children :: Tuple.t[Child],
         .span :: Span,
     };
-
     const Part = newtype (
         | :Ignored Token.t
         | :Keyword Token.t
         | :Value Ast.t
         | :Group Group
     );
-
     const part_span = (self :: &Part) -> Span => match self^ with (
         | :Ignored token => token.span
         | :Keyword token => token.span
         | :Value ast => ast.span
         | :Group group => group.span
     );
-    
     const Child = newtype (
         | :Value Ast.t
         | :Group Group
     );
-    
     const unwrap_child_value = (self :: Child) => match self with (
         | :Value value => value
         | :Group _ => panic("expected value ast child, got group")
     );
-    
     const print_child = (self :: &Child) => (
         match self^ with (
             | :Value ref ast => print(ast)
             | :Group ref group => print_group(group)
         );
     );
-    
     const print_group = (self :: &Group) => (
         print_children(&self^.children);
     );
-    
     const print_children = (children :: &Tuple.t[Child]) => (
         Tuple.print(
             children,
@@ -118,13 +103,14 @@ const Ast = (
             .close = "}",
         );
     );
-    
     const print = (self :: &Ast.t) => (
         let output = @current Output;
         match self^.shape with (
             | :Empty => ansi.with_mode(
                 :Dim,
-                () => output.write("<empty>"),
+                (
+                
+                ) => output.write("<empty>"),
             )
             | :Token token => Token.Shape.print(token.shape)
             | :InterpolatedString {
@@ -135,7 +121,9 @@ const Ast = (
             } => (
                 ansi.with_mode(
                     :Green,
-                    () => (
+                    (
+                    
+                    ) => (
                         output.write(delimiter);
                         output.write("interpolated");
                         output.write(delimiter);
@@ -148,13 +136,22 @@ const Ast = (
                         | :Content { .contents, ... } => (
                             ansi.with_mode(
                                 :Green,
-                                () => output.write(String.escape(contents)),
+                                (
+                                
+                                ) => output.write(String.escape(contents)),
                             );
                         )
-                        | :Interpolated { .open = _, .close = _, .ast = ref ast } => (
+                        | :Interpolated {
+                            .open = _,
+                            .close = _,
+                            .ast = ref ast,
+                            .ignored_trailing_tokens = _,
+                        } => (
                             ansi.with_mode(
                                 :Yellow,
-                                () => output.write("\\ "),
+                                (
+                                
+                                ) => output.write("\\ "),
                             );
                             print(ast);
                         )
@@ -167,7 +164,9 @@ const Ast = (
             | :Rule { .rule, .root = ref root } => (
                 ansi.with_mode(
                     :Magenta,
-                    () => output.write(rule.name),
+                    (
+                    
+                    ) => output.write(rule.name),
                 );
                 output.write(" ");
                 print_group(root);
@@ -179,7 +178,9 @@ const Ast = (
                 );
                 ansi.with_mode(
                     :Yellow,
-                    () => (
+                    (
+                    
+                    ) => (
                         output.write("@syntax");
                         match command.shape with (
                             | :FromScratch => output.write("from_scratch")
@@ -197,7 +198,9 @@ const Ast = (
             | :Error { .parts = ref parts } => (
                 ansi.with_mode(
                     :Red,
-                    () => output.write("<error>"),
+                    (
+                    
+                    ) => output.write("<error>"),
                 );
                 output.write("{\n");
                 output.inc_indentation();
@@ -206,14 +209,18 @@ const Ast = (
                         | :Ignored token => (
                             ansi.with_mode(
                                 :Dim,
-                                () => output.write("<ignored> "),
+                                (
+                                
+                                ) => output.write("<ignored> "),
                             );
                             Token.Shape.print_impl(token.shape, .verbose = false);
                         )
                         | :Keyword token => (
                             ansi.with_mode(
                                 :Magenta,
-                                () => output.write(Token.raw(token)),
+                                (
+                                
+                                ) => output.write(Token.raw(token)),
                             );
                         )
                         | :Value ref ast => (
@@ -226,8 +233,16 @@ const Ast = (
                 output.write("}");
             )
         );
+        ansi.with_mode(
+            :Dim,
+            (
+            
+            ) => (
+                output.write(" at ");
+                Span.print(self^.span);
+            ),
+        );
     );
-    
     const iter_list = (
         ast :: Ast.t,
         .binary_rule_name :: String,
@@ -265,3 +280,4 @@ const Ast = (
         ),
     };
 );
+

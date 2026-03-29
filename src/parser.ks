@@ -184,7 +184,12 @@ const Parser = (
                     for token_part in token_parts |> ArrayList.iter do (
                         let ast_part :: Ast.InterpolatedStringPart = match token_part^ with (
                             | :Content part => :Content part
-                            | :Interpolated { .open, .close, .tokens = ref tokens, .span } => :Interpolated (
+                            | :Interpolated {
+                                .open,
+                                .close,
+                                .tokens = ref tokens,
+                                .span,
+                            } => :Interpolated (
                                 let mut token_stream = (
                                     let mut i = 0;
                                     TokenStream.from_fn(
@@ -212,7 +217,12 @@ const Parser = (
                                     .entire_source_span = span,
                                     .path = span.path,
                                 );
-                                { .open, .close, .ast = parsed.ast }
+                                {
+                                    .open,
+                                    .close,
+                                    .ast = parsed.ast,
+                                    .ignored_trailing_tokens = parsed.ignored_trailing_tokens,
+                                }
                             )
                         );
                         &mut ast_parts |> ArrayList.push_back(ast_part);
