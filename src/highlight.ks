@@ -236,8 +236,8 @@ const Highlight = (
             let output :: OutputT = {
                 .print = print_token,
             };
-            for path in args.paths |> ArrayList.into_iter do (
-                let source = Source.read_file(path);
+            let process = (path :: FileOrStdin) => (
+                let source = Source.read(path);
                 let entire_source_span = (
                     let start = Position.beginning();
                     let mut end = start;
@@ -262,6 +262,12 @@ const Highlight = (
                 Highlight.highlight(&parsed, output);
                 (@current Output).write("\n");
                 state = init_state();
+            );
+            if &args.paths |> ArrayList.length == 0 then (
+                process(:Stdin);
+            );
+            for path in args.paths |> ArrayList.into_iter do (
+                process(:File path);
             );
         );
     );

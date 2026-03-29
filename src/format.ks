@@ -343,9 +343,8 @@ const Format = (
             let mut lexer = Lexer.new(Source.read_file(ruleset_path));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
             let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
-
-            for path in args.paths |> ArrayList.into_iter do (
-                let source = Source.read_file(path);
+            let process = (path :: FileOrStdin) => (
+                let source = Source.read(path);
                 let entire_source_span = (
                     let start = Position.beginning();
                     let mut end = start;
@@ -368,6 +367,12 @@ const Format = (
                 );
 
                 format(&parsed, @current Output);
+            );
+            if &args.paths |> ArrayList.length == 0 then (
+                process(:Stdin);
+            );
+            for path in args.paths |> ArrayList.into_iter do (
+                process(:File path);
             );
         );
     );

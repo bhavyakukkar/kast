@@ -1,6 +1,7 @@
 use (import "../deps/uri/src/lib.ks").*;
 use (import "./position.ks").*;
 use (import "./span.ks").*;
+use (import "./common.ks").*;
 
 module:
 
@@ -17,6 +18,13 @@ impl Source as module = (
         {
             .contents,
             .uri = Uri.new_path(path),
+        }
+    );
+
+    const read = (from :: FileOrStdin) -> Source => (
+        {
+            .contents = FileOrStdin.read(from),
+            .uri = FileOrStdin.uri(from),
         }
     );
 

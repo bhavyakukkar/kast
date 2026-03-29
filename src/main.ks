@@ -218,11 +218,11 @@ with Error.HandlerContext = Error.init_handler(.stop_on_error = args.stop_on_err
 let output = @current Output;
 match args.subcommand with (
     | :Tokenize { .paths } => (
-        for &path in ArrayList.iter(&paths) do (
+        let process = (path :: FileOrStdin) => (
             match args.output_mode with (
                 | :Human => (
-                    ansi.with_mode(:Bold, () => output.write("Lexing " + path + "\n\n"));
-                    let mut lexer = Lexer.new(Source.read_file(path));
+                    ansi.with_mode(:Bold, () => output.write("Lexing " + to_string(path) + "\n\n"));
+                    let mut lexer = Lexer.new(Source.read(path));
                     loop (
                         let token = &mut lexer |> Lexer.next;
                         token |> Token.print_impl(.verbose = true);
@@ -231,7 +231,7 @@ match args.subcommand with (
                     );
                 )
                 | :Json => (
-                    let mut lexer = Lexer.new(Source.read_file(path));
+                    let mut lexer = Lexer.new(Source.read(path));
                     let mut json_tokens = ArrayList.new();
                     loop (
                         let token = &mut lexer |> Lexer.next;
@@ -244,26 +244,44 @@ match args.subcommand with (
                 )
             );
         );
+        if &paths |> ArrayList.length == 0 then (
+            process(:Stdin);
+        );
+        for path in paths |> ArrayList.into_iter do (
+            process(:File path);
+        );
     )
     | :ParseSyntaxRules { .paths } => (
-        for &path in ArrayList.iter(&paths) do (
-            ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + path + "\n\n"));
-            let mut lexer = Lexer.new(Source.read_file(path));
+        let process = (path :: FileOrStdin) => (
+            ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + to_string(path) + "\n\n"));
+            let mut lexer = Lexer.new(Source.read(path));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
             let rules = SyntaxParser.parse_syntax_rules(&mut token_stream);
             dbg.print(rules);
         );
+        if &paths |> ArrayList.length == 0 then (
+            process(:Stdin);
+        );
+        for path in paths |> ArrayList.into_iter do (
+            process(:File path);
+        );
     )
     | :ParseSyntaxRuleset { .paths } => (
         let mut ruleset = SyntaxRuleset.new();
-        for &path in ArrayList.iter(&paths) do (
-            ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + path + "\n\n"));
-            let mut lexer = Lexer.new(Source.read_file(path));
+        let process = (path :: FileOrStdin) => (
+            ansi.with_mode(:Bold, () => output.write("Parsing syntax rules from " + to_string(path) + "\n\n"));
+            let mut lexer = Lexer.new(Source.read(path));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
             let rules = SyntaxParser.parse_syntax_rules(&mut token_stream);
             for &rule in ArrayList.iter(&rules) do (
                 &mut ruleset |> SyntaxRuleset.add(rule);
             );
+        );
+        if &paths |> ArrayList.length == 0 then (
+            process(:Stdin);
+        );
+        for path in paths |> ArrayList.into_iter do (
+            process(:File path);
         );
         SyntaxRuleset.print(&ruleset);
     )
@@ -273,9 +291,9 @@ match args.subcommand with (
         let mut lexer = Lexer.new(Source.read_file(ruleset_path));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
-        for &path in ArrayList.iter(&paths) do (
-            ansi.with_mode(:Bold, () => output.write("Parsing " + path + "\n\n"));
-            let source = Source.read_file(path);
+        let process = (path :: FileOrStdin) => (
+            ansi.with_mode(:Bold, () => output.write("Parsing " + to_string(path) + "\n\n"));
+            let source = Source.read(path);
             let entire_source_span = (
                 let start = Position.beginning();
                 let mut end = start;
@@ -300,18 +318,24 @@ match args.subcommand with (
             Ast.print(&parsed.ast);
             (@current Output).write("\n");
         );
+        if &paths |> ArrayList.length == 0 then (
+            process(:Stdin);
+        );
+        for path in paths |> ArrayList.into_iter do (
+            process(:File path);
+        );
     )
     | :ParseJson { .use_kast_parser, .paths } => (
-        for path in paths |> ArrayList.into_iter do (
-            let json = std.fs.read_file(path);
+        let process = (path :: FileOrStdin) => (
+            let source = Source.read(path);
             let json = if use_kast_parser then (
-                let json = Json.parse(json)
+                let json = Json.parse(source.contents)
                     |> std.Result.unwrap_or_else(
                         error => panic("TODO Error happened")
                     );
                 json
             ) else (
-                let mut reader = dep_json.Reader.create(&json);
+                let mut reader = dep_json.Reader.create(&source.contents);
                 let json = dep_json.parse(&mut reader)
                     |> std.Result.unwrap_or_else(
                         error => panic("TODO Error happened")
@@ -320,6 +344,12 @@ match args.subcommand with (
             );
             Json.print(&json);
             (@current Output).write("\n");
+        );
+        if &paths |> ArrayList.length == 0 then (
+            process(:Stdin);
+        );
+        for path in paths |> ArrayList.into_iter do (
+            process(:File path);
         );
     )
     | :Highlight args => Highlight.Cli.run(args)
