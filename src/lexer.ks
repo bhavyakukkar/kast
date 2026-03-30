@@ -572,7 +572,7 @@ impl Lexer as module = (
             let end = reader^.position.string_encoding_index;
             :Some :Comment {
                 .raw = String.substring(reader^.contents, start, end - start),
-                .ty = :Line,
+                .ty = :Block,
             }
         );
         
