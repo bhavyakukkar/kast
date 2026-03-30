@@ -22,6 +22,7 @@ const Format = (
     const ContextT = newtype {
         .queued_newlines :: Int32,
         .prev_span :: Span,
+        .prev_was_block_comment :: Bool,
         .just_printed_newline :: Bool,
         .queued_indentation :: Int32,
     };
@@ -60,7 +61,7 @@ const Format = (
         (@current Context).queued_indentation -= 1;
     );
 
-    const print_newline = () => (
+    const queue_newline = () => (
         (@current Context).queued_newlines += 1;
     );
 
@@ -70,29 +71,39 @@ const Format = (
         let flush_before = () => ( 
             flush();
             if ctx.just_printed_newline and token.span.start.line - ctx.prev_span.end.line > 1 then (
-                print_newline();
+                queue_newline();
             );
         );
         if token.shape is :Comment { .raw, .ty } then (
             if ctx.prev_span.end.line == token.span.start.line then (
                 output.write(" ");
             ) else (
+                if not ctx.just_printed_newline and ctx.queued_newlines == 0 then (
+                    queue_newline();
+                );
                 flush_before();
             );
             output.write(raw);
             ctx.just_printed_newline = false;
             match ty with (
                 | :Line => (
-                    print_newline();
+                    queue_newline();
                     flush();
                 )
                 | :Block => ()
             );
         ) else (
+            if ctx.prev_was_block_comment and ctx.prev_span.end.line == token.span.start.line then (
+                output.write(" ");
+            );
             flush_before();
             print_raw(Token.raw(token));
         );
         ctx.prev_span = token.span;
+        ctx.prev_was_block_comment = match token.shape with (
+            | :Comment { .ty = :Block, ... } => true
+            | _ => false
+        );
     );
 
     const format_to_string = (parsed :: &Parser.Parsed) -> String => (
@@ -118,6 +129,7 @@ const Format = (
                 .position = Position.beginning(),
                 .path = parsed^.ast.span.path,
             ),
+            .prev_was_block_comment = false,
         };
         with Output = output;
         let {
@@ -127,7 +139,7 @@ const Format = (
         } = parsed^;
         walk_ast(ast, .parent = :None);
         walk_ignored_tokens(ignored_trailing_tokens);
-        print_newline();
+        queue_newline();
         flush();
     );
 
@@ -259,7 +271,7 @@ const Format = (
                         if c == '\t' then (
                             inc_indentation();
                         ) else if c == '\n' then (
-                            print_newline();
+                            queue_newline();
                         ) else if c == '\\' then (
                             dec_indentation();
                         ) else if c == ' ' then (
