@@ -1,7 +1,7 @@
 (
-# hello, world
-@"do"(something);# comment
-a
-|>b
-|>c();
-    );
+    # hello, world
+    @"do"(something); # comment
+    a
+        |> b
+        |> c();
+);

@@ -22,7 +22,7 @@ const SyntaxParser = (
         &mut (@current Context).raw_tokens |> ArrayList.push_back(token);
         tokens |> TokenStream.advance;
     );
-    
+
     const expect_and_advance = (
         tokens :: &mut TokenStream.t,
         expected_raw :: String,
@@ -48,7 +48,7 @@ const SyntaxParser = (
             tokens |> advance;
         );
     );
-    
+
     const peek_is = (
         tokens :: &mut TokenStream.t,
         raw :: String,
@@ -56,12 +56,12 @@ const SyntaxParser = (
         let peek = &tokens^ |> TokenStream.peek;
         peek.shape |> Token.Shape.raw == raw
     );
-    
+
     const SyntaxCommand = newtype (
         | :FromScratch
         | :Rule SyntaxRule.t
     );
-    
+
     const read_wrap_mode = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxRule.WrapMode => with_return (
@@ -92,7 +92,7 @@ const SyntaxParser = (
             ),
         )
     );
-    
+
     const read_group = (
         token_stream :: &mut TokenStream.t,
         .name :: Option.t[String],
@@ -132,12 +132,12 @@ const SyntaxParser = (
             },
         }
     );
-    
+
     const TopLevelState = newtype {
         .first :: Bool,
         .right_assoc :: Bool,
     };
-    
+
     const read_priority = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxRule.Priority => (
@@ -157,7 +157,7 @@ const SyntaxParser = (
             )
         )
     );
-    
+
     const read_part = (
         token_stream :: &mut TokenStream.t,
         .rule_priority :: SyntaxRule.Priority,
@@ -191,12 +191,12 @@ const SyntaxParser = (
                     :Some name
                 );
                 token_stream |> advance;
-                
+
                 if token_stream |> peek_is("=") then (
                     token_stream |> advance;
                     return :Group read_group(token_stream, .name, .rule_priority);
                 );
-                
+
                 let mut right_assoc = false;
                 if top_level is :Some top_level then (
                     if token_stream |> peek_is("->") then (
@@ -205,7 +205,7 @@ const SyntaxParser = (
                         token_stream |> advance;
                     );
                 );
-                
+
                 let priority_filter = if token_stream |> peek_is(":") then (
                     token_stream |> advance;
                     if token_stream |> peek_is("any") then (
@@ -279,15 +279,15 @@ const SyntaxParser = (
                 )
             )
         );
-        
+
         panic("unreachable")
     );
-    
+
     const parse_syntax_rule = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxRule.t => (
         let { .start = span_start, .path, ... } = (&token_stream^ |> TokenStream.peek).span;
-        
+
         let name :: String = (
             let peek = &token_stream^ |> TokenStream.peek;
             if peek.shape is :String { .contents, ... } then (
@@ -305,14 +305,14 @@ const SyntaxParser = (
                 )
             )
         );
-        
+
         let rule_priority = read_priority(token_stream);
         let wrap_mode :: SyntaxRule.WrapMode = (
             token_stream |> expect_and_advance("@wrap");
             read_wrap_mode(token_stream)
         );
         token_stream |> expect_and_advance("=");
-        
+
         let mut parts = ArrayList.new[SyntaxRule.Part]();
         let mut top_level :: TopLevelState = {
             .first = true,
@@ -339,7 +339,7 @@ const SyntaxParser = (
             &mut parts |> ArrayList.push_back(part);
             top_level.first = false;
         );
-        
+
         let span_end = (&token_stream^ |> TokenStream.peek).span.start;
         {
             .name,
@@ -353,7 +353,7 @@ const SyntaxParser = (
             }
         }
     );
-    
+
     const parse_syntax_command = (
         token_stream :: &mut TokenStream.t,
     ) -> {
@@ -373,7 +373,7 @@ const SyntaxParser = (
         token_stream |> expect_and_advance(";");
         { .command, .raw_tokens = ctx.raw_tokens }
     );
-    
+
     const parse_syntax_rules = (
         token_stream :: &mut TokenStream.t,
     ) -> ArrayList.t[SyntaxRule.t] => (
@@ -410,7 +410,7 @@ const SyntaxParser = (
         );
         result
     );
-    
+
     const parse_syntax_ruleset = (
         token_stream :: &mut TokenStream.t,
     ) -> SyntaxRuleset.t => (

@@ -4,7 +4,7 @@ module:
 
 const SyntaxRule = (
     module:
-    
+
     const t = newtype {
         .name :: String,
         .priority :: Priority,
@@ -12,9 +12,9 @@ const SyntaxRule = (
         .span :: Span,
         .wrap_mode :: WrapMode,
     };
-    
+
     const Priority = Float64;
-    
+
     const PriorityFilter = newtype (
         | :Any
         | :GreaterOrEqual Priority
@@ -29,7 +29,7 @@ const SyntaxRule = (
         | :GreaterOrEqual min_priority => priority >= min_priority
         | :Greater min_priority => priority > min_priority
     );
-    
+
     const priority_filter_tag_idx = (self :: PriorityFilter) -> Int32 => (
         match self with (
             | :Any => 0
@@ -37,7 +37,7 @@ const SyntaxRule = (
             | :Greater _ => 2
         )
     );
-    
+
     const compare_priority_filter = (
         a :: PriorityFilter,
         b :: PriorityFilter,
@@ -53,7 +53,7 @@ const SyntaxRule = (
             | _ => panic("unreachable")
         )
     );
-    
+
     const Part = newtype (
         | :Value {
             .name :: Option.t[String],
@@ -66,7 +66,7 @@ const SyntaxRule = (
             .no_wrap :: String,
         }
     );
-    
+
     const Group = newtype {
         .name :: Option.t[String],
         .parts :: ArrayList.t[Part],
@@ -74,13 +74,13 @@ const SyntaxRule = (
         .wrap_mode :: Option.t[WrapMode],
         .span :: Span,
     };
-    
+
     const Quantifier = newtype (
         | :None
         | :Optional
-        # TODO | :Repeated
+    # TODO | :Repeated
     );
-    
+
     const WrapMode = newtype (
         | :Never
         | :Always

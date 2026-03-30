@@ -8,7 +8,7 @@ const State = newtype {
     .syntax_ruleset :: SyntaxRuleset.t,
     .files :: OrdMap.t[String, FileState],
 };
-    
+
 const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String) => (
     Log.info_msg("open_or_change_doc " + Uri.to_string(uri));
     let source :: Source = { .path = :Uri uri, .contents };
@@ -53,7 +53,7 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
     };
     &mut state^.files |> OrdMap.add(Uri.to_string(uri), file_state);
 );
-        
+
 const did_open = (state :: &mut State, n :: Json.t) -> () => (
     let :Object fields = n;
     let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;

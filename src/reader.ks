@@ -9,12 +9,12 @@ const Reader = newtype {
 
 impl Reader as module = (
     module:
-    
+
     const new = (contents :: String) -> Reader => {
         .contents,
         .position = Position.beginning(),
     };
-    
+
     const prev = (reader :: &Reader) -> Option.t[Char] => (
         if reader^.position.string_encoding_index == 0 then (
             :None
@@ -22,7 +22,7 @@ impl Reader as module = (
             :Some (reader^.contents |> String.at(reader^.position.string_encoding_index - 1))
         )
     );
-    
+
     const peek = (reader :: &Reader) -> Option.t[Char] => (
         if reader^.position.string_encoding_index < reader^.contents |> String.length then (
             :Some (reader^.contents |> String.at(reader^.position.string_encoding_index))
@@ -30,7 +30,7 @@ impl Reader as module = (
             :None
         )
     );
-    
+
     const peek2 = (reader :: &Reader) -> Option.t[Char] => (
         match peek(reader) with (
             | :Some peek => (
@@ -44,12 +44,12 @@ impl Reader as module = (
             | :None => :None
         )
     );
-    
+
     const advance = (reader :: &mut Reader) => (
         let c = peek(&reader^) |> Option.unwrap;
         &mut reader^.position |> Position.advance(c);
     );
-    
+
     const read_while = (reader :: &mut Reader, f :: Char -> Bool) -> String => (
         let start = reader^.position.string_encoding_index;
         while peek(&reader^) is :Some c do (

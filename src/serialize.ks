@@ -13,11 +13,11 @@ module:
 
 const Serialize = (
     module:
-    
+
     const ToJson = [Self] newtype {
         .to_json :: Self -> Json.t,
     };
-    
+
     const derive_to_json = (T :: Type) -> Ast => @cfg (
         | target.name == "interpreter" => (
             let self = `(self);
@@ -124,12 +124,11 @@ const Serialize = (
         )
         | true => panic("comptime only")
     );
-    
     # const do_impl = () => (
     #     include_ast derive_to_json(Token.t);
     #     include_ast derive_to_json(Token.Shape.t);
     # );
-    
+
     const as_json = [T] (value :: T) -> Json.t => (
         (T as ToJson).to_json(value)
     );

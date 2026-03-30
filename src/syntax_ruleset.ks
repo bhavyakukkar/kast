@@ -10,17 +10,17 @@ module:
 
 const SyntaxRuleset = (
     module:
-    
+
     const t = newtype {
         .keywords :: OrdSet.t[String],
         .root :: Node,
     };
-    
+
     const EdgeKey = newtype (
         | :Keyword String
         | :Value
     );
-    
+
     const compare_edge_key = (a :: EdgeKey, b :: EdgeKey) -> std.cmp.Ordering => (
         match { a, b } with (
             | { :Keyword a, :Keyword b } => std.cmp.default_compare(a, b)
@@ -29,7 +29,7 @@ const SyntaxRuleset = (
             | { :Value, :Value } => :Equal
         )
     );
-    
+
     const Edge = newtype {
         .key :: EdgeKey,
         .target :: Node,
@@ -38,32 +38,32 @@ const SyntaxRuleset = (
         ## max priority of rules reachable from this edge
         .max_rule_priority :: SyntaxRule.Priority,
     };
-    
+
     const EdgeMap = OrdMap.t[EdgeKey, Edge];
     const new_edge_map = () -> EdgeMap => (
         OrdMap.new_with_compare(compare_edge_key)
     );
-    
+
     const Node = newtype {
         .terminal :: Option.t[SyntaxRule.t],
         .next :: EdgeMap,
     };
-    
+
     const new_node = () -> Node => {
         .terminal = :None,
         .next = new_edge_map(),
     };
-    
+
     const new = () -> SyntaxRuleset.t => {
         .keywords = OrdSet.new(),
         .root = new_node(),
     };
-    
+
     const Context = @context type {
         .ruleset :: &mut SyntaxRuleset.t,
         .rule :: &SyntaxRule.t,
     };
-    
+
     const follow_edge = (
         node :: &mut Node,
         edge_key :: EdgeKey,
@@ -88,7 +88,7 @@ const SyntaxRuleset = (
         );
         &mut edge^.target
     );
-    
+
     const iter_cps_from = [T] (
         index :: Int32,
         list :: &ArrayList.t[T],
@@ -105,7 +105,7 @@ const SyntaxRuleset = (
             continuation(node);
         )
     );
-    
+
     const follow_parts = (
         node :: &mut Node,
         parts :: &ArrayList.t[SyntaxRule.Part],
@@ -140,7 +140,7 @@ const SyntaxRuleset = (
         );
         iter_cps_from(0, parts, .node, .consumer = follow_part, .continuation);
     );
-    
+
     const add = (self :: &mut SyntaxRuleset.t, rule :: SyntaxRule.t) => (
         with Context = { .ruleset = self, .rule = &rule };
         follow_parts(
@@ -165,11 +165,11 @@ const SyntaxRuleset = (
             ),
         );
     );
-    
+
     const print = (self :: &SyntaxRuleset.t) => (
         print_node(&self^.root);
     );
-    
+
     const print_node = (node :: &Node) => (
         let output = @current Output;
         if node^.terminal is :Some rule then (

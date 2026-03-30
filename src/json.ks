@@ -20,7 +20,7 @@ module:
 
 const Json = (
     module:
-    
+
     const t = newtype (
         | :Number Float64
         | :String String
@@ -83,19 +83,19 @@ const Json = (
             | :Null => :Null
         )
     );
-    
+
     const ParseError = newtype {
         .message :: String,
         .position :: Position,
     };
-    
+
     const ruleset = () => (
         let path = std.path.dirname(__FILE__) + "/../tests/syntax/json.ks";
         let mut lexer = Lexer.new(Source.read(SourcePath.file(path)));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         SyntaxParser.parse_syntax_ruleset(&mut token_stream)
     );
-    
+
     const parse_array = (rule :: &SyntaxRule.t, children :: Tuple.t[Ast.Child]) -> Json.t => (
         let mut elements = ArrayList.new();
         let inner = children |> Tuple.unwrap_unnamed_1 |> Ast.unwrap_child_value;
@@ -108,7 +108,7 @@ const Json = (
         );
         :Array elements
     );
-    
+
     const ast_to_name = (ast :: Ast.t) -> String => with_return (
         if ast.shape is :Token token then (
             match token.shape with (
@@ -126,7 +126,7 @@ const Json = (
             ),
         )
     );
-    
+
     const parse_obj = (rule :: &SyntaxRule.t, children :: Tuple.t[Ast.Child]) -> Json.t => (
         let mut fields = OrdMap.new();
         let inner = children |> Tuple.unwrap_unnamed_1 |> Ast.unwrap_child_value;
@@ -159,7 +159,7 @@ const Json = (
         );
         :Object fields
     );
-    
+
     const from_ast = (ast :: Ast.t) -> Json.t => with_return (
         match ast.shape with (
             | :Empty => Error.report_and_unwind(
@@ -230,7 +230,7 @@ const Json = (
             )
         )
     );
-    
+
     const parse = (json :: String) -> Result.t[Json.t, ParseError] => (
         let path :: SourcePath = :Special "<json>";
         let source :: Source = {
@@ -262,7 +262,7 @@ const Json = (
         output.dispose();
         result
     );
-    
+
     const print = (self :: &Json.t) => (
         match self^ with (
             | :Number value => (

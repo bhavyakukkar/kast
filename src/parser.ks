@@ -43,7 +43,7 @@ module:
 
 const Parser = (
     module:
-    
+
     const StaticContextT = newtype {
         .token_stream :: &mut TokenStream.t,
         .entire_source_span :: Span,
@@ -56,16 +56,16 @@ const Parser = (
     };
     const StaticContext = @context StaticContextT;
     const DynamicContext = @context DynamicContextT;
-    
+
     const ParsingRuleCtx = @context type {
         .print :: () -> (),
     };
-    
+
     const ParseResult = newtype (
         | :MadeProgress Ast.t
         | :NoProgress
     );
-    
+
     const try_parse_or_extend_minimal = (
         starting_value :: Option.t[Ast.t],
         .priority_filter :: SyntaxRule.PriorityFilter,
@@ -132,7 +132,7 @@ const Parser = (
         );
         try_parse_single_rule_node(starting_value, .priority_filter)
     );
-    
+
     const skip_comments_and_errors = () => (
         let mut ctx = @current StaticContext;
         loop (
@@ -142,11 +142,13 @@ const Parser = (
                 | :Error _ => ()
                 | _ => break
             );
-            Log.debug(() => (
-                let output = @current Output;
-                output.write("Skipping ");
-                Token.print(peek);
-            ));
+            Log.debug(
+                () => (
+                    let output = @current Output;
+                    output.write("Skipping ");
+                    Token.print(peek);
+                )
+            );
             &mut ctx.ignored_tokens |> ArrayList.push_back(peek);
             ctx.token_stream |> TokenStream.advance;
         );
@@ -158,7 +160,7 @@ const Parser = (
         ctx.ignored_tokens = ArrayList.new();
         result
     );
-    
+
     const try_parse_single_token = () -> ParseResult => (
         let ctx = @current StaticContext;
         let dyn_ctx = @current DynamicContext;
@@ -241,23 +243,23 @@ const Parser = (
             :NoProgress
         )
     );
-    
+
     const ParsedPart = newtype (
         | :Ignored Token.t
         | :Keyword Token.t
         | :Value Ast.t
     );
-    
+
     impl ParsedPart as module = (
         module:
-        
+
         const span = (part :: &ParsedPart) -> Span => match part^ with (
             | :Ignored token => token.span
             | :Keyword token => token.span
             | :Value ast => ast.span
         );
     );
-    
+
     const try_parse_single_rule_node = (
         starting_value :: Option.t[Ast.t],
         .priority_filter :: SyntaxRule.PriorityFilter,
@@ -273,13 +275,13 @@ const Parser = (
                 )
             )
         );
-        
+
         let mut made_progress = false;
         let mut parts :: ArrayList.t[ParsedPart] = ArrayList.new();
         if starting_value is :Some value then (
             &mut parts |> ArrayList.push_back(:Value value);
         );
-        
+
         let parent_parsing_rule_context = @current ParsingRuleCtx;
         with ParsingRuleCtx = {
             .print = () => (
@@ -299,13 +301,13 @@ const Parser = (
                 parent_parsing_rule_context.print();
             ),
         };
-        
+
         loop (
             skip_comments_and_errors();
-            
+
             let peek = &ctx.token_stream^ |> TokenStream.peek;
             let peek_raw = peek.shape |> Token.Shape.raw;
-            
+
             Log.debug(
                 () => (
                     let output = @current Output;
@@ -320,7 +322,7 @@ const Parser = (
                     (@current ParsingRuleCtx).print();
                 )
             );
-            
+
             let should_follow_edge = (edge :: &SyntaxRuleset.Edge) -> Bool => with_return (
                 if edge^.key is :Keyword keyword then (
                     if (
@@ -338,7 +340,6 @@ const Parser = (
                 );
                 SyntaxRule.priority_matches(edge^.max_rule_priority, priority_filter)
             );
-            
             # Try to follow with keyword
             if &node^.next |> OrdMap.get(:Keyword peek_raw) is :Some edge then (
                 if should_follow_edge(edge) then (
@@ -353,7 +354,6 @@ const Parser = (
                     continue;
                 );
             );
-            
             # If no progress was made,
             # then we can start with a simple token value
             # Otherwise this would be infinite recursion
@@ -403,14 +403,14 @@ const Parser = (
                     );
                 );
             );
-            
+
             break;
         );
-        
+
         if not made_progress then (
             return :NoProgress;
         );
-        
+
         let span = (
             let first_span = parts.[0] |> ParsedPart.span;
             let last_index = (&parts |> ArrayList.length) - 1;
@@ -487,7 +487,7 @@ const Parser = (
         );
         :MadeProgress ast
     );
-    
+
     const print_parsed_parts = (parts :: &ArrayList.t[ParsedPart]) => (
         let output = @current Output;
         for part in parts |> ArrayList.iter do (
@@ -506,7 +506,7 @@ const Parser = (
             output.write("\n");
         );
     );
-    
+
     const collect_values = (
         parsed_parts :: ArrayList.t[ParsedPart],
         rule :: &SyntaxRule.t,
@@ -529,7 +529,7 @@ const Parser = (
             result
         )
     );
-    
+
     const collect_values_from = (
         parsed_part_idx :: &mut Int32,
         parsed_parts :: &ArrayList.t[ParsedPart],
@@ -723,7 +723,7 @@ const Parser = (
         );
         { .parts = ast_parts, .children, .span }
     );
-    
+
     const try_parse = (.priority_filter :: SyntaxRule.PriorityFilter) -> ParseResult => (
         let mut progress = :None;
         Log.debug_msg("Try parse");
@@ -737,7 +737,7 @@ const Parser = (
             | :Some ast => :MadeProgress ast
         )
     );
-    
+
     const Parsed = newtype {
         .ast :: Ast.t,
         .ignored_trailing_tokens :: ArrayList.t[Token.t],
@@ -758,7 +758,7 @@ const Parser = (
             .eof_name = "EOF",
         )
     );
-    
+
     const parse_with = (
         .ruleset :: SyntaxRuleset.t,
         .token_stream :: &mut TokenStream.t,

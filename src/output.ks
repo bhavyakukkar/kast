@@ -23,9 +23,9 @@ const new_output = (
     let mut buffer = "";
     let mut indentation = 0;
     let write = mut s => (
-		loop (
+        loop (
             if s == "" then break;
-			let i = s |> String.index_of('\n');
+            let i = s |> String.index_of('\n');
             if buffer |> String.length == 0 and i != 0 then (
                 if color then (
                     buffer += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
@@ -37,17 +37,17 @@ const new_output = (
                     buffer += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
                 );
             );
-			if i < 0 then (
+            if i < 0 then (
                 buffer += s;
                 break;
             );
-			let line = buffer + (s |> String.substring(0, i));
-			write_line(line);
-			let i = i + 1;
-			s = s |> String.substring(i, String.length(s) - i);
+            let line = buffer + (s |> String.substring(0, i));
+            write_line(line);
+            let i = i + 1;
+            s = s |> String.substring(i, String.length(s) - i);
             buffer = "";
-		);
-	);
+        );
+    );
     {
         .color,
         .inc_indentation = () => (
@@ -67,7 +67,7 @@ const new_output = (
 
 const ansi = (
     module:
-    
+
     const Mode = newtype (
         | :Bold
         | :Dim
@@ -94,10 +94,10 @@ const ansi = (
         | :WhiteBg
         | :GrayBg
     );
-    
+
     impl Mode as module = (
         module:
-        
+
         const open_code = (self :: Mode) -> String => match self with (
             | :Bold => "1"
             | :Dim => "2"
@@ -124,7 +124,7 @@ const ansi = (
             | :WhiteBg => "47"
             | :GrayBg => "100"
         );
-        
+
         const close_code = (self :: Mode) -> String => match self with (
             | :Bold => "22"
             | :Dim => "22"
@@ -152,7 +152,7 @@ const ansi = (
             | :GrayBg => "49"
         );
     );
-    
+
     const write_code = (code :: String) => (
         let output = @current Output;
         if output.color then (
@@ -162,15 +162,15 @@ const ansi = (
             output.write("m");
         );
     );
-    
+
     const open = (mode :: Mode) => (
         write_code(mode |> Mode.open_code);
     );
-    
+
     const close = (mode :: Mode) => (
         write_code(mode |> Mode.close_code);
     );
-    
+
     const with_mode = (mode :: Mode, f :: () -> ()) => (
         open(mode);
         f();

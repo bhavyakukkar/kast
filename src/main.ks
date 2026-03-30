@@ -18,7 +18,6 @@ use (import "./highlight.ks").*;
 use (import "./lsp/lsp.ks").*;
 use (import "./format.ks").*;
 const dep_json = import "../deps/json/lib.ks";
-
 # @eval Serialize.do_impl();
 with Stdout = new_std_output(std.io.print);
 with Stderr = new_std_output(std.io.eprint);
@@ -26,14 +25,14 @@ with Output = (@current Stdout);
 
 const Args = (
     module:
-    
+
     const LexerArgs = (
         module:
-        
+
         const t = newtype {
             .paths :: ArrayList.t[String],
         };
-        
+
         const parse = start_index -> t => (
             let mut paths = ArrayList.new();
             for i in start_index..std.sys.argc() do (
@@ -44,14 +43,14 @@ const Args = (
             }
         );
     );
-    
+
     const ParseSyntaxRulesArgs = (
         module:
-        
+
         const t = newtype {
             .paths :: ArrayList.t[String],
         };
-        
+
         const parse = start_index -> t => (
             let mut paths = ArrayList.new();
             for i in start_index..std.sys.argc() do (
@@ -62,15 +61,15 @@ const Args = (
             }
         );
     );
-    
+
     const ParseArgs = (
         module:
-        
+
         const t = newtype {
             .ruleset_path :: Option.t[String],
             .paths :: ArrayList.t[String],
         };
-        
+
         const parse = start_index -> t => (
             let mut paths = ArrayList.new();
             let mut i = start_index;
@@ -94,15 +93,15 @@ const Args = (
             }
         );
     );
-    
+
     const ParseJsonArgs = (
         module:
-        
+
         const t = newtype {
             .use_kast_parser :: Bool,
             .paths :: ArrayList.t[String],
         };
-        
+
         const parse = start_index -> t => (
             let mut use_kast_parser = false;
             let mut paths = ArrayList.new();
@@ -123,7 +122,7 @@ const Args = (
             }
         );
     );
-    
+
     const Subcommand = newtype (
         | :Tokenize LexerArgs.t
         | :ParseSyntaxRules ParseSyntaxRulesArgs.t
@@ -134,7 +133,7 @@ const Args = (
         | :Format Format.Cli.Args.t
         | :Lsp Lsp.CliArgs.t
     );
-    
+
     const t = newtype {
         .subcommand :: Subcommand,
         .output_mode :: (
@@ -144,7 +143,7 @@ const Args = (
         .stop_on_error :: Bool,
         .color :: Bool,
     };
-    
+
     const parse = () -> t => (
         let mut output_mode = :Human;
         let mut stop_on_error = true;
@@ -321,7 +320,7 @@ match args.subcommand with (
                 .path = source.path,
                 .token_stream = &mut token_stream,
             );
-            
+
             Ast.print(&parsed.ast);
             (@current Output).write("\n");
         );
@@ -365,4 +364,3 @@ match args.subcommand with (
 );
 (@current Stdout).dispose();
 (@current Stderr).dispose();
-

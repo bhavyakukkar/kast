@@ -29,7 +29,7 @@ const semantic_tokens = (
 
     impl TokenType as module = (
         module:
-        
+
         const index = (self :: TokenType) -> Int32 => match self with (
             | :Type => 0
             | :Class => 1
@@ -55,7 +55,7 @@ const semantic_tokens = (
             | :Decorator => 21
             | :Namespace => 22
         );
-        
+
         const to_string = (self :: TokenType) -> String => match self with (
             | :Type => "type"
             | :Class => "class"
@@ -81,7 +81,7 @@ const semantic_tokens = (
             | :Decorator => "decorator"
             | :Namespace => "namespace"
         );
-        
+
         const variants = () -> std.iter.Iterable[TokenType] => {
             .iter = f => (
                 f(:Type);
@@ -126,7 +126,7 @@ const semantic_tokens = (
 
     impl TokenModifier as module = (
         module:
-        
+
         const to_string = (self :: TokenModifier) -> String => match self with (
             | :Declaration => "declaration"
             | :Definition => "definition"
@@ -139,7 +139,7 @@ const semantic_tokens = (
             | :Documentation => "documentation"
             | :DefaultLibrary => "defaultLibrary"
         );
-        
+
         const index = (self :: TokenModifier) -> Int32 => match self with (
             | :Declaration => 0
             | :Definition => 1
@@ -152,7 +152,7 @@ const semantic_tokens = (
             | :Documentation => 8
             | :DefaultLibrary => 9
         );
-        
+
         const variants = () -> std.iter.Iterable[TokenModifier] => {
             .iter = f => (
                 f(:Declaration);
@@ -189,7 +189,7 @@ const semantic_tokens = (
         &mut fields |> OrdMap.add("tokenModifiers", :Array token_modifiers);
         :Object fields
     );
-    
+
     const full = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
         let :Object fields = request;
         let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
@@ -199,7 +199,7 @@ const semantic_tokens = (
             let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
             { .uri = parse(uri) }
         );
-        
+
         let file_state = &state^.files
             |> OrdMap.get(Uri.to_string(text_document.uri))
             |> Option.unwrap_or_else(() => return :Null);
@@ -263,7 +263,7 @@ const semantic_tokens = (
                 .reset = () => panic("NO RESET, THIS SHOULD BE DELETED"),
             },
         );
-        
+
         :Object (
             let mut fields = OrdMap.new();
             let mut json_data = ArrayList.new();

@@ -6,12 +6,12 @@ module:
 
 const Token = (
     module:
-    
+
     const t = newtype {
         .shape :: Token.Shape.t,
         .span :: Span,
     };
-    
+
     const print_impl = (
         self :: Token.t,
         .verbose :: Bool,
@@ -39,7 +39,7 @@ const Token = (
             .span :: Span,
         }
     );
-    
+
     const InterpolatedStringPart = newtype (
         | :Content {
             .raw :: String,
@@ -54,7 +54,7 @@ const Token = (
             .span :: Span,
         }
     );
-    
+
     const InterpolatedStringShape = newtype {
         .delimiter :: String,
         .raw :: String,
@@ -74,10 +74,10 @@ const Token = (
     const raw = (token :: Token.t) -> String => (
         Token.Shape.raw(token.shape)
     );
-    
+
     const Shape = (
         module:
-        
+
         const t = newtype (
             | :Comment {
                 .raw :: String,
@@ -101,7 +101,7 @@ const Token = (
                 .raw :: String,
             }
         );
-        
+
         const raw = (self :: Token.Shape.t) -> String => match self with (
             | :Punct { .raw, ... } => raw
             | :Comment { .raw, ... } => raw
@@ -112,7 +112,7 @@ const Token = (
             | :Error { .raw, ... } => raw
             | :Eof => ""
         );
-        
+
         const print_impl = (
             self :: Token.Shape.t,
             .verbose :: Bool,

@@ -30,12 +30,12 @@ const Lsp = (
     include "./selection_range.ks";
     include "./semantic_tokens.ks";
     include "./formatting.ks";
-    
+
     const CliArgs = (
         module:
-        
+
         const t = newtype {  };
-        
+
         const parse = start_index -> t => (
             let mut i = start_index;
             while i < std.sys.argc() do (
@@ -46,7 +46,7 @@ const Lsp = (
             {  }
         );
     );
-    
+
     const on_request = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
         let :Object request_fields = request;
         let &(:String method) = &request_fields |> OrdMap.get("method") |> Option.unwrap;
@@ -85,13 +85,13 @@ const Lsp = (
             )
         );
         if method == "textDocument/didOpen" then (
-            return state |>  did_open(notification);
+            return state |> did_open(notification);
         );
         if method == "textDocument/didChange" then (
             return state |> did_change(notification);
         );
     );
-    
+
     const run = (arg :: CliArgs.t) => (
         (@current Stdout).color = false;
         (@current Stderr).color = false;

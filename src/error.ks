@@ -13,18 +13,18 @@ const Error = (
         | :Internal
         | :Other
     );
-    
+
     const Handler = newtype {
         .stop_on_error :: Bool,
         .handle :: (Kind, Span, () -> ()) -> (),
     };
-    
+
     const HandlerContext = @context Handler;
 
     const UnwindableHandler = @context newtype {
         .unwind_on_error :: [T] () -> T,
     };
-    
+
     const init_handler = (.stop_on_error :: Bool) -> Handler => {
         .stop_on_error,
         .handle = (kind, span, message) => (
@@ -58,7 +58,7 @@ const Error = (
             );
         )
     };
-    
+
     const report_msg = (kind :: Kind, span :: Span, message :: String) => (
         report(kind, span, () => (@current Output).write(message))
     );
@@ -66,7 +66,7 @@ const Error = (
     const report = (kind :: Kind, span :: Span, message :: () -> ()) => (
         (@current HandlerContext).handle(kind, span, message);
     );
-    
+
     const report_and_unwind = [T] (kind :: Kind, span :: Span, message :: () -> ()) -> T => (
         (@current HandlerContext).handle(kind, span, message);
         (@current UnwindableHandler).unwind_on_error()

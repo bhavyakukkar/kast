@@ -68,7 +68,7 @@ const Format = (
     const print_token = (token :: Token.t) => (
         let output = @current Output;
         let mut ctx = @current Context;
-        let flush_before = () => ( 
+        let flush_before = () => (
             flush();
             if ctx.just_printed_newline and token.span.start.line - ctx.prev_span.end.line > 1 then (
                 queue_newline();
@@ -212,7 +212,7 @@ const Format = (
             )
         )
     );
-    
+
     const walk_ast_group = (
         rule_parts :: &ArrayList.t[SyntaxRule.Part],
         group :: &Ast.Group,
@@ -367,14 +367,14 @@ const Format = (
 
         const Args = (
             module:
-        
+
             const t = newtype {
                 .ruleset :: Option.t[String],
                 .paths :: ArrayList.t[String],
                 .highlight :: Option.t[Highlight.OutputMode],
                 .inplace :: Bool,
             };
-            
+
             const parse = start_index -> t => (
                 let mut ruleset = :None;
                 let mut paths = ArrayList.new();
@@ -433,7 +433,7 @@ const Format = (
                         | :None => panic("Inplace formatting is only available given file path")
                     );
                     @native "(await import('fs')).writeFileSync(\(path), \(formatted))";
-                    # TODO std.fs.write_file
+                # TODO std.fs.write_file
                 ) else match args.highlight with (
                     | :None => format(&parsed, @current Output)
                     | :Some highlight_mode => (

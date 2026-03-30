@@ -20,7 +20,7 @@ const span_to_lsp = (span :: Span) -> Json.t => (
 
 const formatting = (
     module:
-    
+
     const format = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
         return :Null;
         # TODO fix formatting
@@ -32,7 +32,7 @@ const formatting = (
             let &(:String uri) = &fields |> OrdMap.get("uri") |> Option.unwrap;
             { .uri = parse(uri) }
         );
-        
+
         let file_state = &state^.files
             |> OrdMap.get(Uri.to_string(text_document.uri))
             |> Option.unwrap_or_else(() => return :Null);
@@ -44,15 +44,21 @@ const formatting = (
 
         let edit = :Object (
             let mut fields = OrdMap.new();
-            &mut fields |> OrdMap.add("range", span_to_lsp({
-                .start = Position.beginning(),
-                .end = parsed^.eof,
-                .path = parsed^.ast.span.path,
-            }));
+            &mut fields
+                |> OrdMap.add(
+                    "range",
+                    span_to_lsp(
+                        {
+                            .start = Position.beginning(),
+                            .end = parsed^.eof,
+                            .path = parsed^.ast.span.path,
+                        }
+                    )
+                );
             &mut fields |> OrdMap.add("newText", :String new_text);
             fields
         );
-        
+
         :Array (
             let mut edits = ArrayList.new();
             &mut edits |> ArrayList.push_back(edit);

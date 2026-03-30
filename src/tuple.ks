@@ -6,13 +6,13 @@ module:
 
 const Tuple = (
     module:
-    
+
     const t = [T] newtype {
         .unnamed :: ArrayList.t[T],
         .named :: OrdMap.t[String, T],
         .name_order :: ArrayList.t[String],
     };
-    
+
     const new = [T] () -> Tuple.t[T] => {
         .unnamed = ArrayList.new(),
         .named = OrdMap.new(),
@@ -33,7 +33,7 @@ const Tuple = (
             | :Name name => get_named(self, name)
         )
     );
-    
+
     const get_unnamed = [T] (
         self :: &Tuple.t[T],
         idx :: Int32,
@@ -51,7 +51,7 @@ const Tuple = (
     ) -> Option.t[type (&T)] => (
         &self^.named |> OrdMap.get(name)
     );
-    
+
     const add = [T] (
         self :: &mut Tuple.t[T],
         name :: Option.t[String],
@@ -62,7 +62,7 @@ const Tuple = (
             | :None => self |> add_unnamed(value)
         );
     );
-    
+
     const add_named = [T] (
         self :: &mut Tuple.t[T],
         name :: String,
@@ -71,18 +71,19 @@ const Tuple = (
         &mut self^.named |> OrdMap.add(name, value);
         &mut self^.name_order |> ArrayList.push_back(name);
     );
-    
+
     const add_unnamed = [T] (
         self :: &mut Tuple.t[T],
         value :: T,
     ) => (
         &mut self^.unnamed |> ArrayList.push_back(value);
     );
-    
+
     const array_to_tuple = (a :: Ast, N :: Int32) -> Ast => @cfg (
         | target.name == "interpreter" => (
             if N == 0 then `(
-                
+
+
             ) else if N == 1 then `(
                 (&$a |> ArrayList.at(0))^
             ) else `(
@@ -91,7 +92,7 @@ const Tuple = (
         )
         | true => panic("comptime only")
     );
-    
+
     const unwrap_unnamed_impl = (self :: Ast, N :: Int32) -> Ast => @cfg (
         | target.name == "interpreter" => `(
             if &$self.name_order |> ArrayList.length != 0 then (
@@ -110,16 +111,16 @@ const Tuple = (
         )
         | true => panic("comptime only")
     );
-    
+
     const unwrap_unnamed_2 = [T] (self :: Tuple.t[T]) -> { T, T } => (
         include_ast unwrap_unnamed_impl(`(self), 2)
     );
-    
+
     const unwrap_unnamed_1 = [T] (self :: Tuple.t[T]) -> T => (
         let { inner } = include_ast unwrap_unnamed_impl(`(self), 1);
         inner
     );
-    
+
     const print = [T] (
         self :: &Tuple.t[T],
         .open :: String,

@@ -108,9 +108,7 @@ const Ast = (
         match self^.shape with (
             | :Empty => ansi.with_mode(
                 :Dim,
-                (
-                
-                ) => output.write("<empty>"),
+                () => output.write("<empty>"),
             )
             | :Token token => Token.Shape.print(token.shape)
             | :InterpolatedString {
@@ -121,9 +119,7 @@ const Ast = (
             } => (
                 ansi.with_mode(
                     :Green,
-                    (
-                    
-                    ) => (
+                    () => (
                         output.write(delimiter);
                         output.write("interpolated");
                         output.write(delimiter);
@@ -137,7 +133,8 @@ const Ast = (
                             ansi.with_mode(
                                 :Green,
                                 (
-                                
+
+
                                 ) => output.write(String.escape(contents)),
                             );
                         )
@@ -150,7 +147,8 @@ const Ast = (
                             ansi.with_mode(
                                 :Yellow,
                                 (
-                                
+
+
                                 ) => output.write("\\ "),
                             );
                             print(ast);
@@ -164,9 +162,7 @@ const Ast = (
             | :Rule { .rule, .root = ref root } => (
                 ansi.with_mode(
                     :Magenta,
-                    (
-                    
-                    ) => output.write(rule.name),
+                    () => output.write(rule.name),
                 );
                 output.write(" ");
                 print_group(root);
@@ -178,9 +174,7 @@ const Ast = (
                 );
                 ansi.with_mode(
                     :Yellow,
-                    (
-                    
-                    ) => (
+                    () => (
                         output.write("@syntax");
                         match command.shape with (
                             | :FromScratch => output.write("from_scratch")
@@ -198,9 +192,7 @@ const Ast = (
             | :Error { .parts = ref parts } => (
                 ansi.with_mode(
                     :Red,
-                    (
-                    
-                    ) => output.write("<error>"),
+                    () => output.write("<error>"),
                 );
                 output.write("{\n");
                 output.inc_indentation();
@@ -210,7 +202,8 @@ const Ast = (
                             ansi.with_mode(
                                 :Dim,
                                 (
-                                
+
+
                                 ) => output.write("<ignored> "),
                             );
                             Token.Shape.print_impl(token.shape, .verbose = false);
@@ -219,7 +212,8 @@ const Ast = (
                             ansi.with_mode(
                                 :Magenta,
                                 (
-                                
+
+
                                 ) => output.write(Token.raw(token)),
                             );
                         )
@@ -235,9 +229,7 @@ const Ast = (
         );
         ansi.with_mode(
             :Dim,
-            (
-            
-            ) => (
+            () => (
                 output.write(" at ");
                 Span.print(self^.span);
             ),
@@ -280,4 +272,3 @@ const Ast = (
         ),
     };
 );
-

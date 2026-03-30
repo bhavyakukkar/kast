@@ -11,16 +11,16 @@ const BufferedReader = newtype {
 
 const JsonRpc = (
     module:
-    
+
     const Message = Json.t;
-    
+
     const Io = newtype {
         .input :: BufferedReader,
         .output :: {
             .write :: String -> (),
         },
     };
-    
+
     const stdio = () -> Io => {
         .input = {
             .read_exactly = std.io.stdin.read_exactly,
@@ -30,16 +30,16 @@ const JsonRpc = (
             .write = std.io.stdout.write,
         },
     };
-    
+
     const Handler = newtype {
         .on_notification :: Json.t -> (),
         .on_request :: Json.t -> Result.t[Json.t, String],
     };
-    
+
     const Header = newtype {
         .content_length :: Int32,
     };
-    
+
     const read_header = (io :: Io) -> Header => (
         let mut content_length = :None;
         loop (
@@ -75,7 +75,7 @@ const JsonRpc = (
             );
         { .content_length }
     );
-    
+
     const write = (io :: Io, message :: Json.t) => (
         let contents = message |> Json.into_dep |> to_string;
         let content_length :: Int32 = @native "Buffer.byteLength(\(contents), 'utf-8')";
@@ -84,7 +84,7 @@ const JsonRpc = (
         io.output.write("\r\n\r\n");
         io.output.write(contents);
     );
-    
+
     const run = (io :: Io, handler :: Handler) => (
         loop (
             let { .content_length } = read_header(io);

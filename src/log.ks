@@ -4,7 +4,7 @@ module:
 
 const Log = (
     module:
-    
+
     const Level = newtype (
         | :Trace
         | :Debug
@@ -22,7 +22,7 @@ const Log = (
     );
 
     const min_level :: Level = :Info;
-    
+
     const with_level = (level :: Level, message :: () -> ()) => with_return (
         if level_idx(level) < level_idx(min_level) then return;
         let { mode :: ansi.Mode, level_text } = match level with (

@@ -13,7 +13,6 @@ const Span = newtype {
 
 impl Span as module = (
     module:
-
     # <source_path>:<start.line>.<start.column>-<end.line>.<end.column>
     const print = (self :: Span) => (
         let output = @current Output;

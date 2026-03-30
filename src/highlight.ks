@@ -82,7 +82,7 @@ const Highlight = (
 
     const OutputMode = newtype (
         | :Terminal
-        # TODO | :Html
+    # TODO | :Html
     );
 
     impl OutputMode as FromString = {
@@ -199,7 +199,7 @@ const Highlight = (
             )
         )
     );
-    
+
     const walk_ast_group = (group :: &Ast.Group) => (
         walk_ast_parts(&group^.parts);
     );
@@ -243,13 +243,13 @@ const Highlight = (
 
         const Args = (
             module:
-        
+
             const t = newtype {
                 .ruleset :: Option.t[String],
                 .paths :: ArrayList.t[String],
                 .mode :: OutputMode,
             };
-            
+
             const parse = start_index -> t => (
                 let mut ruleset = :None;
                 let mut paths = ArrayList.new();
@@ -303,7 +303,7 @@ const Highlight = (
                     .path = source.path,
                     .token_stream = &mut token_stream,
                 );
-                
+
                 Highlight.highlight(&parsed, output);
                 (@current Output).write("\n");
                 output.reset();
