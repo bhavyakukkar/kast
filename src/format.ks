@@ -87,7 +87,9 @@ const Format = (
             ctx.just_printed_newline = false;
             match ty with (
                 | :Line => (
-                    queue_newline();
+                    if ctx.queued_newlines == 0 then (
+                        queue_newline();
+                    );
                     flush();
                 )
                 | :Block => ()
