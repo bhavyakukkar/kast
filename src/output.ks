@@ -5,6 +5,7 @@ const OutputT = newtype {
     .write :: String -> (),
     .inc_indentation :: () -> (),
     .dec_indentation :: () -> (),
+    .dispose :: () -> (),
 };
 const Output = @context OutputT;
 const Stdout = @context OutputT;
@@ -21,6 +22,32 @@ const new_output = (
 ) -> OutputT => (
     let mut buffer = "";
     let mut indentation = 0;
+    let write = s => (
+		buffer += s;
+		loop (
+			let i = buffer |> String.index_of('\n');
+			if i < 0 then break;
+			let line = buffer |> String.substring(0, i);
+			let color = (@current Output).color;
+			let mut s = "";
+			if color then (
+				s += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
+			);
+			for _ in 0..indentation do (
+				s += (indentation_string);
+			);
+			if color then (
+				s += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
+			);
+			write_line(s + line);
+			let i = i + 1;
+			buffer = String.substring(
+				buffer,
+				i,
+				String.length(buffer) - i,
+			);
+		);
+	);
     {
         .color,
         .inc_indentation = () => (
@@ -29,30 +56,10 @@ const new_output = (
         .dec_indentation = () => (
             indentation -= 1;
         ),
-        .write = s => (
-            buffer += s;
-            loop (
-                let i = buffer |> String.index_of('\n');
-                if i < 0 then break;
-                let line = buffer |> String.substring(0, i);
-                let color = (@current Output).color;
-                let mut s = "";
-                if color then (
-                    s += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
-                );
-                for _ in 0..indentation do (
-                    s += (indentation_string);
-                );
-                if color then (
-                    s += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
-                );
-                write_line(s + line);
-                let i = i + 1;
-                buffer = String.substring(
-                    buffer,
-                    i,
-                    String.length(buffer) - i,
-                );
+        .write,
+        .dispose = () => (
+            if buffer != "" then (
+                write("\n");
             );
         ),
     }

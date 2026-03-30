@@ -250,13 +250,16 @@ const Json = (
 
     const to_str = (self :: &Json.t) -> String => (
         let mut result = "";
-        with Output = {
+        let output = new_output(
+            .write_line = s => (
+                result += s;
+            ),
+            .indentation_string = "",
             .color = false,
-            .write = s => (result += s),
-            .inc_indentation = () => (),
-            .dec_indentation = () => (),
-        };
+        );
+        with Output = output;
         print(self);
+        output.dispose();
         result
     );
     

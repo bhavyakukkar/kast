@@ -363,3 +363,6 @@ match args.subcommand with (
     | :Format args => Format.Cli.run(args)
     | :Lsp args => Lsp.run(args)
 );
+(@current Stdout).dispose();
+(@current Stderr).dispose();
+
