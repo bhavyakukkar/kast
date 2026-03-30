@@ -17,6 +17,19 @@ impl SourcePath as module = (
             Uri.spec_path("file", path)
         )
     );
+
+    const file_path = (path :: SourcePath) -> Option.t[String] => (
+        match path with (
+            | :Uri uri => (
+                if uri.scheme == "file" then (
+                    :Some uri.path
+                ) else (
+                    :None
+                )
+            )
+            | _ => :None
+        )
+    );
 );
 
 impl SourcePath as ToString = {

@@ -361,6 +361,7 @@ const Format = (
                 .ruleset :: Option.t[String],
                 .paths :: ArrayList.t[String],
                 .highlight :: Option.t[Highlight.OutputMode],
+                .inplace :: Bool,
             };
             
             const parse = start_index -> t => (
@@ -368,6 +369,7 @@ const Format = (
                 let mut paths = ArrayList.new();
                 let mut i = start_index;
                 let mut highlight = :Some :Terminal;
+                let mut inplace = false;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
                     if arg == "--ruleset" then (
@@ -385,10 +387,15 @@ const Format = (
                         i += 2;
                         continue;
                     );
+                    if arg == "--inplace" then (
+                        inplace = true;
+                        i += 1;
+                        continue;
+                    );
                     &mut paths |> ArrayList.push_back(arg);
                     i += 1;
                 );
-                { .ruleset, .paths, .highlight }
+                { .ruleset, .paths, .highlight, .inplace }
             );
         );
 
@@ -408,7 +415,15 @@ const Format = (
                     .token_stream = &mut token_stream,
                 );
 
-                match args.highlight with (
+                if args.inplace then (
+                    let formatted = format_to_string(&parsed);
+                    let path = match path |> SourcePath.file_path with (
+                        | :Some path => path
+                        | :None => panic("Inplace formatting is only available given file path")
+                    );
+                    @native "(await import('fs')).writeFileSync(\(path), \(formatted))";
+                    # TODO std.fs.write_file
+                ) else match args.highlight with (
                     | :None => format(&parsed, @current Output)
                     | :Some highlight_mode => (
                         let source = {
