@@ -24,10 +24,9 @@ const new_output = (
     let mut indentation = 0;
     let write = mut s => (
 		loop (
+            if s == "" then break;
 			let i = s |> String.index_of('\n');
-            dbg.print({ s, i });
             if buffer |> String.length == 0 and i != 0 then (
-                dbg.print("adding indentation");
                 if color then (
                     buffer += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
                 );
