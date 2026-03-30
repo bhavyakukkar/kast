@@ -189,9 +189,20 @@ const Format = (
                 );
             )
             | :Syntax { .command, .value_after } => (
-                for token in &command.raw_tokens |> ArrayList.iter do (
-                    print_token(token^);
+                let mut prev_token_span = :None;
+                for &token in &command.raw_tokens |> ArrayList.iter do (
+                    if prev_token_span is :Some prev_token_span then (
+                        if (
+                            prev_token_span.end.line != token.span.start.line
+                            or prev_token_span.end.column.string_encoding != token.span.start.column.string_encoding
+                        ) then (
+                            print_raw(" ");
+                        );
+                    );
+                    print_token(token);
+                    prev_token_span = :Some token.span;
                 );
+                queue_newline();
                 if value_after is :Some ref ast then (
                     walk_ast(ast, .parent = :None);
                 );
