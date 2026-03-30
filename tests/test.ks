@@ -3,5 +3,5 @@
 @"do"(something);# comment
 a
 |>b
-|>c()
+|>c();
     );

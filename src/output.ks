@@ -22,30 +22,31 @@ const new_output = (
 ) -> OutputT => (
     let mut buffer = "";
     let mut indentation = 0;
-    let write = s => (
-		buffer += s;
+    let write = mut s => (
 		loop (
-			let i = buffer |> String.index_of('\n');
-			if i < 0 then break;
-			let line = buffer |> String.substring(0, i);
-			let color = (@current Output).color;
-			let mut s = "";
-			if color then (
-				s += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
-			);
-			for _ in 0..indentation do (
-				s += (indentation_string);
-			);
-			if color then (
-				s += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
-			);
-			write_line(s + line);
+			let i = s |> String.index_of('\n');
+            dbg.print({ s, i });
+            if buffer |> String.length == 0 and i != 0 then (
+                dbg.print("adding indentation");
+                if color then (
+                    buffer += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
+                );
+                for _ in 0..indentation do (
+                    buffer += (indentation_string);
+                );
+                if color then (
+                    buffer += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
+                );
+            );
+			if i < 0 then (
+                buffer += s;
+                break;
+            );
+			let line = buffer + (s |> String.substring(0, i));
+			write_line(line);
 			let i = i + 1;
-			buffer = String.substring(
-				buffer,
-				i,
-				String.length(buffer) - i,
-			);
+			s = s |> String.substring(i, String.length(s) - i);
+            buffer = "";
 		);
 	);
     {
