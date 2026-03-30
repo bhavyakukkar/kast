@@ -32,7 +32,8 @@ const Highlight = (
 
     const OutputT = newtype {
         .print :: (Span, TokenType, String) -> (),
-        .reset :: () -> (), # TODO remove this
+        .replace_ast :: Option.t[type ((&Ast.t, &Ast.t -> ()) -> ())],
+        .move_to :: (Position, .print_whitespace :: Bool) -> (),
     };
 
     const Context = @context OutputT;
@@ -70,18 +71,30 @@ const Highlight = (
                 .position = start,
             };
             let mut state = init_state();
+            # Needed because of replace within replace when
+            # doing structural find and replace :)
+            let mut printed_something_after_moving = false;
+            let move_to = (target_position :: Position, .print_whitespace :: Bool) => (
+                if printed_something_after_moving and print_whitespace then (
+                    while state.position.line < target_position.line do (
+                        before_new_line();
+                        # TODO fix copy
+                        state.position = { ...state.position };
+                        state.position.line += 1;
+                        state.position.column = PositionColumn.zero();
+                        (@current Output).write("\n");
+                    );
+                    let current_column = state.position.column.string_encoding;
+                    let target_column = target_position.column.string_encoding;
+                    for _ in current_column..target_column do (
+                        (@current Output).write(" ");
+                    );
+                );
+                state.position = target_position;
+                printed_something_after_moving = false;
+            );
             let print_token = (span, token_type, s) => (
-                while state.position.line < span.start.line do (
-                    before_new_line();
-                    # TODO fix copy
-                    state.position = { ...state.position };
-                    state.position.line += 1;
-                    state.position.column = PositionColumn.zero();
-                    (@current Output).write("\n");
-                );
-                for _ in state.position.column.string_encoding..span.start.column.string_encoding do (
-                    (@current Output).write(" ");
-                );
+                move_to(span.start, .print_whitespace = true);
                 let mode :: Option.t[ansi.Mode] = match token_type with (
                     | :Keyword => :Some :Magenta
                     | :Number => :Some :Italic
@@ -100,12 +113,12 @@ const Highlight = (
                     | :None => (@current Output).write(s)
                 );
                 state.position = span.end;
+                printed_something_after_moving = true;
             );
             {
                 .print = print_token,
-                .reset = () => (
-                    state = init_state();
-                ),
+                .replace_ast = :None,
+                .move_to,
             }
         )
     );
@@ -155,42 +168,55 @@ const Highlight = (
         );
     );
 
-    const walk_ast = (ast :: &Ast.t) => (
-        let {
-            .ignored_tokens_before = ref ignored_tokens_before,
-            .shape = ref shape,
-            .span = _,
-        } = ast^;
-        walk_ignored_tokens(ignored_tokens_before);
-        match shape^ with (
+    const walk_ast = (original_ast :: &Ast.t) => (
+        let ctx = @current Context;
+        let mut replaced = false;
+        if ctx.replace_ast is :Some f then (
+            f(original_ast, replace_ast => (
+                ctx.move_to(original_ast^.span.start, .print_whitespace = true);
+                ctx.move_to(replace_ast^.span.start, .print_whitespace = false);
+                walk_ast(replace_ast);
+                ctx.move_to(original_ast^.span.end, .print_whitespace = false);
+                replaced = true;
+            ));
+        );
+        if not replaced then (
+            walk_ast_impl(original_ast);
+        );
+    );
+
+    const walk_ast_impl = (ast :: &Ast.t) => (
+        let ctx = @current Context;
+        walk_ignored_tokens(&ast^.ignored_tokens_before);
+        match ast^.shape with (
             | :Empty => ()
             | :Token token => (
                 match token.shape with (
                     | :Ident { .raw, .string, ... } => (
                         match string with (
                             | :None => (
-                                (@current Context).print(token.span, :Ident, raw);
+                                ctx.print(token.span, :Ident, raw);
                             )
                             | :Some { { .open, .close, .raw_parts, ... }, .at_token } => (
-                                (@current Context).print(at_token.span, :Ident, Token.raw(at_token));
-                                (@current Context).print(open.span, :RawIdent, Token.raw(open));
+                                ctx.print(at_token.span, :Ident, Token.raw(at_token));
+                                ctx.print(open.span, :RawIdent, Token.raw(open));
                                 walk_string_parts(:RawIdent, &raw_parts);
-                                (@current Context).print(close.span, :RawIdent, Token.raw(close));
+                                ctx.print(close.span, :RawIdent, Token.raw(close));
                             )
                         )
                     )
                     | :Number { .raw, ... } => (
-                        (@current Context).print(token.span, :Number, raw);
+                        ctx.print(token.span, :Number, raw);
                     )
                     | :String { .open, .close, .raw_parts, ... } => (
-                        (@current Context).print(open.span, :StringDelimeter, Token.raw(open));
+                        ctx.print(open.span, :StringDelimeter, Token.raw(open));
                         walk_string_parts(:StringContent, &raw_parts);
-                        (@current Context).print(close.span, :StringDelimeter, Token.raw(close));
+                        ctx.print(close.span, :StringDelimeter, Token.raw(close));
                     )
                 )
             )
             | :InterpolatedString { .delimiter = _, .open, .parts, .close } => (
-                (@current Context).print(open.span, :StringDelimeter, Token.raw(open));
+                ctx.print(open.span, :StringDelimeter, Token.raw(open));
                 for part in &parts |> ArrayList.iter do (
                     match part^ with (
                         | :Content { .raw = _, .raw_parts, .span, .contents = _ } => (
@@ -202,21 +228,21 @@ const Highlight = (
                             .ast = ref inner,
                             .ignored_trailing_tokens = ref ignored_trailing_tokens,
                         } => (
-                            (@current Context).print(open.span, :Escape, Token.raw(open));
+                            ctx.print(open.span, :Escape, Token.raw(open));
                             walk_ast(inner);
                             walk_ignored_tokens(ignored_trailing_tokens);
-                            (@current Context).print(close.span, :Escape, Token.raw(close));
+                            ctx.print(close.span, :Escape, Token.raw(close));
                         )
                     );
                 );
-                (@current Context).print(close.span, :StringDelimeter, Token.raw(close));
+                ctx.print(close.span, :StringDelimeter, Token.raw(close));
             )
             | :Rule { .root = ref root, ... } => (
                 walk_ast_group(root);
             )
             | :Syntax { .command, .value_after } => (
                 for token in &command.raw_tokens |> ArrayList.iter do (
-                    (@current Context).print(token^.span, :SyntaxCommand, Token.raw(token^));
+                    ctx.print(token^.span, :SyntaxCommand, Token.raw(token^));
                 );
                 if value_after is :Some ref ast then (
                     walk_ast(ast);
@@ -225,7 +251,7 @@ const Highlight = (
             | :Error { .parts = ref parts } => (
                 walk_ast_parts(parts)
             )
-        )
+        );
     );
 
     const walk_ast_group = (group :: &Ast.Group) => (
@@ -334,7 +360,8 @@ const Highlight = (
 
                 Highlight.highlight(&parsed, output);
                 (@current Output).write("\n");
-                output.reset();
+                # Reset for next file
+                output.move_to(Position.beginning(), .print_whitespace = false);
             );
             if &args.paths |> ArrayList.length == 0 then (
                 process(:Stdin);

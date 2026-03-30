@@ -713,8 +713,8 @@ const Parser = (
                     ),
                 );
             );
-            let first_part = &ast_parts |> ArrayList.at(0);
-            let last_part = &ast_parts |> ArrayList.at(parts_len - 1);
+            let first_part = ast_parts.[0];
+            let last_part = ast_parts.[parts_len - 1];
             {
                 .start = (first_part |> Ast.part_span).start,
                 .end = (last_part |> Ast.part_span).end,

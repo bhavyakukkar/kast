@@ -28,6 +28,7 @@ const StructuralFindAndReplace = (
 
     const Pattern = newtype {
         .ast :: Ast.t,
+        .bindings :: OrdMap.t[String, type (&Ast.t)],
     };
 
     const compile_pattern = (
@@ -42,9 +43,49 @@ const StructuralFindAndReplace = (
             .path = source.path,
             .token_stream = &mut token_stream,
         );
+        let mut bindings = OrdMap.new();
+        with FindBindingsContext = {
+            .bindings = &mut bindings,
+        };
+        find_bindings_ast(&parsed.ast);
         {
             .ast = parsed.ast,
+            .bindings,
         }
+    );
+
+    const FindBindingsContext = @context newtype {
+        .bindings :: &mut OrdMap.t[String, type (&Ast.t)],
+    };
+
+    const find_bindings_ast = (ast :: &Ast.t) => with_return (
+        if unquote_name(ast) is :Some name then (
+            (@current FindBindingsContext).bindings |> OrdMap.add(name, ast);
+            return;
+        );
+        match ast^.shape with (
+            | :Empty => ()
+            | :Token _ => ()
+            | :Rule { .root = ref root, ... } => (
+                find_bindings_ast_group(root);
+            )
+            | :Syntax { .value_after, ... } => (
+                if value_after is :Some ref ast then (
+                    find_bindings_ast(ast);
+                );
+            )
+        );
+    );
+
+    const find_bindings_ast_group = (group :: &Ast.Group) => (
+        for part in &group^.parts |> ArrayList.iter do (
+            match part^ with (
+                | :Ignored _ => ()
+                | :Keyword _ => ()
+                | :Value ref ast => find_bindings_ast(ast)
+                | :Group ref group => find_bindings_ast_group(group)
+            );
+        );
     );
 
     const Found = newtype {
@@ -231,12 +272,18 @@ const StructuralFindAndReplace = (
                 .ruleset :: Option.t[String],
                 .paths :: ArrayList.t[String],
                 .pattern :: String,
+                .replace :: Option.t[String],
+                .replace_ruleset :: Option.t[String],
+                .inplace :: Bool,
             };
 
             const parse = start_index -> t => (
                 let mut ruleset = :None;
                 let mut paths = ArrayList.new();
                 let mut pattern = :None;
+                let mut replace = :None;
+                let mut replace_ruleset = :None;
+                let mut inplace = false;
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
@@ -250,11 +297,33 @@ const StructuralFindAndReplace = (
                         i += 2;
                         continue;
                     );
+                    if arg == "--replace" then (
+                        replace = :Some std.sys.argv_at(i + 1);
+                        i += 2;
+                        continue;
+                    );
+                    if arg == "--replace-ruleset" then (
+                        replace_ruleset = :Some std.sys.argv_at(i + 1);
+                        i += 2;
+                        continue;
+                    );
+                    if arg == "--inplace" then (
+                        inplace = true;
+                        i += 1;
+                        continue;
+                    );
                     &mut paths |> ArrayList.push_back(arg);
                     i += 1;
                 );
                 let pattern = pattern |> Option.unwrap_or_else(() => panic("missing --pattern arg"));
-                { .ruleset, .paths, .pattern }
+                {
+                    .ruleset,
+                    .paths,
+                    .pattern,
+                    .replace,
+                    .replace_ruleset,
+                    .inplace,
+                }
             );
         );
 
@@ -263,12 +332,29 @@ const StructuralFindAndReplace = (
             let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
             let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
+            let replace_ruleset = match args.replace_ruleset with (
+                | :None => ruleset
+                | :Some path => (
+                    let mut lexer = Lexer.new(Source.read(SourcePath.file(path)));
+                    let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+                    SyntaxParser.parse_syntax_ruleset(&mut token_stream)
+                )
+            );
             let pattern = compile_pattern(
                 {
                     .contents = args.pattern,
                     .path = :Special "pattern",
                 },
                 .ruleset,
+            );
+            let replace = args.replace |> Option.map(
+                contents => compile_pattern(
+                    {
+                        .contents,
+                        .path = :Special "replace pattern",
+                    },
+                    .ruleset = replace_ruleset,
+                )
             );
             let process = (path :: SourcePath) => (
                 let source = Source.read(path);
@@ -280,9 +366,61 @@ const StructuralFindAndReplace = (
                     .path = source.path,
                     .token_stream = &mut token_stream,
                 );
-                for found in find(&parsed.ast, &pattern) |> ArrayList.into_iter do (
-                    Found.print(&found);
-                    (@current Output).write("\n");
+                let founds = find(&parsed.ast, &pattern);
+                match replace with (
+                    | :None => (
+                        for found in founds |> ArrayList.into_iter do (
+                            Found.print(&found);
+                            (@current Output).write("\n");
+                        );
+                    )
+                    | :Some replace_pattern => (
+                        let mut output = Highlight.new_output(:Terminal);
+                        let replace_ast = (ast :: &Ast.t, f :: &Ast.t -> ()) => (
+                            for found in &founds |> ArrayList.iter do (
+                                # TODO this is hack only working currently
+                                # I mean the equality - we are checking for identity equality
+                                if found^.ast^ == ast^ then (
+                                    with Highlight.Context = {
+                                        ...(@current Highlight.Context),
+                                        .replace_ast = :Some ((ast :: &Ast.t, f :: &Ast.t -> ()) => (
+                                            for &{ .key = binding_name, .value = binding_ast } in &replace_pattern.bindings |> OrdMap.iter do (
+                                                # TODO identity equality
+                                                if ast^ == binding_ast^ then (
+                                                    f((&found^.bindings |> OrdMap.get(binding_name) |> Option.unwrap)^);
+                                                    break;
+                                                );
+                                            );
+                                        )),
+                                    };
+                                    f(&replace_pattern.ast);
+                                    break;
+                                );
+                            );
+                        );
+                        output.replace_ast = :Some replace_ast;
+                        if args.inplace then (
+                            let mut result = "";
+                            with Output = new_output(
+                                .write_line = s => (
+                                    result += s;
+                                    result += "\n";
+                                ),
+                                .indentation_string = "    ",
+                                .color = false,
+                            );
+                            Highlight.highlight(&parsed, output);
+                            (@current Output).write("\n");
+                            let path = match path |> SourcePath.file_path with (
+                                | :Some path => path
+                                | :None => panic("Inplace is only available given file path")
+                            );
+                            # TODO std.fs.write_file
+                            @native "(await import('fs')).writeFileSync(\(path), \(result))";
+                        ) else (
+                            Highlight.highlight(&parsed, output);
+                        );
+                    )
                 );
             );
             if &args.paths |> ArrayList.length == 0 then (
