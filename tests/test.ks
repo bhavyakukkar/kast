@@ -1,7 +1,3 @@
-(
-    # hello, world
-    @"do"(something); # comment
-    a
-        |> b
-        |> c();
-);
+
+let result = f(1 + 2 + 
+3 * PI + 4);

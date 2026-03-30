@@ -432,8 +432,8 @@ const Format = (
                         | :Some path => path
                         | :None => panic("Inplace formatting is only available given file path")
                     );
+                    # TODO std.fs.write_file
                     @native "(await import('fs')).writeFileSync(\(path), \(formatted))";
-                # TODO std.fs.write_file
                 ) else match args.highlight with (
                     | :None => format(&parsed, @current Output)
                     | :Some highlight_mode => (

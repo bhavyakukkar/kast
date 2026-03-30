@@ -150,4 +150,16 @@ const Tuple = (
         output.dec_indentation();
         output.write(close);
     );
+
+    const iter = [T] (self :: &Tuple.t[T]) -> std.iter.Iterable[type { Member, &T }] => {
+        .iter = consumer => (
+            for { index, element } in &self^.unnamed |> ArrayList.iter |> std.iter.enumerate do (
+                consumer({ :Index index, element });
+            );
+            for &name in &self^.name_order |> ArrayList.iter do (
+                let element = &self^.named |> OrdMap.get(name) |> Option.unwrap;
+                consumer({ :Name name, element });
+            );
+        ),
+    };
 );

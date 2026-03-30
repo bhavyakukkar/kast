@@ -35,14 +35,44 @@ const Highlight = (
         .reset :: () -> (), # TODO remove this
     };
 
-    const new_output = (mode :: OutputMode) -> OutputT => match mode with (
+    const Context = @context OutputT;
+
+    const print_single_line = (ast :: &Ast.t) => with_return (
+        with Context = new_output_with(
+            :Terminal,
+            .start = ast^.span.start,
+            .before_new_line = () => (
+                ansi.with_mode(
+                    :Dim,
+                    () => (@current Output).write(" ..."),
+                );
+                return;
+            ),
+        );
+        walk_ast(ast);
+    );
+
+    const new_output = (mode :: OutputMode) -> OutputT => (
+        new_output_with(
+            mode,
+            .start = Position.beginning(),
+            .before_new_line = () => (),
+        )
+    );
+    
+    const new_output_with = (
+        mode :: OutputMode,
+        .start :: Position,
+        .before_new_line :: () -> (),
+    ) => match mode with (
         | :Terminal => (
             let init_state = () => {
-                .position = Position.beginning(),
+                .position = start,
             };
             let mut state = init_state();
             let print_token = (span, token_type, s) => (
                 while state.position.line < span.start.line do (
+                    before_new_line();
                     # TODO fix copy
                     state.position = { ...state.position };
                     state.position.line += 1;
@@ -97,8 +127,6 @@ const Highlight = (
             )
         ),
     };
-
-    const Context = @context OutputT;
 
     const highlight = (parsed :: &Parser.Parsed, output :: OutputT) => (
         with Context = output;

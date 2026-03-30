@@ -17,6 +17,7 @@ use (import "./json.ks").*;
 use (import "./highlight.ks").*;
 use (import "./lsp/lsp.ks").*;
 use (import "./format.ks").*;
+use (import "./structural_find_and_replace.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 # @eval Serialize.do_impl();
 with Stdout = new_std_output(std.io.print);
@@ -132,6 +133,7 @@ const Args = (
         | :Highlight Highlight.Cli.Args.t
         | :Format Format.Cli.Args.t
         | :Lsp Lsp.CliArgs.t
+        | :StructuralFindAndReplace StructuralFindAndReplace.Cli.Args.t
     );
 
     const t = newtype {
@@ -175,6 +177,9 @@ const Args = (
                 );
                 if arg == "lsp" then (
                     unwind subcommand (:Lsp Lsp.CliArgs.parse(i + 1));
+                );
+                if arg == "find-ast" then (
+                    unwind subcommand (:StructuralFindAndReplace StructuralFindAndReplace.Cli.Args.parse(i + 1));
                 );
                 if arg == "--output-mode" then (
                     let mode = std.sys.argv_at(i + 1);
@@ -361,6 +366,7 @@ match args.subcommand with (
     | :Highlight args => Highlight.Cli.run(args)
     | :Format args => Format.Cli.run(args)
     | :Lsp args => Lsp.run(args)
+    | :StructuralFindAndReplace args => StructuralFindAndReplace.Cli.run(args)
 );
 (@current Stdout).dispose();
 (@current Stderr).dispose();
