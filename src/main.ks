@@ -18,10 +18,11 @@ use (import "./highlight.ks").*;
 use (import "./lsp/lsp.ks").*;
 use (import "./format.ks").*;
 use (import "./structural_find_and_replace.ks").*;
+use (import "./repl.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 # @eval Serialize.do_impl();
-with Stdout = new_std_output(std.io.print);
-with Stderr = new_std_output(std.io.eprint);
+with Stdout = new_std_output(std.io.stdout.write);
+with Stderr = new_std_output(std.io.stderr.write);
 with Output = (@current Stdout);
 
 const Args = (
@@ -134,6 +135,7 @@ const Args = (
         | :Format Format.Cli.Args.t
         | :Lsp Lsp.CliArgs.t
         | :StructuralFindAndReplace StructuralFindAndReplace.Cli.Args.t
+        | :Repl
     );
 
     const t = newtype {
@@ -206,7 +208,7 @@ const Args = (
                 );
                 panic("Unexpected arg " + arg);
             );
-            panic("No default subcommand")
+            :Repl
         );
         {
             .output_mode,
@@ -367,6 +369,51 @@ match args.subcommand with (
     | :Format args => Format.Cli.run(args)
     | :Lsp args => Lsp.run(args)
     | :StructuralFindAndReplace args => StructuralFindAndReplace.Cli.run(args)
+    | :Repl => (
+        let ruleset_path = "tests/syntax/kast.ks";
+        let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
+        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+        let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
+        let highlight = contents => (
+            with Diagnostic.HandlerContext = {
+                .stop_on_error = false,
+                .handle = diagnostic => (
+                    # TODO show diagnostics under the repl line
+                    # &mut diagnostics |> ArrayList.push_back(diagnostic);
+                    let () = ();
+                ),
+            };
+            let source = {
+                .contents,
+                .path = :Special "repl"
+            };
+            let mut lexer = Lexer.new(source);
+            let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+            let parsed = Parser.parse(
+                .ruleset,
+                .entire_source_span = Source.entire_span(&source),
+                .path = source.path,
+                .token_stream = &mut token_stream,
+            );
+            let mut result = "";
+            with Output = new_output(
+                .write = s => (
+                    result += s;
+                ),
+                .indentation_string = "    ",
+                .color = true,
+            );
+            Highlight.highlight(&parsed, Highlight.new_output(:Terminal));
+            result
+        );
+        let prompt = output_to_string(
+            () => (
+                ansi.with_mode(
+                    :Dim,
+                    () => (@current Output).write("> "),
+                )
+            )
+        );
+        Repl.run(.highlight, .prompt);
+    )
 );
-(@current Stdout).dispose();
-(@current Stderr).dispose();

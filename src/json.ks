@@ -254,18 +254,7 @@ const Json = (
     );
 
     const to_str = (self :: &Json.t) -> String => (
-        let mut result = "";
-        let output = new_output(
-            .write_line = s => (
-                result += s;
-            ),
-            .indentation_string = "",
-            .color = false,
-        );
-        with Output = output;
-        print(self);
-        output.dispose();
-        result
+        output_to_string(() => print(self))
     );
 
     const print = (self :: &Json.t) => (

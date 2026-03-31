@@ -5,47 +5,59 @@ const OutputT = newtype {
     .write :: String -> (),
     .inc_indentation :: () -> (),
     .dec_indentation :: () -> (),
-    .dispose :: () -> (),
 };
 const Output = @context OutputT;
 const Stdout = @context OutputT;
 const Stderr = @context OutputT;
 
-const new_std_output = (write_line :: String -> ()) -> OutputT => (
-    new_output(.write_line, .indentation_string = "│   ", .color = true)
+const new_std_output = (write :: String -> ()) -> OutputT => (
+    new_output(.write, .indentation_string = "│   ", .color = true)
+);
+
+const output_to_string = (f :: () -> ()) -> String => (
+    let mut result = "";
+    with Output = new_output(
+        .write = s => (
+            result += s;
+        ),
+        .indentation_string = "    ",
+        .color = false,
+    );
+    f();
+    result
 );
 
 const new_output = (
-    .write_line :: String -> (),
+    .write :: String -> (),
     .indentation_string :: String,
     .color :: Bool,
 ) -> OutputT => (
-    let mut buffer = "";
     let mut indentation = 0;
+    let mut started_line = false;
     let write = mut s => (
         loop (
             if s == "" then break;
             let i = s |> String.index_of('\n');
-            if buffer |> String.length == 0 and i != 0 then (
+            if not started_line and i != 0 then (
                 if (@current Output).color then (
-                    buffer += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
+                    write("\x1b[" + ansi.Mode.open_code(:Dim) + "m");
                 );
                 for _ in 0..indentation do (
-                    buffer += (indentation_string);
+                    write(indentation_string);
                 );
                 if (@current Output).color then (
-                    buffer += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
+                    write("\x1b[" + ansi.Mode.close_code(:Dim) + "m");
                 );
             );
             if i < 0 then (
-                buffer += s;
+                write(s);
+                started_line = true;
                 break;
             );
-            let line = buffer + (s |> String.substring(0, i));
-            write_line(line);
             let i = i + 1;
+            write(s |> String.substring(0, i));
             s = s |> String.substring(i, String.length(s) - i);
-            buffer = "";
+            started_line = false;
         );
     );
     {
@@ -57,11 +69,6 @@ const new_output = (
             indentation -= 1;
         ),
         .write,
-        .dispose = () => (
-            if buffer != "" then (
-                write("\n");
-            );
-        ),
     }
 );
 

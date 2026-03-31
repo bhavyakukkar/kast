@@ -1,21 +1,6 @@
 const diagnostics = (
     module:
 
-    const get_message = (f :: () -> ()) -> String => (
-        let mut result = "";
-        with Output = new_output(
-            .write_line = s => (
-                result += s;
-                result += "\n";
-            ),
-            .indentation_string = "    ",
-            .color = false,
-        );
-        f();
-        (@current Output).dispose();
-        result
-    );
-
     const document = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
         let :Object fields = request;
         let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
@@ -56,14 +41,14 @@ const diagnostics = (
                     );
                     &mut fields |> OrdMap.add("source", :String source);
                 );
-                let message = get_message(diagnostic^.message);
+                let message = output_to_string(diagnostic^.message);
                 &mut fields |> OrdMap.add("message", :String message);
                 # Can add tags : unnecessary/deprecated
                 let mut related = ArrayList.new();
                 for info in &diagnostic^.related |> ArrayList.iter do (
                     let mut fields = OrdMap.new();
                     &mut fields |> OrdMap.add("location", span_to_lsp_location(info^.span));
-                    let message = get_message(info^.message);
+                    let message = output_to_string(info^.message);
                     &mut fields |> OrdMap.add("message", :String message);
                     &mut related |> ArrayList.push_back(:Object fields);
                 );

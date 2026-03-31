@@ -111,9 +111,8 @@ const Format = (
     const format_to_string = (parsed :: &Parser.Parsed) -> String => (
         let mut result = "";
         let output = new_output(
-            .write_line = s => (
+            .write = s => (
                 result += s;
-                result += "\n"
             ),
             .indentation_string = "    ", # should depend on user setting
             .color = false,
