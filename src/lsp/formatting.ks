@@ -11,19 +11,10 @@ const position_to_lsp = (position :: Position) -> Json.t => (
     :Object fields
 );
 
-const span_to_lsp = (span :: Span) -> Json.t => (
-    let mut fields = OrdMap.new();
-    &mut fields |> OrdMap.add("start", position_to_lsp(span.start));
-    &mut fields |> OrdMap.add("end", position_to_lsp(span.end));
-    :Object fields
-);
-
 const formatting = (
     module:
 
     const format = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
-        return :Null;
-        # TODO fix formatting
         let :Object fields = request;
         let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;
         let text_document = (
@@ -47,7 +38,7 @@ const formatting = (
             &mut fields
                 |> OrdMap.add(
                     "range",
-                    span_to_lsp(
+                    span_to_lsp_range(
                         {
                             .start = Position.beginning(),
                             .end = parsed^.eof,

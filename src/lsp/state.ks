@@ -1,7 +1,14 @@
+const Diagnostic = newtype {
+    .span :: Span,
+    .kind :: Error.Kind,
+    .message :: String,
+};
+
 const FileState = newtype {
     .contents :: String,
     .lines :: ArrayList.t[String],
     .parsed :: Option.t[Parser.Parsed],
+    .diagnostics :: ArrayList.t[Diagnostic],
 };
 
 const State = newtype {
@@ -24,6 +31,40 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
             .path = source.path,
         }
     );
+    let mut diagnostics = ArrayList.new();
+    let parsed = (
+        with Error.HandlerContext = {
+            .stop_on_error = false,
+            .handle = (kind, span, message_f) => (
+                let mut message = "";
+                with Output = new_output(
+                    .write_line = s => (
+                        message += s;
+                        message += "\n";
+                    ),
+                    .indentation_string = "    ",
+                    .color = false,
+                );
+                message_f();
+                (@current Output).dispose();
+                let diagnostic = {
+                    .kind,
+                    .span,
+                    .message,
+                };
+                &mut diagnostics |> ArrayList.push_back(diagnostic);
+            ),
+        };
+        let mut lexer = Lexer.new(source);
+        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+        let parsed = Parser.parse(
+            .ruleset = state^.syntax_ruleset,
+            .entire_source_span,
+            .path = source.path,
+            .token_stream = &mut token_stream,
+        );
+        :Some parsed
+    );
     let file_state = {
         .contents,
         .lines = (
@@ -33,23 +74,8 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
             );
             lines
         ),
-        .parsed = (
-            with Error.HandlerContext = {
-                .stop_on_error = false,
-                .handle = (kind, span, msg) => (
-                    # TODO add to diagnostics
-                ),
-            };
-            let mut lexer = Lexer.new(source);
-            let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
-            let parsed = Parser.parse(
-                .ruleset = state^.syntax_ruleset,
-                .entire_source_span,
-                .path = source.path,
-                .token_stream = &mut token_stream,
-            );
-            :Some parsed
-        ),
+        .parsed,
+        .diagnostics,
     };
     &mut state^.files |> OrdMap.add(Uri.to_string(uri), file_state);
 );

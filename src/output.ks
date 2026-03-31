@@ -27,13 +27,13 @@ const new_output = (
             if s == "" then break;
             let i = s |> String.index_of('\n');
             if buffer |> String.length == 0 and i != 0 then (
-                if color then (
+                if (@current Output).color then (
                     buffer += "\x1b[" + ansi.Mode.open_code(:Dim) + "m";
                 );
                 for _ in 0..indentation do (
                     buffer += (indentation_string);
                 );
-                if color then (
+                if (@current Output).color then (
                     buffer += "\x1b[" + ansi.Mode.close_code(:Dim) + "m";
                 );
             );

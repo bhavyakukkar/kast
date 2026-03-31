@@ -24,12 +24,14 @@ module:
 const Lsp = (
     module:
 
+    include "./common.ks";
     include "./state.ks";
     include "./init.ks";
     include "./hover.ks";
     include "./selection_range.ks";
     include "./semantic_tokens.ks";
     include "./formatting.ks";
+    include "./diagnostics.ks";
 
     const CliArgs = (
         module:
@@ -71,6 +73,12 @@ const Lsp = (
         );
         if method == "textDocument/formatting" then (
             return state |> formatting.format(request);
+        );
+        if method == "textDocument/diagnostic" then (
+            return state |> diagnostics.document(request);
+        );
+        if method == "workspace/diagnostic" then (
+            return state |> diagnostics.workspace(request);
         );
         panic("TODO respond to " + method)
     );

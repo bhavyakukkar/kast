@@ -78,6 +78,7 @@ const JsonRpc = (
 
     const write = (io :: Io, message :: Json.t) => (
         let contents = message |> Json.into_dep |> to_string;
+        dbg.print(contents);
         let content_length :: Int32 = @native "Buffer.byteLength(\(contents), 'utf-8')";
         io.output.write("Content-Length: ");
         io.output.write(to_string(content_length));
