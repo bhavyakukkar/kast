@@ -60,7 +60,7 @@ const Highlight = (
             .before_new_line = () => (),
         )
     );
-    
+
     const new_output_with = (
         mode :: OutputMode,
         .start :: Position,
@@ -73,7 +73,7 @@ const Highlight = (
             let mut state = init_state();
             # Needed because of replace within replace when
             # doing structural find and replace :)
-            let mut printed_something_after_moving = false;
+            let mut printed_something_after_moving = true;
             let move_to = (target_position :: Position, .print_whitespace :: Bool) => (
                 if printed_something_after_moving and print_whitespace then (
                     while state.position.line < target_position.line do (
@@ -146,10 +146,11 @@ const Highlight = (
         let {
             .ast = ref ast,
             .ignored_trailing_tokens = ref ignored_trailing_tokens,
-            .eof = _,
+            .eof,
         } = parsed^;
         walk_ast(ast);
         walk_ignored_tokens(ignored_trailing_tokens);
+        output.move_to(eof, .print_whitespace = true);
     );
 
     const walk_string_parts = (
@@ -172,13 +173,16 @@ const Highlight = (
         let ctx = @current Context;
         let mut replaced = false;
         if ctx.replace_ast is :Some f then (
-            f(original_ast, replace_ast => (
-                ctx.move_to(original_ast^.span.start, .print_whitespace = true);
-                ctx.move_to(replace_ast^.span.start, .print_whitespace = false);
-                walk_ast(replace_ast);
-                ctx.move_to(original_ast^.span.end, .print_whitespace = false);
-                replaced = true;
-            ));
+            f(
+                original_ast,
+                replace_ast => (
+                    ctx.move_to(original_ast^.span.start, .print_whitespace = true);
+                    ctx.move_to(replace_ast^.span.start, .print_whitespace = false);
+                    walk_ast(replace_ast);
+                    ctx.move_to(original_ast^.span.end, .print_whitespace = false);
+                    replaced = true;
+                )
+            );
         );
         if not replaced then (
             walk_ast_impl(original_ast);
@@ -282,7 +286,9 @@ const Highlight = (
             (@current Context).print(token^.span, :Comment, raw);
         ) else (
             # ignored because of error
-            (@current Context).print(token^.span, :Error, Token.raw(token^));
+            (
+                @current Context
+            ).print(token^.span, :Error, Token.raw(token^));
         )
     );
 
