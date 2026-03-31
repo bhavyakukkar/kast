@@ -1,6 +1,7 @@
 use (import "./common.ks").*;
 use (import "./output.ks").*;
-use (import "./error.ks").*;
+use (import "./span.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./tuple.ks").*;
 use (import "./source.ks").*;
 use (import "./source_path.ks").*;
@@ -15,6 +16,17 @@ use (import "./ast.ks").*;
 use (import "./parser.ks").*;
 const dep = import "../deps/json/lib.ks";
 use std.collections.OrdMap;
+
+const error = [T] (span :: Span, message :: () -> ()) -> T => (
+    let diagnostic = {
+        .severity = :Error,
+        .span,
+        .source = :Parser,
+        .message,
+        .related = ArrayList.new(),
+    };
+    Diagnostic.report_and_unwind(diagnostic)
+);
 
 module:
 
@@ -117,8 +129,7 @@ const Json = (
                 | _ => ()
             );
         );
-        Error.report_and_unwind(
-            :Parser,
+        error(
             ast.span,
             () => (
                 let output = @current Output;
@@ -147,8 +158,7 @@ const Json = (
                     continue;
                 );
             );
-            Error.report_and_unwind(
-                :Parser,
+            error(
                 field.span,
                 () => (
                     let output = @current Output;
@@ -162,8 +172,7 @@ const Json = (
 
     const from_ast = (ast :: Ast.t) -> Json.t => with_return (
         match ast.shape with (
-            | :Empty => Error.report_and_unwind(
-                :Parser,
+            | :Empty => error(
                 ast.span,
                 () => (@current Output).write("json can't be empty"),
             )
@@ -171,8 +180,7 @@ const Json = (
                 match token.shape with (
                     | :String { .contents, ... } => :String contents
                     | :Number { .raw, ... } => :Number std.String.parse[Float64](raw)
-                    | _ => Error.report_and_unwind(
-                        :Parser,
+                    | _ => error(
                         token.span,
                         () => (
                             (@current Output).write("json can't be ");
@@ -182,8 +190,7 @@ const Json = (
                 )
             )
             | :InterpolatedString _ => (
-                Error.report_and_unwind(
-                    :Parser,
+                error(
                     ast.span,
                     () => (@current Output).write("Interpolated strings aren't supported")
                 )
@@ -195,8 +202,7 @@ const Json = (
                     match value with (
                         | :Number x => return :Number -x
                         | _ => (
-                            Error.report_and_unwind(
-                                :Parser,
+                            error(
                                 inner.span,
                                 () => (@current Output).write("Expected a number to be negated"),
                             )
@@ -218,8 +224,7 @@ const Json = (
                 if rule.name == "false" then (
                     return :Bool false;
                 );
-                Error.report_and_unwind(
-                    :Parser,
+                error(
                     ast.span,
                     () => (
                         let output = @current Output;

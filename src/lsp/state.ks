@@ -1,14 +1,8 @@
-const Diagnostic = newtype {
-    .span :: Span,
-    .kind :: Error.Kind,
-    .message :: String,
-};
-
 const FileState = newtype {
     .contents :: String,
     .lines :: ArrayList.t[String],
     .parsed :: Option.t[Parser.Parsed],
-    .diagnostics :: ArrayList.t[Diagnostic],
+    .diagnostics :: ArrayList.t[Diagnostic.t],
 };
 
 const State = newtype {
@@ -33,25 +27,9 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
     );
     let mut diagnostics = ArrayList.new();
     let parsed = (
-        with Error.HandlerContext = {
+        with Diagnostic.HandlerContext = {
             .stop_on_error = false,
-            .handle = (kind, span, message_f) => (
-                let mut message = "";
-                with Output = new_output(
-                    .write_line = s => (
-                        message += s;
-                        message += "\n";
-                    ),
-                    .indentation_string = "    ",
-                    .color = false,
-                );
-                message_f();
-                (@current Output).dispose();
-                let diagnostic = {
-                    .kind,
-                    .span,
-                    .message,
-                };
+            .handle = diagnostic => (
                 &mut diagnostics |> ArrayList.push_back(diagnostic);
             ),
         };

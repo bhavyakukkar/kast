@@ -1,6 +1,6 @@
 use (import "./common.ks").*;
 use (import "./serialize.ks").*;
-use (import "./error.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./log.ks").*;
 use (import "./output.ks").*;
 use (import "./position.ks").*;
@@ -157,10 +157,10 @@ const Args = (
                 if arg == "lex" or arg == "tokenize" then (
                     unwind subcommand (:Tokenize LexerArgs.parse(i + 1));
                 );
-                if arg == "parse_syntax_rules" then (
+                if arg == "parse-syntax-rules" then (
                     unwind subcommand (:ParseSyntaxRules ParseSyntaxRulesArgs.parse(i + 1));
                 );
-                if arg == "parse_syntax_ruleset" then (
+                if arg == "parse-syntax-ruleset" then (
                     unwind subcommand (:ParseSyntaxRuleset ParseSyntaxRulesArgs.parse(i + 1));
                 );
                 if arg == "parse" then (
@@ -220,7 +220,7 @@ const Args = (
 let args = Args.parse();
 (@current Stdout).color = args.color;
 (@current Stderr).color = args.color;
-with Error.HandlerContext = Error.init_handler(.stop_on_error = args.stop_on_error);
+with Diagnostic.HandlerContext = Diagnostic.default_handler(.stop_on_error = args.stop_on_error);
 let output = @current Output;
 match args.subcommand with (
     | :Tokenize { .paths } => (

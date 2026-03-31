@@ -1,7 +1,7 @@
 use (import "./common.ks").*;
 use (import "./log.ks").*;
 use (import "./output.ks").*;
-use (import "./error.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./syntax_rule.ks").*;
 use std.collections.OrdMap;
 use std.collections.OrdSet;
@@ -148,17 +148,31 @@ const SyntaxRuleset = (
             &rule.parts,
             .continuation = node => (
                 if node^.terminal is :Some existing_rule then (
-                    Error.report(
-                        :Other,
-                        rule.span,
-                        () => (
+                    let diagnostic = {
+                        .severity = :Error,
+                        .source = :Other,
+                        .span = rule.span,
+                        .message = () => (
                             let output = @current Output;
                             output.write("Conflicting syntax rules ");
                             output.write(String.escape(existing_rule.name));
                             output.write(" and ");
                             output.write(String.escape(rule.name));
                         ),
-                    );
+                        .related = (
+                            let mut related = ArrayList.new();
+                            let existing_rule_info = {
+                                .span = existing_rule.span,
+                                .message = () => (
+                                    let output = @current Output;
+                                    output.write("Existing rule is defined here");
+                                ),
+                            };
+                            &mut related |> ArrayList.push_back(existing_rule_info);
+                            related
+                        ),
+                    };
+                    Diagnostic.report(diagnostic);
                 );
                 Log.debug_msg("Added rule " + rule.name);
                 node^.terminal = :Some rule;

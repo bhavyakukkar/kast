@@ -2,7 +2,7 @@ use (import "./common.ks").*;
 use (import "./output.ks").*;
 use (import "./tuple.ks").*;
 use (import "./log.ks").*;
-use (import "./error.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./token_stream.ks").*;
 use (import "./syntax_parser.ks").*;
 use (import "./syntax_rule.ks").*;
@@ -37,6 +37,17 @@ const iter_find = [T] (
         if predicate(value) then return :Some value;
     );
     :None
+);
+
+const internal_error = [T] (span :: Span, message :: () -> ()) -> T => (
+    let diagnostic = {
+        .severity = :Error,
+        .source = :Internal,
+        .span,
+        .message,
+        .related = ArrayList.new(),
+    };
+    Diagnostic.report_and_unwind(diagnostic)
 );
 
 module:
@@ -422,7 +433,7 @@ const Parser = (
             }
         );
         let shape = with_return (
-            with Error.UnwindableHandler = {
+            with Diagnostic.UnwindableHandler = {
                 .unwind_on_error = [T] () -> T => (
                     let mut error_parts = ArrayList.new();
                     for part in parts |> ArrayList.into_iter do (
@@ -439,11 +450,11 @@ const Parser = (
             let rule = node^.terminal
                 |> Option.unwrap_or_else(
                     () => (
-                        let output = @current Output;
-                        Error.report_and_unwind(
-                            :Parser,
-                            span,
-                            () => (
+                        let diagnostic = {
+                            .severity = :Error,
+                            .source = :Parser,
+                            .span,
+                            .message = () => (
                                 let output = @current Output;
                                 output.write("Can't finish parsing");
                                 for part in &parts |> ArrayList.iter do (
@@ -456,10 +467,23 @@ const Parser = (
                                         | :Value _ => output.write(" _")
                                     );
                                 );
-                                output.write("\nUnexpected token ");
-                                Token.print(&ctx.token_stream^ |> TokenStream.peek);
-                            )
-                        )
+                            ),
+                            .related = (
+                                let mut related = ArrayList.new();
+                                let peek = &ctx.token_stream^ |> TokenStream.peek;
+                                let unexpected_token = {
+                                    .span = peek.span,
+                                    .message = () => (
+                                        let output = @current Output;
+                                        output.write("Unexpected token ");
+                                        Token.Shape.print(peek.shape);
+                                    )
+                                };
+                                &mut related |> ArrayList.push_back(unexpected_token);
+                                related
+                            ),
+                        };
+                        Diagnostic.report_and_unwind(diagnostic)
                     )
                 );
             :Rule {
@@ -579,8 +603,7 @@ const Parser = (
                 )
                 | { :Keyword token, :Keyword keyword } => (
                     if token.shape |> Token.Shape.raw != keyword then (
-                        Error.report_and_unwind(
-                            :Internal,
+                        internal_error(
                             error_span,
                             () => (@current Output).write("Incorrectly matched keyword")
                         );
@@ -651,8 +674,7 @@ const Parser = (
                     # dbg.print(parsed_part^);
                     dbg.print({ .rule_part = rule_part^ });
                     print_parsed_parts(parsed_parts);
-                    Error.report_and_unwind(
-                        :Internal,
+                    internal_error(
                         error_span,
                         () => (
                             let output = @current Output;
@@ -667,8 +689,7 @@ const Parser = (
         );
         while rule_part_idx < rule_group_parts |> ArrayList.length do (
             let rule_part = rule_group_parts^.[rule_part_idx];
-            let fail = (type_name, name, span) => Error.report_and_unwind(
-                :Internal,
+            let fail = (type_name, name, span) => internal_error(
                 error_span,
                 () => (
                     let output = @current Output;
@@ -704,8 +725,7 @@ const Parser = (
         let span = (
             let parts_len = &ast_parts |> ArrayList.length;
             if parts_len == 0 then (
-                Error.report_and_unwind(
-                    :Internal,
+                internal_error(
                     error_span,
                     () => (
                         let output = @current Output;
@@ -794,17 +814,20 @@ const Parser = (
                 unwind eof peek.span.start;
             );
             if not reported_expected_eof then (
-                Error.report(
-                    :Parser,
-                    peek.span,
-                    () => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Parser,
+                    .span = peek.span,
+                    .message = () => (
                         let output = @current Output;
                         output.write("Expected ");
                         output.write(eof_name);
                         output.write(", got ");
                         Token.Shape.print_impl(peek.shape, .verbose = false);
                     ),
-                );
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report(diagnostic);
                 reported_expected_eof = true;
             );
             &mut ctx.ignored_tokens |> ArrayList.push_back(peek);

@@ -1,19 +1,19 @@
 const diagnostics = (
     module:
 
-    const Severity = (
-        module:
-
-        const t = Int32;
-
-        # Reports an error.
-        const Error :: t = 1;
-        # Reports a warning.
-        const Warning :: t = 2;
-        # Reports an information.
-        const Information :: t = 3;
-        # Reports a hint.
-        const Hint :: t = 4;
+    const get_message = (f :: () -> ()) -> String => (
+        let mut result = "";
+        with Output = new_output(
+            .write_line = s => (
+                result += s;
+                result += "\n";
+            ),
+            .indentation_string = "    ",
+            .color = false,
+        );
+        f();
+        (@current Output).dispose();
+        result
     );
 
     const document = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
@@ -40,10 +40,15 @@ const diagnostics = (
                 let mut fields = OrdMap.new();
                 let range = span_to_lsp_range(diagnostic^.span);
                 &mut fields |> OrdMap.add("range", range);
-                let severity = :Number std.convert.int32_to_float64(Severity.Error);
-                &mut fields |> OrdMap.add("severity", severity);
+                let severity = match diagnostic^.severity with (
+                    | :Error => 1
+                    | :Warning => 2
+                    | :Info => 3
+                    | :Hint => 4
+                );
+                &mut fields |> OrdMap.add("severity", :Number severity);
                 unwindable source (
-                    let source = match diagnostic^.kind with (
+                    let source = match diagnostic^.source with (
                         | :Lexer => "lexer"
                         | :Parser => "parser"
                         | :Internal => "internal"
@@ -51,9 +56,18 @@ const diagnostics = (
                     );
                     &mut fields |> OrdMap.add("source", :String source);
                 );
-                &mut fields |> OrdMap.add("message", :String diagnostic^.message);
+                let message = get_message(diagnostic^.message);
+                &mut fields |> OrdMap.add("message", :String message);
                 # Can add tags : unnecessary/deprecated
-                # Can add related info
+                let mut related = ArrayList.new();
+                for info in &diagnostic^.related |> ArrayList.iter do (
+                    let mut fields = OrdMap.new();
+                    &mut fields |> OrdMap.add("location", span_to_lsp_location(info^.span));
+                    let message = get_message(info^.message);
+                    &mut fields |> OrdMap.add("message", :String message);
+                    &mut related |> ArrayList.push_back(:Object fields);
+                );
+                &mut fields |> OrdMap.add("relatedInformation", :Array related);
                 fields
             );
             &mut diagnostics |> ArrayList.push_back(diagnostic);

@@ -4,7 +4,7 @@ use (import "./position.ks").*;
 use (import "./source.ks").*;
 use (import "./reader.ks").*;
 use (import "./token.ks").*;
-use (import "./error.ks").*;
+use (import "./diagnostic.ks").*;
 
 const is_hex_digit = (c :: Char) -> Bool => (
     ('0' <= c and c <= '9')
@@ -54,7 +54,14 @@ impl Lexer as module = (
     const Context = @context ContextT;
 
     const error_with_span = [T] (span, message) -> T => (
-        Error.report_and_unwind(:Lexer, span, () => (@current Output).write(message))
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Lexer,
+            .span,
+            .message = () => (@current Output).write(message),
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
     );
     const error_at_current_position = [T] message -> T => (
         let ctx = @current Context;
@@ -626,8 +633,7 @@ impl Lexer as module = (
         let string = match string_token with (
             | :String string => string
             | :InterpolatedString _ => (
-                Error.report_msg(:Lexer, span, "Raw idents can't use interpolated strings");
-                return :Some :Error { .raw }
+                error_with_span(span, "Raw idents can't use interpolated strings")
             )
         );
         :Some :Ident {
@@ -665,7 +671,7 @@ impl Lexer as module = (
         };
         let start = lexer^.reader.position;
         let shape = with_return (
-            with Error.UnwindableHandler = {
+            with Diagnostic.UnwindableHandler = {
                 .unwind_on_error = [T] () -> T => (
                     let start = start.string_encoding_index;
                     let end = lexer^.reader.position.string_encoding_index;
@@ -695,10 +701,6 @@ impl Lexer as module = (
             .path = lexer^.source.path,
         );
         Reader.advance(&mut lexer^.reader);
-        Error.report_and_unwind(
-            :Lexer,
-            span,
-            () => (@current Output).write(message),
-        )
+        error_with_span(span, message)
     );
 );

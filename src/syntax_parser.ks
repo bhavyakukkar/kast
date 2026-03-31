@@ -1,12 +1,23 @@
 use (import "./output.ks").*;
 use (import "./span.ks").*;
 use (import "./common.ks").*;
-use (import "./error.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./syntax_ruleset.ks").*;
 use (import "./token.ks").*;
 use (import "./token_stream.ks").*;
 use (import "./log.ks").*;
+
+const report_error_and_unwind = [T] (span :: Span, message :: () -> ()) -> T => (
+    let diagnostic = {
+        .severity = :Error,
+        .source = :Parser,
+        .span,
+        .message,
+        .related = ArrayList.new(),
+    };
+    Diagnostic.report_and_unwind(diagnostic)
+);
 
 module:
 
@@ -30,8 +41,7 @@ const SyntaxParser = (
         let actual = &tokens^ |> TokenStream.peek;
         let actual_raw = actual.shape |> Token.Shape.raw;
         if actual_raw != expected_raw then (
-            Error.report_and_unwind(
-                :Parser,
+            report_error_and_unwind(
                 actual.span,
                 () => (
                     let output = @current Output;
@@ -82,8 +92,7 @@ const SyntaxParser = (
             return :Always;
         );
         let peek = &token_stream^ |> TokenStream.peek;
-        Error.report_and_unwind(
-            :Parser,
+        report_error_and_unwind(
             peek.span,
             () => (
                 let output = @current Output;
@@ -146,8 +155,7 @@ const SyntaxParser = (
             token_stream |> advance;
             raw |> parse
         ) else (
-            Error.report_and_unwind(
-                :Parser,
+            report_error_and_unwind(
                 peek.span,
                 () => (
                     let output = @current Output;
@@ -169,8 +177,7 @@ const SyntaxParser = (
                 Log.trace_msg("<-");
                 if not top_level^.first then (
                     let peek = &token_stream^ |> TokenStream.peek;
-                    Error.report_and_unwind(
-                        :Parser,
+                    report_error_and_unwind(
                         peek.span,
                         () => (
                             let output = @current Output;
@@ -219,8 +226,7 @@ const SyntaxParser = (
                         :GreaterOrEqual read_priority(token_stream)
                     ) else (
                         let peek = &token_stream^ |> TokenStream.peek;
-                        Error.report_and_unwind(
-                            :Parser,
+                        report_error_and_unwind(
                             peek.span,
                             () => (
                                 let output = @current Output;
@@ -250,8 +256,7 @@ const SyntaxParser = (
                             token_stream |> advance;
                             contents
                         ) else (
-                            Error.report_and_unwind(
-                                :Parser,
+                            report_error_and_unwind(
                                 peek.span,
                                 () => (
                                     let output = @current Output;
@@ -268,8 +273,7 @@ const SyntaxParser = (
                 )
             )
             | _ => (
-                Error.report_and_unwind(
-                    :Parser,
+                report_error_and_unwind(
                     peek.span,
                     () => (
                         let output = @current Output;
@@ -294,8 +298,7 @@ const SyntaxParser = (
                 token_stream |> advance;
                 contents
             ) else (
-                Error.report_and_unwind(
-                    :Parser,
+                report_error_and_unwind(
                     peek.span,
                     () => (
                         let output = @current Output;
@@ -321,8 +324,7 @@ const SyntaxParser = (
         while not token_stream |> peek_is(";") do (
             if top_level.right_assoc then (
                 let peek = &token_stream^ |> TokenStream.peek;
-                Error.report_and_unwind(
-                    :Parser,
+                report_error_and_unwind(
                     peek.span,
                     () => (
                         let output = @current Output;
@@ -382,7 +384,7 @@ const SyntaxParser = (
         loop (
             let peek = &token_stream^ |> TokenStream.peek;
             let index_before = token_stream^.index;
-            with Error.UnwindableHandler = {
+            with Diagnostic.UnwindableHandler = {
                 .unwind_on_error = [T] () => (
                     if token_stream^.index == index_before then (
                         Log.debug_msg("skipping " + String.escape(Token.raw(peek)));
