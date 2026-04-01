@@ -11,7 +11,7 @@ build *args:
         --use-numbers-instead-of-symbols false \
         --target js \
         --output target/main.mjs \
-        src/main.ks
+        src/cli/main.ks
 
 watch:
     #!/usr/bin/env bash
