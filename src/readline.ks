@@ -3,7 +3,7 @@ use std.collections.OrdMap;
 
 module:
 
-const Repl = (
+const Readline = (
     module:
 
     const Context = @context newtype {

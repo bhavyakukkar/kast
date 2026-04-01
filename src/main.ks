@@ -18,7 +18,7 @@ use (import "./highlight.ks").*;
 use (import "./lsp/lsp.ks").*;
 use (import "./format.ks").*;
 use (import "./structural_find_and_replace.ks").*;
-use (import "./repl.ks").*;
+use (import "./readline.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 # @eval Serialize.do_impl();
 with Stdout = new_std_output(std.io.stdout.write);
@@ -414,6 +414,6 @@ match args.subcommand with (
                 )
             )
         );
-        Repl.run(.highlight, .prompt);
+        Readline.run(.highlight, .prompt);
     )
 );
