@@ -374,6 +374,36 @@ match args.subcommand with (
         let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
+        let tokenize = contents => (
+            with Diagnostic.HandlerContext = {
+                .stop_on_error = false,
+                .handle = diagnostic => (
+                    # TODO show diagnostics under the repl line
+                    # &mut diagnostics |> ArrayList.push_back(diagnostic);
+                    let () = ();
+                ),
+            };
+            let source = {
+                .contents,
+                .path = :Special "repl"
+            };
+            let mut lexer = Lexer.new(source);
+            let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+            let mut ranges = ArrayList.new();
+            loop (
+                let token = &token_stream |> TokenStream.peek;
+                if token.shape is :Eof then (
+                    break;
+                );
+                &mut token_stream |> TokenStream.advance;
+                let range = {
+                    .start = token.span.start.string_encoding_index,
+                    .end = token.span.end.string_encoding_index,
+                };
+                &mut ranges |> ArrayList.push_back(range);
+            );
+            ranges
+        );
         let highlight = contents => (
             with Diagnostic.HandlerContext = {
                 .stop_on_error = false,
@@ -414,6 +444,6 @@ match args.subcommand with (
                 )
             )
         );
-        Readline.run(.highlight, .prompt);
+        Readline.run(.tokenize, .highlight, .prompt);
     )
 );

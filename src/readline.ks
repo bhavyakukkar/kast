@@ -5,9 +5,16 @@ module:
 
 const Readline = (
     module:
+    ## indices are in string encoding
+    ## end is exclusive
+    const Range = newtype {
+        .start :: Int32,
+        .end :: Int32,
+    };
 
     const Context = @context newtype {
         .highlight :: String -> String,
+        .tokenize :: String -> ArrayList.t[Range],
         .prompt :: String,
     };
 
@@ -72,6 +79,61 @@ const Readline = (
                     tty.write(content);
                     cursor_pos = tty.read_cursor_position();
                 )
+                | :Modified { .modifiers, .inner } => match inner with (
+                    | :ArrowLeft => (
+                        if modifiers |> tty.Modifiers.has_alt or modifiers |> tty.Modifiers.has_ctrl then (
+                            let tokens = ctx.tokenize(result.before_cursor + result.after_cursor);
+                            let mut target_pos = 0;
+                            for token in tokens |> ArrayList.into_iter do (
+                                if token.start < result.before_cursor |> String.length then (
+                                    target_pos = token.start;
+                                ) else (
+                                    break;
+                                );
+                            );
+                            let skipped = result.before_cursor
+                                |> String.substring_from(target_pos);
+                            result.after_cursor = skipped + result.after_cursor;
+                            result.before_cursor = result.before_cursor
+                                |> String.substring(0, target_pos);
+                            let mut distance_to_move = 0;
+                            for c in skipped |> String.iter do (
+                                distance_to_move += display_width(c);
+                            );
+                            if distance_to_move > 0 then (
+                                tty.move_cursor(:Left, distance_to_move);
+                                cursor_pos = tty.read_cursor_position();
+                            );
+                        );
+                    )
+                    | :ArrowRight => (
+                        if modifiers |> tty.Modifiers.has_alt or modifiers |> tty.Modifiers.has_ctrl then (
+                            let tokens = ctx.tokenize(result.before_cursor + result.after_cursor);
+                            let current_pos = result.before_cursor |> String.length;
+                            let mut target_delta = String.length(result.after_cursor);
+                            for token in tokens |> ArrayList.into_iter do (
+                                if token.start > current_pos then (
+                                    target_delta = token.start - current_pos;
+                                    break;
+                                );
+                            );
+                            let skipped = result.after_cursor
+                                |> String.substring(0, target_delta);
+                            result.before_cursor = result.before_cursor + skipped;
+                            result.after_cursor = result.after_cursor
+                                |> String.substring_from(target_delta);
+                            let mut distance_to_move = 0;
+                            for c in skipped |> String.iter do (
+                                distance_to_move += display_width(c);
+                            );
+                            if distance_to_move > 0 then (
+                                tty.move_cursor(:Right, distance_to_move);
+                                cursor_pos = tty.read_cursor_position();
+                            );
+                        );
+                    )
+                    | _ => ()
+                )
                 | :ArrowLeft => (
                     if result.before_cursor != "" then (
                         let c = &mut result.before_cursor |> String.pop_back;
@@ -126,11 +188,13 @@ const Readline = (
     );
 
     const run = (
+        .tokenize :: String -> ArrayList.t[Range],
         .highlight :: String -> String,
         .prompt :: String,
     ) => (
         let main_loop = () => with_return (
             with Context = {
+                .tokenize,
                 .highlight,
                 .prompt,
             };
