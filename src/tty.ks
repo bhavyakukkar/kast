@@ -5,7 +5,7 @@ module:
 const tty = (
     module:
 
-    const Input = newtype (
+    const InputShape = newtype (
         | :Content String
         | :Backspace
         | :Insert
@@ -21,7 +21,6 @@ const tty = (
         | :PageDown
         | :ClearScreen
         | :Escape
-        | :Modified { .modifiers :: Modifiers, .inner :: Input }
         | :Unknown
     );
 
@@ -42,6 +41,19 @@ const tty = (
         const has_meta = ({ self } :: Modifiers) -> Bool => (
             std.op.bit_and(self - 1, 8) != 0
         );
+    );
+
+    const Input = newtype {
+        .shape :: InputShape,
+        .modifiers :: Modifiers,
+    };
+
+    impl Input as module = (
+        module:
+        const new = (shape :: InputShape) -> Input => {
+            .shape,
+            .modifiers = Modifiers.EMPTY,
+        };
     );
 
     const ContextT = newtype {
@@ -120,11 +132,11 @@ const tty = (
         );
         let { code, modifiers } = if parameters |> String.contains(";") then (
             let { code, modifiers } = parameters |> String.split_once(';');
-            { code, :Some { String.parse(modifiers) } }
+            { code, { String.parse(modifiers) } }
         ) else (
-            { parameters, :None }
+            { parameters, Modifiers.EMPTY }
         );
-        let input_without_modifiers = if final == 'A' then (
+        let shape = if final == 'A' then (
             :ArrowUp
         ) else if final == 'B' then (
             :ArrowDown
@@ -154,19 +166,12 @@ const tty = (
             ) else if code == "8" then (
                 :End
             ) else (
-                return :Some :Unknown
+                :Unknown
             )
         ) else (
-            return :Some :Unknown
+            :Unknown
         );
-        let input = match modifiers with (
-            | :None => input_without_modifiers
-            | :Some modifiers => :Modified {
-                .modifiers,
-                .inner = input_without_modifiers,
-            }
-        );
-        :Some input
+        :Some { .shape, .modifiers }
     );
 
     const read_more_stdin_data = () => (
@@ -186,13 +191,13 @@ const tty = (
                 ctx.handle_ctrl_c();
             ) else if c == '\r' then (
                 raw.advance();
-                push_input(:Enter);
+                push_input(Input.new(:Enter));
             ) else if c == '\x7f' then (
                 raw.advance();
-                push_input(:Backspace);
+                push_input(Input.new(:Backspace));
             ) else if c == '\f' then (
                 raw.advance();
-                push_input(:ClearScreen);
+                push_input(Input.new(:ClearScreen));
             ) else if c == '\x1b' then (
                 raw.advance();
                 if std.repr.structurally_equal(raw.peek(), :Some '[') then (
@@ -203,21 +208,21 @@ const tty = (
                 ) else match raw.peek() with (
                     | :Some c => (
                         raw.advance();
-                        let inner = if c == '\x1b' then (
+                        let shape = if c == '\x1b' then (
                             :Escape
                         ) else (
                             :Content to_string(c)
                         );
-                        let mut modifiers = { 2 };
-                        push_input(:Modified { .modifiers, .inner });
+                        let mut modifiers = { 3 };
+                        push_input({ .shape, .modifiers });
                     )
                     | :None => (
-                        push_input(:Escape);
+                        push_input(Input.new(:Escape));
                     )
                 );
             ) else (
                 raw.advance();
-                push_input(:Content to_string(c));
+                push_input(Input.new(:Content to_string(c)));
             );
         );
     );

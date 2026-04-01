@@ -7,7 +7,6 @@ const Readline = (
     module:
 
     const DEBUG = false;
-
     ## indices are in string encoding
     ## end is exclusive
     const Range = newtype {
@@ -65,11 +64,7 @@ const Readline = (
         );
         loop (
             let input = tty.input();
-            let { input, modifiers } = match input with (
-                | :Modified { .modifiers, .inner } => { inner, modifiers }
-                | _ => { input, tty.Modifiers.EMPTY }
-            );
-            match input with (
+            match input.shape with (
                 | :Enter => (
                     break;
                 )
@@ -110,7 +105,10 @@ const Readline = (
                 )
                 | :ArrowLeft => (
                     if result.before_cursor != "" then (
-                        if modifiers |> tty.Modifiers.has_alt or modifiers |> tty.Modifiers.has_ctrl then (
+                        if (
+                            input.modifiers |> tty.Modifiers.has_alt
+                            or input.modifiers |> tty.Modifiers.has_ctrl
+                        ) then (
                             let tokens = ctx.tokenize(result.before_cursor + result.after_cursor);
                             let mut target_pos = 0;
                             for token in tokens |> ArrayList.into_iter do (
@@ -129,14 +127,17 @@ const Readline = (
                             let c = &mut result.before_cursor |> String.pop_back;
                             result.after_cursor = to_string(c) + result.after_cursor;
                         );
-                        if not modifiers |> tty.Modifiers.has_shift then (
+                        if not input.modifiers |> tty.Modifiers.has_shift then (
                             reset_selection();
                         );
                     );
                 )
                 | :ArrowRight => (
                     if result.after_cursor != "" then (
-                        if modifiers |> tty.Modifiers.has_alt or modifiers |> tty.Modifiers.has_ctrl then (
+                        if (
+                            input.modifiers |> tty.Modifiers.has_alt
+                            or input.modifiers |> tty.Modifiers.has_ctrl
+                        ) then (
                             let tokens = ctx.tokenize(result.before_cursor + result.after_cursor);
                             let current_pos = result.before_cursor |> String.length;
                             let mut target_delta = String.length(result.after_cursor);
@@ -158,7 +159,7 @@ const Readline = (
                                 |> String.substring(i, String.length(result.after_cursor) - i);
                             result.before_cursor += to_string(c);
                         );
-                        if not modifiers |> tty.Modifiers.has_shift then (
+                        if not input.modifiers |> tty.Modifiers.has_shift then (
                             reset_selection();
                         );
                     );
@@ -169,7 +170,7 @@ const Readline = (
                         .after_cursor = result.before_cursor + result.after_cursor,
                     };
                     cursor_pos = begin_pos;
-                    if not modifiers |> tty.Modifiers.has_shift then (
+                    if not input.modifiers |> tty.Modifiers.has_shift then (
                         reset_selection();
                     );
                 )
@@ -178,7 +179,7 @@ const Readline = (
                         .before_cursor = result.before_cursor + result.after_cursor,
                         .after_cursor = ""
                     };
-                    if not modifiers |> tty.Modifiers.has_shift then (
+                    if not input.modifiers |> tty.Modifiers.has_shift then (
                         reset_selection();
                     );
                 )
