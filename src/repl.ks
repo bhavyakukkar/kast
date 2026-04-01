@@ -1,4 +1,5 @@
 use (import "./tty.ks").*;
+use std.collections.OrdMap;
 
 module:
 
@@ -15,48 +16,109 @@ const Repl = (
         tty.write(ctx.prompt);
         tty.flush();
         let mut begin_pos = tty.read_cursor_position();
-        let mut s = "";
-        # TODO add string.pop_back instead
-        let mut char_offsets = ArrayList.new();
+        let mut cursor_pos = begin_pos;
+        let mut result = {
+            .before_cursor = "",
+            .after_cursor = "",
+        };
+        let mut display_widths = OrdMap.new();
+        let display_width = c => (
+            (&display_widths |> OrdMap.get(c) |> Option.unwrap)^
+        );
         loop (
             match tty.input() with (
                 | :Enter => (
                     break;
                 )
                 | :Backspace => (
-                    if s != "" then (
-                        s = s |> String.substring(0, &mut char_offsets |> ArrayList.pop_back);
+                    if result.before_cursor != "" then (
+                        let c = &mut result.before_cursor |> String.pop_back;
+                        for _ in 0..display_width(c) do (
+                            tty.write_backspace();
+                        );
+                        cursor_pos = tty.read_cursor_position();
+                    );
+                )
+                | :Delete => (
+                    if result.after_cursor != "" then (
+                        let c = result.after_cursor |> String.at(0);
+                        let i = Char.string_encoding_len(c);
+                        result.after_cursor = result.after_cursor
+                            |> String.substring(i, String.length(result.after_cursor) - i);
                     );
                 )
                 | :ClearScreen => (
                     tty.clear_screen();
-                    tty.move_cursor(1, 1);
+                    tty.move_cursor_to(1, 1);
                     tty.write(ctx.prompt);
                     begin_pos = tty.read_cursor_position();
+                    tty.write(result.before_cursor);
+                    cursor_pos = tty.read_cursor_position();
                 )
                 | :Content content => (
-                    for c in String.iter(content) do (
-                        &mut char_offsets |> ArrayList.push_back(String.length(s));
-                        s += to_string(c);
+                    result.before_cursor += content;
+                    tty.save_cursor_position();
+                    for c in content |> String.iter do (
+                        # we clear them afterwards anyway
+                        let start = tty.read_cursor_position();
+                        tty.write(to_string(c));
+                        let end = tty.read_cursor_position();
+                        &mut display_widths |> OrdMap.add(c, end.1 - start.1);
+                        tty.reset_cursor_position();
+                    );
+                    tty.write(content);
+                    cursor_pos = tty.read_cursor_position();
+                )
+                | :ArrowLeft => (
+                    if result.before_cursor != "" then (
+                        let c = &mut result.before_cursor |> String.pop_back;
+                        result.after_cursor = to_string(c) + result.after_cursor;
+                        tty.move_cursor(:Left, display_width(c));
+                        cursor_pos = tty.read_cursor_position();
                     );
                 )
-                | :Unknown => ()
+                | :ArrowRight => (
+                    if result.after_cursor != "" then (
+                        let c = result.after_cursor |> String.at(0);
+                        tty.write(to_string(c));
+                        cursor_pos = tty.read_cursor_position();
+                        let i = Char.string_encoding_len(c);
+                        result.after_cursor = result.after_cursor
+                            |> String.substring(i, String.length(result.after_cursor) - i);
+                        result.before_cursor += to_string(c);
+                    );
+                )
+                | :Home => (
+                    result = {
+                        .before_cursor = "",
+                        .after_cursor = result.before_cursor + result.after_cursor,
+                    };
+                    cursor_pos = begin_pos;
+                )
+                | :End => (
+                    tty.write(result.after_cursor);
+                    cursor_pos = tty.read_cursor_position();
+                    result = {
+                        .before_cursor = result.before_cursor + result.after_cursor,
+                        .after_cursor = ""
+                    };
+                )
+                | _ => ()
             );
-            tty.move_cursor(...begin_pos);
+            tty.move_cursor_to(...begin_pos);
             tty.clear_after_cursor();
-            tty.write(ctx.highlight(s));
-            tty.save_cursor_position();
+            tty.write(ctx.highlight(result.before_cursor + result.after_cursor));
             tty.write("\n");
             tty.flush();
             # dbg.print writes directly to stderr so need to flush first
             dbg.print((@current tty.Context).last_read);
-            tty.reset_cursor_position();
+            tty.move_cursor_to(...cursor_pos);
             tty.flush();
         );
         tty.clear_after_cursor();
         tty.write("\n");
         tty.flush();
-        s
+        result.before_cursor + result.after_cursor
     );
 
     const run = (

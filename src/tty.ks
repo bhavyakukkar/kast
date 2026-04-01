@@ -5,17 +5,17 @@ module:
 const tty = (
     module:
 
-    const special = (
-        const UP = "\x1B[A";
-        const DOWN = "\x1B[B";
-        const RIGHT = "\x1B[C";
-        const LEFT = "\x1B[D";
-    );
-
     const Input = newtype (
         | :Content String
         | :Backspace
+        | :Delete
         | :Enter
+        | :ArrowLeft
+        | :ArrowRight
+        | :ArrowUp
+        | :ArrowDown
+        | :Home
+        | :End
         | :ClearScreen
         | :Unknown
     );
@@ -113,6 +113,24 @@ const tty = (
                             String.parse(row),
                             String.parse(column),
                         };
+                    ) else if final == 'A' then (
+                        push_input(:ArrowUp);
+                    ) else if final == 'B' then (
+                        push_input(:ArrowDown);
+                    ) else if final == 'C' then (
+                        push_input(:ArrowRight);
+                    ) else if final == 'D' then (
+                        push_input(:ArrowLeft);
+                    ) else if final == 'H' then (
+                        push_input(:Home);
+                    ) else if final == 'F' then (
+                        push_input(:End);
+                    ) else if final == '~' then (
+                        if parameters == "3" then (
+                            push_input(:Delete);
+                        ) else (
+                            push_input(:Unknown);
+                        );
                     ) else (
                         push_input(:Unknown);
                     );
@@ -150,12 +168,33 @@ const tty = (
         write("\x1b[u");
     );
 
-    const move_cursor = (row :: Int32, column :: Int32) => (
+    const move_cursor_to = (row :: Int32, column :: Int32) => (
         write("\x1b[");
         write(to_string(row));
         write(";");
         write(to_string(column));
         write("H");
+    );
+
+    const MoveCursorDirection = newtype (
+        | :Up
+        | :Down
+        | :Right
+        | :Left
+    );
+
+    const move_cursor = (direction :: MoveCursorDirection, amount :: Int32) => (
+        write("\x1b[");
+        if amount != 1 then (
+            write(to_string(amount));
+        );
+        let c = match direction with (
+            | :Up => "A"
+            | :Down => "B"
+            | :Right => "C"
+            | :Left => "D"
+        );
+        write(c);
     );
 
     const clear_screen = () => (
@@ -164,6 +203,10 @@ const tty = (
 
     const clear_after_cursor = () => (
         write("\x1b[J");
+    );
+
+    const write_backspace = () => (
+        write("\b");
     );
 
     const read_cursor_position = () -> { Int32, Int32 } => with_return (
