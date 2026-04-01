@@ -29,6 +29,7 @@ const tty = (
 
     impl Modifiers as module = (
         module:
+        const EMPTY :: Modifiers = { 1 };
         const has_shift = ({ self } :: Modifiers) -> Bool => (
             std.op.bit_and(self - 1, 1) != 0
         );
@@ -281,6 +282,35 @@ const tty = (
         write("\b");
     );
 
+    const invert_colors = () => (
+        write("\x1b[7m");
+    );
+
+    const CursorType = newtype (
+        | :Default
+        | :BlinkingBlock
+        | :SteadyBlock
+        | :BlinkingUnderline
+        | :SteadyUnderline
+        | :BlinkingBar
+        | :SteadyBar
+    );
+
+    const set_cursor_type = (cursor_type :: CursorType) => (
+        write("\x1b[");
+        let cursor_type = match cursor_type with (
+            | :Default => "0"
+            | :BlinkingBlock => "1"
+            | :SteadyBlock => "2"
+            | :BlinkingUnderline => "3"
+            | :SteadyUnderline => "4"
+            | :BlinkingBar => "5"
+            | :SteadyBar => "6"
+        );
+        write(cursor_type);
+        write(" q");
+    );
+
     const read_cursor_position = () -> { Int32, Int32 } => with_return (
         let mut ctx = @current Context;
         write("\x1b[6n");
@@ -318,18 +348,21 @@ const tty = (
             @native "process.stdin.pause()";
         );
 
-        let f = () => with_return (
-            with Context = {
-                .handle_ctrl_c = () => (
-                    print("Ctrl-C was pressed, exiting...");
-                    return;
-                ),
-                .last_read = "",
-                .read_buffer = Queue.new(),
-                .write_buffer = "",
-                .cursor_position_report = :None,
-            };
-            f();
+        let f = () => (
+            with_return (
+                with Context = {
+                    .handle_ctrl_c = () => (
+                        print("Ctrl-C was pressed, exiting...");
+                        return;
+                    ),
+                    .last_read = "",
+                    .read_buffer = Queue.new(),
+                    .write_buffer = "",
+                    .cursor_position_report = :None,
+                };
+                f();
+            );
+            set_cursor_type(:Default);
         );
         enter_raw_mode();
         @native "await (async ()=>{try { \(f()) } finally { \(exit_raw_mode()) }})()"
