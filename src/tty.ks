@@ -8,6 +8,7 @@ const tty = (
     const Input = newtype (
         | :Content String
         | :Backspace
+        | :Insert
         | :Delete
         | :Enter
         | :ArrowLeft
@@ -16,8 +17,30 @@ const tty = (
         | :ArrowDown
         | :Home
         | :End
+        | :PageUp
+        | :PageDown
         | :ClearScreen
+        | :Escape
+        | :Modified { .modifiers :: Modifiers, .inner :: Input }
         | :Unknown
+    );
+
+    const Modifiers = newtype { Int32 };
+
+    impl Modifiers as module = (
+        module:
+        const has_shift = ({ self } :: Modifiers) -> Bool => (
+            std.op.bit_and(self - 1, 1) != 0
+        );
+        const has_alt = ({ self } :: Modifiers) -> Bool => (
+            std.op.bit_and(self - 1, 2) != 0
+        );
+        const has_ctrl = ({ self } :: Modifiers) -> Bool => (
+            std.op.bit_and(self - 1, 4) != 0
+        );
+        const has_meta = ({ self } :: Modifiers) -> Bool => (
+            std.op.bit_and(self - 1, 8) != 0
+        );
     );
 
     const ContextT = newtype {
@@ -84,10 +107,77 @@ const tty = (
         &mut ctx.read_buffer |> Queue.push(input);
     );
 
+    const parse_csi = (csi :: raw.Csi) -> Option.t[Input] => with_return (
+        let { .parameters, .intermediate, .final } = csi;
+        if final == 'R' then (
+            let { row, column } = parameters |> String.split_once(';');
+            (@current Context).cursor_position_report = :Some {
+                String.parse(row),
+                String.parse(column),
+            };
+            return :None;
+        );
+        let { code, modifiers } = if parameters |> String.contains(";") then (
+            let { code, modifiers } = parameters |> String.split_once(';');
+            { code, :Some { String.parse(modifiers) } }
+        ) else (
+            { parameters, :None }
+        );
+        let input_without_modifiers = if final == 'A' then (
+            :ArrowUp
+        ) else if final == 'B' then (
+            :ArrowDown
+        ) else if final == 'C' then (
+            :ArrowRight
+        ) else if final == 'D' then (
+            :ArrowLeft
+        ) else if final == 'H' then (
+            :Home
+        ) else if final == 'F' then (
+            :End
+        ) else if final == '~' then (
+            if code == "1" then (
+                :Home
+            ) else if code == "2" then (
+                :Insert
+            ) else if code == "3" then (
+                :Delete
+            ) else if code == "4" then (
+                :End
+            ) else if code == "5" then (
+                :PageUp
+            ) else if code == "6" then (
+                :PageDown
+            ) else if code == "7" then (
+                :Home
+            ) else if code == "8" then (
+                :End
+            ) else (
+                return :Some :Unknown
+            )
+        ) else (
+            return :Some :Unknown
+        );
+        let input = match modifiers with (
+            | :None => input_without_modifiers
+            | :Some modifiers => :Modified {
+                .modifiers,
+                .inner = input_without_modifiers,
+            }
+        );
+        :Some input
+    );
+
     const read_more_stdin_data = () => (
         let mut ctx = @current Context;
         let data = @native "await new Promise(resolve => {const on_data = data => {resolve(data.toString());process.stdin.removeListener('data', on_data);};process.stdin.addListener('data', on_data);})";
-        ctx.last_read = data;
+        ctx.last_read += data;
+        while ctx.last_read |> String.length > 40 do (
+            let c = ctx.last_read |> String.at(0);
+            let i = Char.string_encoding_len(c);
+            ctx.last_read = ctx.last_read
+                |> String.substring(i, String.length(ctx.last_read) - i);
+        );
         with raw.Context = { .data };
         while raw.peek() is :Some c do (
             if c == '\x03' then (
@@ -106,40 +196,22 @@ const tty = (
                 raw.advance();
                 if std.repr.structurally_equal(raw.peek(), :Some '[') then (
                     raw.advance();
-                    let { .parameters, .intermediate, .final } = raw.read_csi();
-                    if final == 'R' then (
-                        let { row, column } = parameters |> String.split_once(';');
-                        ctx.cursor_position_report = :Some {
-                            String.parse(row),
-                            String.parse(column),
-                        };
-                    ) else if final == 'A' then (
-                        push_input(:ArrowUp);
-                    ) else if final == 'B' then (
-                        push_input(:ArrowDown);
-                    ) else if final == 'C' then (
-                        push_input(:ArrowRight);
-                    ) else if final == 'D' then (
-                        push_input(:ArrowLeft);
-                    ) else if final == 'H' then (
-                        push_input(:Home);
-                    ) else if final == 'F' then (
-                        push_input(:End);
-                    ) else if final == '~' then (
-                        if parameters == "3" then (
-                            push_input(:Delete);
-                        ) else (
-                            push_input(:Unknown);
-                        );
-                    ) else (
-                        push_input(:Unknown);
+                    if parse_csi(raw.read_csi()) is :Some input then (
+                        push_input(input);
                     );
                 ) else match raw.peek() with (
                     | :Some c => (
-                        push_input(:Unknown);
+                        raw.advance();
+                        let inner = if c == '\x1b' then (
+                            :Escape
+                        ) else (
+                            :Content to_string(c)
+                        );
+                        let mut modifiers = { 2 };
+                        push_input(:Modified { .modifiers, .inner });
                     )
                     | :None => (
-                        push_input(:Unknown);
+                        push_input(:Escape);
                     )
                 );
             ) else (

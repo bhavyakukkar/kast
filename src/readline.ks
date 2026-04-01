@@ -26,7 +26,8 @@ const Readline = (
             (&display_widths |> OrdMap.get(c) |> Option.unwrap)^
         );
         loop (
-            match tty.input() with (
+            let input = tty.input();
+            match input with (
                 | :Enter => (
                     break;
                 )
@@ -59,12 +60,14 @@ const Readline = (
                     result.before_cursor += content;
                     tty.save_cursor_position();
                     for c in content |> String.iter do (
-                        # we clear them afterwards anyway
-                        let start = tty.read_cursor_position();
-                        tty.write(to_string(c));
-                        let end = tty.read_cursor_position();
-                        &mut display_widths |> OrdMap.add(c, end.1 - start.1);
-                        tty.reset_cursor_position();
+                        if &display_widths |> OrdMap.get(c) is :None then (
+                            # we clear them afterwards anyway
+                            let start = tty.read_cursor_position();
+                            tty.write(to_string(c));
+                            let end = tty.read_cursor_position();
+                            &mut display_widths |> OrdMap.add(c, end.1 - start.1);
+                            tty.reset_cursor_position();
+                        );
                     );
                     tty.write(content);
                     cursor_pos = tty.read_cursor_position();
@@ -112,6 +115,7 @@ const Readline = (
             tty.flush();
             # dbg.print writes directly to stderr so need to flush first
             dbg.print((@current tty.Context).last_read);
+            dbg.print(input);
             tty.move_cursor_to(...cursor_pos);
             tty.flush();
         );
