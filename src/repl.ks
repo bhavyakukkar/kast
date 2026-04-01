@@ -51,70 +51,96 @@ const Repl = (
         const LEFT = "\x1B[D";
     );
 
+    const Context = @context newtype {
+        .highlight :: String -> String,
+        .prompt :: String,
+        .read_buffer :: String,
+        .write_buffer :: String,
+        .handle_ctrl_c :: () -> (),
+    };
+
+    const read_char = () => (
+        let mut ctx = @current Context;
+        if ctx.read_buffer == "" then (
+            ctx.read_buffer = read_stdin();
+        );
+        let c = ctx.read_buffer |> String.at(0);
+        let i = Char.string_encoding_len(c);
+        ctx.read_buffer = ctx.read_buffer
+            |> String.substring(i, String.length(ctx.read_buffer) - i);
+        c
+    );
+
+    const write = (s :: String) => (
+        let mut ctx = @current Context;
+        ctx.write_buffer += s;
+    );
+
+    const flush = () => (
+        let mut ctx = @current Context;
+        std.io.stdout.write(ctx.write_buffer);
+        ctx.write_buffer = "";
+    );
+
+    const read_line = (prompt :: String) -> String => (
+        let ctx = @current Context;
+        write(ctx.prompt);
+        write("\x1b[s"); # save cursor
+        flush();
+        let mut s = "";
+        # TODO add string.pop_back instead
+        let mut char_offsets = ArrayList.new();
+        loop (
+            let c = read_char();
+            if c == '\x03' then (
+                (@current Context).handle_ctrl_c();
+            );
+            if c == '\r' then (
+                # enter
+                break;
+            );
+            if c == '\x7F' then (
+                # backspace
+                if s != "" then (
+                    s = s |> String.substring(0, &mut char_offsets |> ArrayList.pop_back);
+                );
+            ) else if c == '\x1b' then (
+                if read_char() != '[' then panic("unexpected esc");
+                let c = read_char();
+                dbg.print(c);
+            ) else if c == '\f' then (
+                write("\x1b[2J"); # clear
+                write("\x1b[1;1H"); # move cursor to 1,1
+                write(ctx.prompt);
+                write("\x1b[s"); # save cursor 
+            ) else (
+                &mut char_offsets |> ArrayList.push_back(String.length(s));
+                s += to_string(c);
+            );
+            write("\x1b[u"); # reset position
+            write("\x1b[J"); # clear everything after cursor
+            write(ctx.highlight(s));
+            flush();
+        );
+        write("\n");
+        flush();
+        s
+    );
+
     const run = (
         .highlight :: String -> String,
         .prompt :: String,
     ) => (
-        let stdout = std.io.stdout;
-        const Context = @context newtype {
-            .handle_ctrl_c :: () -> (),
-        };
-        let mut buffer = "";
-        let read_char = () => (
-            if buffer == "" then (
-                buffer = read_stdin();
-            );
-            let c = buffer |> String.at(0);
-            let i = Char.string_encoding_len(c);
-            buffer = buffer |> String.substring(i, String.length(buffer) - i);
-            c
-        );
-        let read_line = (prompt :: String) -> String => (
-            std.io.stdout.write(prompt);
-            stdout.write("\x1b[s"); # save cursor
-            let mut s = "";
-            # TODO add string.pop_back instead
-            let mut char_offsets = ArrayList.new();
-            loop (
-                let c = read_char();
-                if c == '\x03' then (
-                    (@current Context).handle_ctrl_c();
-                );
-                if c == '\r' then (
-                    # enter
-                    break;
-                );
-                if c == '\x7F' then (
-                    # backspace
-                    if s != "" then (
-                        s = s |> String.substring(0, &mut char_offsets |> ArrayList.pop_back);
-                    );
-                ) else if c == '\x1b' then (
-                    if read_char() != '[' then panic("unexpected esc");
-                    let c = read_char();
-                    dbg.print(c);
-                ) else if c == '\f' then (
-                    stdout.write("\x1b[2J"); # clear
-                    stdout.write("\x1b[1;1H"); # move cursor to 1,1
-                    std.io.stdout.write(prompt);
-                    stdout.write("\x1b[s"); # save cursor 
-                ) else (
-                    &mut char_offsets |> ArrayList.push_back(String.length(s));
-                    s += to_string(c);
-                );
-                stdout.write("\x1b[u"); # reset position
-                stdout.write("\x1b[J"); # clear everything after cursor
-                stdout.write(highlight(s));
-            );
-            stdout.write("\n");
-            s
-        );
         let main_loop = () => with_return (
             with Context = {
                 .handle_ctrl_c = () => (
                     print("Ctrl-C was pressed, exiting...");
                     return;
                 ),
+                .read_buffer = "",
+                .write_buffer = "",
+                .highlight,
+                .prompt,
             };
             loop (
                 let line = read_line(prompt);
