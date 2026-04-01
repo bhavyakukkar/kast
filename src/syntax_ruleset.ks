@@ -1,4 +1,3 @@
-use (import "./common.ks").*;
 use (import "./log.ks").*;
 use (import "./output.ks").*;
 use (import "./diagnostic.ks").*;

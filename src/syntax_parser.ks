@@ -1,6 +1,5 @@
 use (import "./output.ks").*;
 use (import "./span.ks").*;
-use (import "./common.ks").*;
 use (import "./diagnostic.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./syntax_ruleset.ks").*;

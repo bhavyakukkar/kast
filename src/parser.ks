@@ -1,4 +1,3 @@
-use (import "./common.ks").*;
 use (import "./output.ks").*;
 use (import "./tuple.ks").*;
 use (import "./log.ks").*;

@@ -4,7 +4,6 @@
 #   group^.parts.[part_idx]
 #
 # kast find-ast --pattern '&$arr |> ArrayList.at($idx)' --replace '$arr.[$idx]'
-use (import "./common.ks").*;
 use (import "./tuple.ks").*;
 use (import "./span.ks").*;
 use (import "./source.ks").*;

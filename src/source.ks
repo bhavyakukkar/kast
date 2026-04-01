@@ -1,7 +1,6 @@
 use (import "../deps/uri/src/lib.ks").*;
 use (import "./position.ks").*;
 use (import "./span.ks").*;
-use (import "./common.ks").*;
 use (import "./source_path.ks").*;
 
 module:
