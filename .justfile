@@ -10,7 +10,7 @@ build *args:
         --async always \
         --use-numbers-instead-of-symbols false \
         --target js \
-        --output target/main.mjs \
+        --output target/kast.mjs \
         src/cli/main.ks
 
 watch:
