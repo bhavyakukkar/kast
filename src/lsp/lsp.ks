@@ -102,13 +102,16 @@ const Lsp = (
     const run = (arg :: CliArgs.t) => (
         (@current Stdout).color = false;
         (@current Stderr).color = false;
+        let get_syntax = ruleset_path => (
+            let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
+            let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+            SyntaxParser.parse_syntax_ruleset(&mut token_stream)
+        );
         let mut state :: State = {
-            .syntax_ruleset = (
-                let ruleset_path = "tests/syntax/kast.ks";
-                let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
-                let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
-                SyntaxParser.parse_syntax_ruleset(&mut token_stream)
-            ),
+            .@"syntax" = {
+                .kast = get_syntax("tests/syntax/kast.ks"),
+                .minikast = get_syntax("src/mini/syntax.ks"),
+            },
             .files = OrdMap.new(),
         };
         JsonRpc.run(

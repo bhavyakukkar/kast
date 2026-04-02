@@ -29,6 +29,7 @@ const Diagnostic = (
     const Source = newtype (
         | :Lexer
         | :Parser
+        | :Compiler
         ## Internal error is a bug in the implementation of kast
         | :Internal
         | :Other
@@ -56,6 +57,7 @@ const Diagnostic = (
                         | :Internal => :Some "Internal"
                         | :Lexer => :Some "Lexer"
                         | :Parser => :Some "Parser"
+                        | :Compiler => :Some "Compiler"
                         | :Other => :None
                     );
                     match source_name with (

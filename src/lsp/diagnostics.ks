@@ -37,6 +37,7 @@ const diagnostics = (
                         | :Lexer => "lexer"
                         | :Parser => "parser"
                         | :Internal => "internal"
+                        | :Compiler => "compiler"
                         | :Other => unwind source ()
                     );
                     &mut fields |> OrdMap.add("source", :String source);

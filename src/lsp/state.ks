@@ -6,9 +6,21 @@ const FileState = newtype {
 };
 
 const State = newtype {
-    .syntax_ruleset :: SyntaxRuleset.t,
+    .@"syntax" :: {
+        .kast :: SyntaxRuleset.t,
+        .minikast :: SyntaxRuleset.t,
+    },
     .files :: OrdMap.t[String, FileState],
 };
+
+const get_ext = (path :: String) -> Option.t[String] => (
+    let last_dot = path |> String.last_index_of('.');
+    if last_dot < 0 then (
+        :None
+    ) else (
+        :Some (path |> String.substring_from(last_dot + 1))
+    )
+);
 
 const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String) => (
     Log.info_msg("open_or_change_doc " + Uri.to_string(uri));
@@ -35,8 +47,13 @@ const open_or_change_doc = (state :: &mut State, uri :: Uri, contents :: String)
         };
         let mut lexer = Lexer.new(source);
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+        let ruleset = if std.repr.structurally_equal(get_ext(uri.path), :Some "mks") then (
+            state^.@"syntax".minikast
+        ) else (
+            state^.@"syntax".kast
+        );
         let parsed = Parser.parse(
-            .ruleset = state^.syntax_ruleset,
+            .ruleset,
             .entire_source_span,
             .path = source.path,
             .token_stream = &mut token_stream,

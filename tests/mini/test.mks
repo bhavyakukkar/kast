@@ -1,0 +1,54 @@
+const add = fn (a :: Int32, b :: Int32) -> Bool => (
+    @native "\(a) + \(b)"
+);
+
+const sub = fn (a :: Int32, b :: Int32) -> Bool => (
+    @native "\(a) - \(b)"
+);
+
+const less = fn (a :: Int32, b :: Int32) -> Bool => (
+    @native "\(a) < \(b)"
+);
+
+const fib = fn (n :: Int32) -> Int32 => (
+    if is_less(n, 2) then (
+        1
+    ) else (
+        add(fib(sub(n, 1)), fib(sub(n, 2)))
+    )
+);
+
+const OptionTag = enum {
+    | :Some
+    | :None
+};
+
+const Unit = struct {  };
+
+const OptionData = union {
+    .Some :: Int32,
+    .None :: Unit,
+};
+# const Parse = [Self] newtype { .parse :: Self -> String }
+# impl Int32 as Parse = { .parse :: Int32 -> String = ... }
+# const parse = [T] (s :: String) -> T => (T as Parse).parse(s)
+
+const get_trait_impl = fn (T :: TypeInfo, trait :: TypeInfo -> TypeInfo) -> Any => (
+    something
+);
+
+const parse = fn (T :: TypeInfo, s :: String) -> Any => (
+    let T_as_Parse :: Any = get_trait_impl(T, Parse);
+    let parse :: Any = get_field(T_as_Parse, "parse");
+    let parse = parse as (Any -> Any);
+    call_1(parse, s);
+);
+
+const Option = struct {
+    .tag :: OptionTag,
+    .data :: OptionData,
+};
+
+const main = fn () -> Unit => (
+    print("Hello, world!");
+);
