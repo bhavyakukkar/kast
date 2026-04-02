@@ -2,11 +2,10 @@
 @syntax "then" 0 @wrap always = _ ";" "\n" _ ->;
 @syntax "stmt" 0 @wrap always = _ ";";
 @syntax "assign" 2 @wrap never = assignee " " "=" " " value;
-@syntax "const" 2 @wrap never = "const" " " pattern " " "=" " " value;
-@syntax "enum" 2 @wrap never = "const" " " name " " "=" " " "enum" " " def;
-@syntax "union" 2 @wrap never = "const" " " name " " "=" " " "union" " " def;
-@syntax "struct" 2 @wrap never = "const" " " name " " "=" " " "struct" " " def;
-@syntax "top_level_fn" 2 @wrap never = "const" " " name " " "=" " " "fn" " " def;
+@syntax "const" 2 @wrap never = "const" " " name " " "=" " " value;
+@syntax "enum" 2.5 @wrap never = "enum" " " def;
+@syntax "union" 2.5 @wrap never = "union" " " def;
+@syntax "struct" 2.5 @wrap never = "struct" " " def;
 @syntax "let" 3 @wrap never = "let" " " pattern " " "=" " " value;
 @syntax "leading union" 3.99 @wrap never = "|" " " _;
 @syntax "union" 4 @wrap if_any_assoc = <- _ " "/"\n" "|" " " _;
@@ -17,8 +16,8 @@
 @syntax "field def" 6 @wrap never = "." label " " "::" " " type;
 @syntax "field init" 6 @wrap never = "." label " " "=" " " value;
 @syntax "type ascribe" 6.2 @wrap never = expr " " "::" " " type;
-@syntax "fn_type" 6.5 @wrap never = async=("async" _=("=" value)? " ")? arg " " context=("with" " " _ " ")? result=("->" " " _ _=(" " "with" " " context " ")?);
-@syntax "fn" 7 @wrap never = async=("async" _=("=" value)? " ")? arg " " context=("with" " " _ " ")? result=("->" " " _ " " _=("with" " " context " ")?)? "=>" " " body;
+@syntax "fn_type" 6.5 @wrap never = args " " "->" " " result;
+@syntax "fn" 7 @wrap never = args " " "->" " " result_ty " " "=>" " " body;
 @syntax "if_without_else" 7.5 @wrap never = "if" " " cond " " "then" " " then_case;
 @syntax "if" 7.5 @wrap never = "if" " " cond " " "then" " " then_case " " "else" " " else_case ->;
 @syntax "unwindable" 7.7 @wrap never = "unwindable" " " token: >=1000 " " body;

@@ -1,16 +1,16 @@
-const add = fn (a :: Int32, b :: Int32) -> Bool => (
+const add = (a :: Int32, b :: Int32) -> Bool => (
     @native "\(a) + \(b)"
 );
 
-const sub = fn (a :: Int32, b :: Int32) -> Bool => (
+const sub = (a :: Int32, b :: Int32) -> Bool => (
     @native "\(a) - \(b)"
 );
 
-const less = fn (a :: Int32, b :: Int32) -> Bool => (
+const less = (a :: Int32, b :: Int32) -> Bool => (
     @native "\(a) < \(b)"
 );
 
-const fib = fn (n :: Int32) -> Int32 => (
+const fib = (n :: Int32) -> Int32 => (
     if is_less(n, 2) then (
         1
     ) else (
@@ -33,11 +33,11 @@ const OptionData = union {
 # impl Int32 as Parse = { .parse :: Int32 -> String = ... }
 # const parse = [T] (s :: String) -> T => (T as Parse).parse(s)
 
-const get_trait_impl = fn (T :: TypeInfo, trait :: TypeInfo -> TypeInfo) -> Any => (
+const get_trait_impl = (T :: TypeInfo, trait :: TypeInfo -> TypeInfo) -> Any => (
     something
 );
 
-const parse = fn (T :: TypeInfo, s :: String) -> Any => (
+const parse = (T :: TypeInfo, s :: String) -> Any => (
     let T_as_Parse :: Any = get_trait_impl(T, Parse);
     let parse :: Any = get_field(T_as_Parse, "parse");
     let parse = parse as (Any -> Any);
@@ -49,6 +49,6 @@ const Option = struct {
     .data :: OptionData,
 };
 
-const main = fn () -> Unit => (
+const main = () -> Unit => (
     print("Hello, world!");
 );

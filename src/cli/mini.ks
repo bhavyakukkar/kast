@@ -49,6 +49,6 @@ const Mini = (
             &mut compiler |> root_scope.Mini.Compiler.add_source(source);
         );
         let program = compiler |> root_scope.Mini.Compiler.compile;
-        dbg.print(program);
+        &program |> root_scope.Mini.Ir.Print.program
     );
 );

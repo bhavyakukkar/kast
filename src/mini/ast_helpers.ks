@@ -1,0 +1,111 @@
+use (import "../ast.ks").*;
+use (import "../output.ks").*;
+use (import "../diagnostic.ks").*;
+use (import "../tuple.ks").*;
+
+module:
+
+const AstHelpers = (
+    module:
+
+    const expect_ident = (ast :: Ast.t) -> String => (
+        match ast.shape with (
+            | :Token { .shape = :Ident { .name, ... }, ... } => name
+            | _ => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        (@current Output).write("Expected an ident");
+                    ),
+                    .span = ast.span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
+        )
+    );
+
+    const expect_string_literal = (ast :: Ast.t) -> String => (
+        match ast.shape with (
+            | :Token { .shape = :String { .contents, ... }, ... } => contents
+            | _ => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        (@current Output).write("Expected a string literal");
+                    ),
+                    .span = ast.span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
+        )
+    );
+
+    const expect_rule = (
+        ast :: Ast.t,
+        rule_name :: String,
+    ) -> Ast.Group => with_return (
+        if ast.shape is :Rule { .rule, .root } then (
+            if rule.name == rule_name then (
+                return root;
+            )
+        );
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Compiler,
+            .message = () => (
+                (@current Output).write("Expected " + rule_name);
+            ),
+            .span = ast.span,
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
+    );
+
+    const expect_two_children = (
+        group :: Ast.Group,
+        child_names :: Option.t[type { String, String }],
+    ) -> { Ast.t, Ast.t } => (
+        let { a, b } = match child_names with (
+            | :None => (
+                group.children
+                    |> Tuple.unwrap_unnamed_2
+            )
+            | :Some { a, b } => (
+                let a = (
+                    &group.children
+                        |> Tuple.get_named(a)
+                        |> Option.unwrap
+                )^;
+                let b = (
+                    &group.children
+                        |> Tuple.get_named(b)
+                        |> Option.unwrap
+                )^;
+                { a, b }
+            )
+        );
+        { a |> Ast.unwrap_child_value, b |> Ast.unwrap_child_value }
+    );
+
+    const expect_single_child = (
+        group :: Ast.Group,
+        child_name :: Option.t[String],
+    ) -> Ast.t => (
+        let child = match child_name with (
+            | :None => (
+                group.children
+                    |> Tuple.unwrap_unnamed_1
+            )
+            | :Some name => (
+                &group.children
+                    |> Tuple.get_named(name)
+                    |> Option.unwrap
+            )^
+        );
+        child |> Ast.unwrap_child_value
+    );
+);

@@ -8,9 +8,11 @@ use (import "../lexer.ks").*;
 use (import "../syntax_parser.ks").*;
 use (import "../parser.ks").*;
 use (import "../ast.ks").*;
-use (import "./ir.ks").*;
 use std.collections.OrdMap;
 use std.collections.OrdSet;
+
+use (import "./ir.ks").*;
+use (import "./ast_helpers.ks").*;
 
 module:
 
@@ -19,121 +21,125 @@ const Compiler = (
 
     const TypeKind = newtype (
         | :Enum
-        | :Union
         | :Struct
+        | :Union
     );
 
-    const TopLevelItem = newtype (
-        | :Type {
-            .name :: String,
-            .kind :: TypeKind,
-            .def :: Ast.t,
-        }
-        | :Fn {
-            .name :: String,
-            .def :: Ast.t,
-        }
+    const TopLevelKind = newtype (
+        | :Type TypeKind
+        | :Fn
     );
+
+    const TopLevelItem = newtype {
+        .name :: String,
+        .kind :: TopLevelKind,
+        .def :: Ast.t,
+    };
+
+    const FnType = newtype {
+        .args :: ArrayList.t[Ir.TypeName],
+        .result :: Ir.TypeName,
+    };
 
     const State = newtype {
         .top_level_items :: ArrayList.t[TopLevelItem],
         .type_names :: OrdSet.t[String],
+        .fn_types :: OrdMap.t[String, FnType],
         .program :: Ir.Program,
     };
 
     const init = () -> State => {
         .top_level_items = ArrayList.new(),
         .type_names = OrdSet.new(),
+        .fn_types = OrdMap.new(),
         .program = {
             .types = OrdMap.new(),
             .fns = OrdMap.new(),
         },
     };
 
-    const expect_ident = (ast :: Ast.t) -> String => (
-        match ast.shape with (
-            | :Token { .shape = :Ident { .name, ... }, ... } => name
-            | _ => (
-                let diagnostic = {
-                    .severity = :Error,
-                    .source = :Compiler,
-                    .message = () => (
-                        (@current Output).write("Expected an ident");
-                    ),
-                    .span = ast.span,
-                    .related = ArrayList.new(),
-                };
-                Diagnostic.report_and_unwind(diagnostic)
-            )
-        )
-    );
-
-    const expect_string_literal = (ast :: Ast.t) -> String => (
-        match ast.shape with (
-            | :Token { .shape = :String { .contents, ... }, ... } => contents
-            | _ => (
-                let diagnostic = {
-                    .severity = :Error,
-                    .source = :Compiler,
-                    .message = () => (
-                        (@current Output).write("Expected a string literal");
-                    ),
-                    .span = ast.span,
-                    .related = ArrayList.new(),
-                };
-                Diagnostic.report_and_unwind(diagnostic)
-            )
-        )
-    );
-
     const add_source_ast = (state :: &mut State, ast :: Ast.t) => (
-        let type_def = (kind :: TypeKind, root :: Ast.Group) => (
-            let name = (
-                &root.children
-                    |> Tuple.get_named("name")
-                    |> Option.unwrap
-            )^
-                |> Ast.unwrap_child_value
-                |> expect_ident;
+        let type_def = (name :: String, kind :: TypeKind, root :: Ast.Group) => (
             let def = (
                 &root.children
                     |> Tuple.get_named("def")
                     |> Option.unwrap
             )^
                 |> Ast.unwrap_child_value;
-            let ty = { .name, .kind, .def };
-            &mut state^.top_level_items |> ArrayList.push_back(:Type ty);
+            let def = def
+                |> AstHelpers.expect_rule("record")
+                |> AstHelpers.expect_single_child(:None);
+            let item = {
+                .name,
+                .kind = :Type kind,
+                .def,
+            };
+            &mut state^.top_level_items |> ArrayList.push_back(item);
         );
-
-        for item in Ast.iter_list(
-            ast,
-            .binary_rule_name = "then",
-            .trailing_or_leading_rule_name = :Some "stmt",
-        ) do (
-            match item.shape with (
-                | :Rule { .rule, .root } => (
-                    if rule.name == "enum" then (
-                        type_def(:Enum, root);
-                        continue;
-                    );
-                    if rule.name == "union" then (
-                        type_def(:Union, root);
-                        continue;
-                    );
-                    if rule.name == "struct" then (
-                        type_def(:Struct, root);
-                        continue;
-                    );
-                    if rule.name == "top_level_fn" then (
-                        continue;
-                    );
-                )
+        let top_level_item = (root :: Ast.Group) => with_return (
+            let name = (
+                &root.children
+                    |> Tuple.get_named("name")
+                    |> Option.unwrap
+            )^
+                |> Ast.unwrap_child_value
+                |> AstHelpers.expect_ident;
+            let value = (
+                &root.children
+                    |> Tuple.get_named("value")
+                    |> Option.unwrap
+            )^
+                |> Ast.unwrap_child_value;
+            if value.shape is :Rule { .rule, .root } then (
+                if rule.name == "enum" then (
+                    type_def(name, :Enum, root);
+                    return;
+                );
+                if rule.name == "struct" then (
+                    type_def(name, :Struct, root);
+                    return;
+                );
+                if rule.name == "union" then (
+                    type_def(name, :Union, root);
+                    return;
+                );
+                if rule.name == "fn" then (
+                    let item = {
+                        .name,
+                        .kind = :Fn,
+                        .def = value,
+                    };
+                    &mut state^.top_level_items |> ArrayList.push_back(item);
+                    return;
+                );
             );
             let diagnostic = {
                 .severity = :Error,
                 .source = :Compiler,
                 .message = () => (
                     (@current Output).write("Unexpected top level item");
+                ),
+                .span = value.span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        );
+        for item in Ast.iter_list(
+            ast,
+            .binary_rule_name = "then",
+            .trailing_or_leading_rule_name = :Some "stmt",
+        ) do (
+            if item.shape is :Rule { .rule, .root } then (
+                if rule.name == "const" then (
+                    top_level_item(root);
+                    continue;
+                );
+            );
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    (@current Output).write("Expected const <name> = <top_level_item>");
                 ),
                 .span = item.span,
                 .related = ArrayList.new(),
@@ -165,118 +171,48 @@ const Compiler = (
     const compile = (mut state :: State) -> Ir.Program => (
         with Context = state;
         for item in &state.top_level_items |> ArrayList.iter do (
-            match item^ with (
-                | :Type { .name, ... } => (
-                    &mut state.type_names |> OrdSet.add(name);
+            match item^.kind with (
+                | :Type _ => (
+                    &mut state.type_names |> OrdSet.add(item^.name);
                 )
-                | :Fn _ => panic("TODO fn")
+                | :Fn => ()
             )
         );
         for item in &state.top_level_items |> ArrayList.iter do (
-            match item^ with (
-                | :Type ty => (
-                    process_type(...ty);
+            match item^.kind with (
+                | :Type _ => ()
+                | :Fn => (
+                    preprocess_fn(item^.name, item^.def);
                 )
-                | :Fn _ => panic("TODO fn")
             )
+        );
+        for item in &state.top_level_items |> ArrayList.iter do (
+            process_top_level_item(item^);
         );
         state.program
     );
 
-    const expect_rule_with_two_children = (
-        ast :: Ast.t,
-        .rule :: String = rule_name,
-        .child_names :: Option.t[type { String, String }],
-        .error_msg :: String,
-    ) -> { Ast.t, Ast.t } => with_return (
-        if ast.shape is :Rule { .rule, .root } then (
-            if rule.name == rule_name then (
-                let { a, b } = match child_names with (
-                    | :None => (
-                        root.children
-                            |> Tuple.unwrap_unnamed_2
-                    )
-                    | :Some { a, b } => (
-                        let a = (
-                            &root.children
-                                |> Tuple.get_named(a)
-                                |> Option.unwrap
-                        )^;
-                        let b = (
-                            &root.children
-                                |> Tuple.get_named(b)
-                                |> Option.unwrap
-                        )^;
-                        { a, b }
-                    )
-                );
-                return {
-                    a |> Ast.unwrap_child_value,
-                    b |> Ast.unwrap_child_value,
-                };
-            );
-        );
-        let diagnostic = {
-            .severity = :Error,
-            .source = :Compiler,
-            .message = () => (
-                (@current Output).write(error_msg);
-            ),
-            .span = ast.span,
-            .related = ArrayList.new(),
-        };
-        Diagnostic.report_and_unwind(diagnostic)
-    );
-
-    const expect_rule_with_single_child = (
-        ast :: Ast.t,
-        .rule :: String = rule_name,
-        .child_name :: Option.t[String],
-        .error_msg :: String,
-    ) -> Ast.t => with_return (
-        if ast.shape is :Rule { .rule, .root } then (
-            if rule.name == rule_name then (
-                let child = match child_name with (
-                    | :None => (
-                        root.children
-                            |> Tuple.unwrap_unnamed_1
-                    )
-                    | :Some name => (
-                        &root.children
-                            |> Tuple.get_named(name)
-                            |> Option.unwrap
-                    )^
-                );
-                return child |> Ast.unwrap_child_value;
-            );
-        );
-        let diagnostic = {
-            .severity = :Error,
-            .source = :Compiler,
-            .message = () => (
-                (@current Output).write(error_msg);
-            ),
-            .span = ast.span,
-            .related = ArrayList.new(),
-        };
-        Diagnostic.report_and_unwind(diagnostic)
-    );
-
-    const process_type = (
-        .name :: String,
-        .kind :: TypeKind,
-        .def :: Ast.t,
+    const preprocess_fn = (
+        name :: String,
+        def :: Ast.t,
     ) => (
-        let def = expect_rule_with_single_child(
-            def,
-            .rule = "record",
-            .child_name = :None,
-            .error_msg = "Expected {}",
+        if def.shape is :Rule { .rule, .root } then (
+            if rule.name == "fn" then (
+
+
+            )
         );
+    );
+
+    const process_top_level_item = (item :: TopLevelItem) => (
+        let { .name, .kind, .def } = item;
         match kind with (
-            | :Enum => process_enum(.name, .def)
-            | :Union => process_struct_or_union(.name, .kind, .def)
-            | :Struct => process_struct_or_union(.name, .kind, .def)
+            | :Type kind => match kind with (
+                | :Enum => process_enum(.name, .def)
+                | :Union => process_struct_or_union(.name, .kind, .def)
+                | :Struct => process_struct_or_union(.name, .kind, .def)
+            )
+            | :Fn => ()
         );
     );
 
@@ -291,13 +227,10 @@ const Compiler = (
             .binary_rule_name = "union",
             .trailing_or_leading_rule_name = :Some "leading union",
         ) do (
-            let variant_name = expect_rule_with_single_child(
-                variant,
-                .rule = "variant",
-                .child_name = :Some "label",
-                .error_msg = "Expected :VariantName",
-            )
-                |> expect_ident;
+            let variant_name = variant
+                |> AstHelpers.expect_rule("variant")
+                |> AstHelpers.expect_single_child(:Some "label")
+                |> AstHelpers.expect_ident;
             &mut variants |> OrdSet.add(variant_name);
         );
         let ty = :Enum { .variants };
@@ -316,14 +249,11 @@ const Compiler = (
             .binary_rule_name = "comma",
             .trailing_or_leading_rule_name = :Some "trailing comma",
         ) do (
-            let { name, ty } = expect_rule_with_two_children(
-                field,
-                .rule = "field def",
-                .child_names = :Some { "label", "type" },
-                .error_msg = "Expected .name :: Type",
-            );
-            let name = name |> expect_ident;
-            let ty = { .name = ty |> expect_ident };
+            let { name, ty } = field
+                |> AstHelpers.expect_rule("field def")
+                |> AstHelpers.expect_two_children(:Some { "label", "type" });
+            let name = name |> AstHelpers.expect_ident;
+            let ty = { .name = ty |> AstHelpers.expect_ident };
             &mut fields |> OrdMap.add(name, ty);
         );
         let ty = match kind with (
