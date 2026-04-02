@@ -88,8 +88,26 @@ const Parser = (
             let peek_raw = peek.shape |> Token.Shape.raw;
             if peek_raw == "@syntax" then (
                 let syntax_token = peek;
+                let recording = ctx.token_stream |> TokenStream.start_recording;
                 let ignored_tokens_before = claim_ignored_tokens();
                 ctx.token_stream |> TokenStream.advance;
+                with Diagnostic.UnwindableHandler = {
+                    .unwind_on_error = [T] () -> T => (
+                        let raw_tokens = ctx.token_stream
+                            |> TokenStream.finish_recording(recording);
+                        let mut parts = ArrayList.new();
+                        let mut span = { ...syntax_token.span };
+                        for token in raw_tokens |> ArrayList.into_iter do (
+                            &mut parts |> ArrayList.push_back(:Ignored token);
+                            span.end = token.span.end;
+                        );
+                        return :MadeProgress {
+                            .ignored_tokens_before,
+                            .shape = :Error { .parts },
+                            .span,
+                        }
+                    ),
+                };
                 let {
                     .command,
                     .raw_tokens = command_raw_tokens,
@@ -108,18 +126,13 @@ const Parser = (
                     | :MadeProgress ast => :Some ast
                     | :NoProgress => :None
                 );
+                let raw_tokens = ctx.token_stream
+                    |> TokenStream.finish_recording(recording);
                 return :MadeProgress {
                     .shape = :Syntax {
                         .command = {
                             .shape = command,
-                            .raw_tokens = (
-                                let mut tokens = ArrayList.new();
-                                &mut tokens |> ArrayList.push_back(syntax_token);
-                                for token in command_raw_tokens |> ArrayList.into_iter do (
-                                    &mut tokens |> ArrayList.push_back(token);
-                                );
-                                tokens
-                            ),
+                            .raw_tokens,
                         },
                         .value_after,
                     },
