@@ -2,6 +2,7 @@ use (import "../log.ks").*;
 use (import "../output.ks").*;
 use (import "../diagnostic.ks").*;
 use (import "../tuple.ks").*;
+use (import "../span.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
 use (import "../token_stream.ks").*;
@@ -9,6 +10,7 @@ use (import "../lexer.ks").*;
 use (import "../syntax_parser.ks").*;
 use (import "../parser.ks").*;
 use (import "../ast.ks").*;
+use (import "../highlight.ks").*;
 use std.collections.OrdMap;
 use std.collections.OrdSet;
 
@@ -195,8 +197,150 @@ const Compiler = (
         state.program
     );
 
-    const parse_type = (ast :: Ast.t) -> Ir.TypeName => with_return (
+    const Scope = newtype {
+        .parent :: Option.t[Scope],
+        .vars :: OrdMap.t[String, Ir.Type],
+    };
+    const ScopeContext = @context Scope;
+
+    const find_in_scope = (scope :: &Scope, name :: String) -> Option.t[Ir.Type] => (
+        match &scope^.vars |> OrdMap.get(name) with (
+            | :Some &result => :Some result
+            | :None => match scope^.parent with (
+                | :Some ref parent => find_in_scope(parent, name)
+                | :None => :None
+            )
+        )
+    );
+
+    const find_ident_ty = (span :: Span, name :: String) -> Ir.Type => with_return (
+        let ctx = @current Context;
+        if find_in_scope(&(@current ScopeContext), name) is :Some result then (
+            return result;
+        );
+        if &ctx.fn_types |> OrdMap.get(name) is :Some &fn_type then (
+            return :Fn fn_type;
+        );
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Compiler,
+            .message = () => (
+                let output = @current Output;
+                output.write(name);
+                output.write(" not found in current scope");
+            ),
+            .span,
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
+    );
+
+    const type_check = (span :: Span, expected :: Ir.Type, actual :: Ir.Type) => (
+        if not std.repr.structurally_equal(expected, actual) then (
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    let output = @current Output;
+                    output.write("Expected type ");
+                    Ir.Print.type_name(&expected);
+                    output.write(", got ");
+                    Ir.Print.type_name(&actual);
+                ),
+                .span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        );
+    );
+
+    const parse_expr = (expected_ty :: Option.t[Ir.Type], ast :: Ast.t) -> Ir.Expr => (
+        let { .shape, .ty } = with_return (
+            match ast.shape with (
+                | :Empty => return {
+                    .shape = :Unit,
+                    .ty = :Unit,
+                }
+                | :Rule { .rule, .root } => (
+                    if rule.name == "stmt" then (
+                        let inner = root |> AstHelpers.expect_single_child(:None);
+                        return {
+                            .shape = :Stmt parse_expr(:None, inner),
+                            .ty = :Unit,
+                        };
+                    );
+                    if rule.name == "scope" then (
+                        with ScopeContext = {
+                            .parent = :Some (@current ScopeContext),
+                            .vars = OrdMap.new(),
+                        };
+                        let inner = root |> AstHelpers.expect_single_child(:None);
+                        let inner = parse_expr(expected_ty, inner);
+                        return {
+                            .shape = :Scope inner,
+                            .ty = inner.ty,
+                        };
+                    );
+                    if rule.name == "then" then (
+                        let mut last_expr_ty = :Unit;
+                        let mut expr_asts = ArrayList.new();
+                        for expr in Ast.iter_list(
+                            ast,
+                            .binary_rule_name = "then",
+                            .trailing_or_leading_rule_name = :None,
+                        ) do (
+                            &mut expr_asts |> ArrayList.push_back(expr);
+                        );
+                        let mut exprs = ArrayList.new();
+                        for { i, &expr } in &expr_asts |> ArrayList.iter |> std.iter.enumerate do (
+                            let expected_ty = if i + 1 < ArrayList.length(&expr_asts) then (
+                                :None
+                            ) else (
+                                expected_ty
+                            );
+                            let expr = parse_expr(expected_ty, expr);
+                            &mut exprs |> ArrayList.push_back(expr);
+                        );
+                        return {
+                            .shape = :Then exprs,
+                            .ty = last_expr_ty,
+                        };
+                    );
+                )
+                | :Token token => (
+                    match token.shape with (
+                        | :Ident ident => (
+                            return {
+                                .shape = :Ident ident.name,
+                                .ty = find_ident_ty(token.span, ident.name),
+                            }
+                        )
+                        | _ => ()
+                    )
+                )
+                | _ => ()
+            );
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    (@current Output).write("Expected an expr, got ");
+                    Highlight.print_single_line(&ast);
+                ),
+                .span = ast.span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        );
+        if expected_ty is :Some expected_ty then (
+            type_check(ast.span, expected_ty, ty);
+        );
+        { .shape, .ty, .span = ast.span }
+    );
+
+    const parse_type = (ast :: Ast.t) -> Ir.Type => with_return (
         match ast.shape with (
+            | :Empty => return :Unit
             | :Rule { .rule, .root } => (
                 if rule.name == "fn_type" then (
                     let { arg_asts, result } = root
@@ -214,6 +358,11 @@ const Compiler = (
                     );
                     let result = parse_type(result);
                     return :Fn { .args, .result };
+                );
+                if rule.name == "scope" then (
+                    let inner = root
+                        |> AstHelpers.expect_single_child(:None);
+                    return parse_type(inner);
                 );
             )
             | :Token token => match token.shape with (
@@ -244,7 +393,8 @@ const Compiler = (
             .severity = :Error,
             .source = :Compiler,
             .message = () => (
-                (@current Output).write("Expected a type");
+                (@current Output).write("Expected a type, got ");
+                Highlight.print_single_line(&ast);
             ),
             .span = ast.span,
             .related = ArrayList.new(),
@@ -304,8 +454,50 @@ const Compiler = (
                 | :Union => process_struct_or_union(.name, .kind, .def)
                 | :Struct => process_struct_or_union(.name, .kind, .def)
             )
-            | :Fn => ()
+            | :Fn => process_fn(.name, .def)
         );
+    );
+
+    const process_fn = (
+        .name :: String,
+        .def :: Ast.t,
+    ) => (
+        let mut ctx = @current Context;
+        let fn_type = &ctx.fn_types |> OrdMap.get(name) |> Option.unwrap;
+        let { args_ast, result_ty, body } = def
+            |> AstHelpers.expect_rule("fn")
+            |> AstHelpers.expect_three_children("args", "result_ty", "body");
+        let args_ast = args_ast
+            |> AstHelpers.expect_rule("scope")
+            |> AstHelpers.expect_single_child(:None);
+        let mut args :: ArrayList.t[Ir.FnArg] = ArrayList.new();
+        for arg in Ast.iter_list(
+            args_ast,
+            .binary_rule_name = "comma",
+            .trailing_or_leading_rule_name = :Some "trailing comma",
+        ) do (
+            let { name, ty } = arg
+                |> AstHelpers.expect_rule("type ascribe")
+                |> AstHelpers.expect_two_children(:Some { "expr", "type" });
+            let name = name |> AstHelpers.expect_ident;
+            let ty = parse_type(ty);
+            &mut args |> ArrayList.push_back({ .name, .ty });
+        );
+        let mut scope = {
+            .parent = :None,
+            .vars = OrdMap.new(),
+        };
+        for arg in &args |> ArrayList.iter do (
+            &mut scope.vars |> OrdMap.add(arg^.name, arg^.ty);
+        );
+        with ScopeContext = scope;
+        let body = parse_expr(:Some fn_type^.result, body);
+        let fn = {
+            .args,
+            .result_ty = fn_type^.result,
+            .body,
+        };
+        &mut ctx.program.fns |> OrdMap.add(name, fn);
     );
 
     const process_enum = (

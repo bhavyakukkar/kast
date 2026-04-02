@@ -14,26 +14,32 @@ const Ir = (
             .variants :: OrdSet.t[String],
         }
         | :Union {
-            .variants :: OrdMap.t[String, TypeName],
+            .variants :: OrdMap.t[String, Type],
         }
         | :Struct {
-            .fields :: OrdMap.t[String, TypeName],
+            .fields :: OrdMap.t[String, Type],
         }
-        | :Alias TypeName
+        | :Alias Type
     );
 
     const FnType = newtype {
-        .args :: ArrayList.t[TypeName],
-        .result :: TypeName,
+        .args :: ArrayList.t[Type],
+        .result :: Type,
     };
 
-    const TypeName = newtype (
+    const Type = newtype (
+        | :Unit
+        | :String
         | :Named String
         | :Fn FnType
     );
 
     const ExprShape = newtype (
+        | :Unit
+        | :Ident String
+        | :Stmt Expr
         | :Then ArrayList.t[Expr]
+        | :Scope Expr
         | :Apply {
             .f :: Expr,
             .args :: ArrayList.t[Expr],
@@ -42,6 +48,7 @@ const Ir = (
 
     const Expr = newtype {
         .shape :: ExprShape,
+        .ty :: Type,
         .span :: Span,
     };
 
@@ -77,9 +84,11 @@ const Ir = (
             Ir.Print.type_name(&self^.result);
         );
 
-        const type_name = (self :: &TypeName) => (
+        const type_name = (self :: &Type) => (
             let output = @current Output;
             match self^ with (
+                | :Unit => output.write("()")
+                | :String => output.write("String")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type(ty)
             )
