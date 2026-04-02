@@ -27,7 +27,7 @@ watch:
 test:
     just build
     fd --type file --extension ks --exec-batch kast tokenize
-    kast parse_syntax_rules tests/syntax/*.ks
+    kast parse-syntax-rules tests/syntax/*.ks
     kast parse-json tests/json/*.json
     kast parse-json --use-kast-parser tests/json/*.json
     fd --type file --extension ks --exec-batch kast parse
