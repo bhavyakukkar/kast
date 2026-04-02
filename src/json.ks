@@ -147,9 +147,9 @@ const Json = (
         ) do (
             if field.shape is :Rule { .rule, .root = { .children, ... } } then (
                 if rule.name == "field" then (
-                    let name = (&children |> Tuple.get_named("name") |> Option.unwrap)^
+                    let name = (&children |> Tuple.get_named("name"))^
                         |> Ast.unwrap_child_value;
-                    let value = (&children |> Tuple.get_named("value") |> Option.unwrap)^
+                    let value = (&children |> Tuple.get_named("value"))^
                         |> Ast.unwrap_child_value;
                     let name = ast_to_name(name);
                     let value = from_ast(value);

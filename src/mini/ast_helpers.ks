@@ -75,20 +75,28 @@ const AstHelpers = (
                     |> Tuple.unwrap_unnamed_2
             )
             | :Some { a, b } => (
-                let a = (
-                    &group.children
-                        |> Tuple.get_named(a)
-                        |> Option.unwrap
-                )^;
-                let b = (
-                    &group.children
-                        |> Tuple.get_named(b)
-                        |> Option.unwrap
-                )^;
+                let a = (&group.children |> Tuple.get_named(a))^;
+                let b = (&group.children |> Tuple.get_named(b))^;
                 { a, b }
             )
         );
         { a |> Ast.unwrap_child_value, b |> Ast.unwrap_child_value }
+    );
+
+    const expect_three_children = (
+        group :: Ast.Group,
+        a :: String,
+        b :: String,
+        c :: String,
+    ) -> { Ast.t, Ast.t, Ast.t } => (
+        let a = (&group.children |> Tuple.get_named(a))^;
+        let b = (&group.children |> Tuple.get_named(b))^;
+        let c = (&group.children |> Tuple.get_named(c))^;
+        {
+            a |> Ast.unwrap_child_value,
+            b |> Ast.unwrap_child_value,
+            c |> Ast.unwrap_child_value,
+        }
     );
 
     const expect_single_child = (
@@ -100,11 +108,7 @@ const AstHelpers = (
                 group.children
                     |> Tuple.unwrap_unnamed_1
             )
-            | :Some name => (
-                &group.children
-                    |> Tuple.get_named(name)
-                    |> Option.unwrap
-            )^
+            | :Some name => (&group.children |> Tuple.get_named(name))^
         );
         child |> Ast.unwrap_child_value
     );

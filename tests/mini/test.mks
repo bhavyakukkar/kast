@@ -1,8 +1,11 @@
-const add = (a :: Int32, b :: Int32) -> Bool => (
+const Int32 = @opaque_type;
+const Bool = @opaque_type;
+
+const add = (a :: Int32, b :: Int32) -> Int32 => (
     @native "\(a) + \(b)"
 );
 
-const sub = (a :: Int32, b :: Int32) -> Bool => (
+const sub = (a :: Int32, b :: Int32) -> Int32 => (
     @native "\(a) - \(b)"
 );
 
@@ -28,25 +31,6 @@ const Unit = struct {  };
 const OptionData = union {
     .Some :: Int32,
     .None :: Unit,
-};
-# const Parse = [Self] newtype { .parse :: Self -> String }
-# impl Int32 as Parse = { .parse :: Int32 -> String = ... }
-# const parse = [T] (s :: String) -> T => (T as Parse).parse(s)
-
-const get_trait_impl = (T :: TypeInfo, trait :: TypeInfo -> TypeInfo) -> Any => (
-    something
-);
-
-const parse = (T :: TypeInfo, s :: String) -> Any => (
-    let T_as_Parse :: Any = get_trait_impl(T, Parse);
-    let parse :: Any = get_field(T_as_Parse, "parse");
-    let parse = parse as (Any -> Any);
-    call_1(parse, s);
-);
-
-const Option = struct {
-    .tag :: OptionTag,
-    .data :: OptionData,
 };
 
 const main = () -> Unit => (

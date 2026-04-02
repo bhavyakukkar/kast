@@ -27,7 +27,7 @@ const Tuple = (
     const get = [T] (
         self :: &Tuple.t[T],
         member :: Member,
-    ) -> Option.t[type (&T)] => (
+    ) -> &T => (
         match member with (
             | :Index i => get_unnamed(self, i)
             | :Name name => get_named(self, name)
@@ -35,6 +35,37 @@ const Tuple = (
     );
 
     const get_unnamed = [T] (
+        self :: &Tuple.t[T],
+        idx :: Int32,
+    ) -> &T => (
+        if 0 <= idx and idx < ArrayList.length(&self^.unnamed) then (
+            ArrayList.at(&self^.unnamed, idx)
+        ) else (
+            panic("tuple idx out of range")
+        )
+    );
+
+    const get_named = [T] (
+        self :: &Tuple.t[T],
+        name :: String,
+    ) -> &T => (
+        match &self^.named |> OrdMap.get(name) with (
+            | :Some value => value
+            | :None => panic("tuple doesnt have field " + String.escape(name))
+        )
+    );
+
+    const get_opt = [T] (
+        self :: &Tuple.t[T],
+        member :: Member,
+    ) -> Option.t[type (&T)] => (
+        match member with (
+            | :Index i => get_unnamed_opt(self, i)
+            | :Name name => get_named_opt(self, name)
+        )
+    );
+
+    const get_unnamed_opt = [T] (
         self :: &Tuple.t[T],
         idx :: Int32,
     ) -> Option.t[type (&T)] => (
@@ -45,7 +76,7 @@ const Tuple = (
         )
     );
 
-    const get_named = [T] (
+    const get_named_opt = [T] (
         self :: &Tuple.t[T],
         name :: String,
     ) -> Option.t[type (&T)] => (

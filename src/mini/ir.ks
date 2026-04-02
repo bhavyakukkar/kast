@@ -19,15 +19,18 @@ const Ir = (
         | :Struct {
             .fields :: OrdMap.t[String, TypeName],
         }
-        | :Fn {
-            .args :: ArrayList.t[TypeName],
-            .result :: TypeName,
-        }
+        | :Alias TypeName
     );
 
-    const TypeName = newtype {
-        .name :: String,
+    const FnType = newtype {
+        .args :: ArrayList.t[TypeName],
+        .result :: TypeName,
     };
+
+    const TypeName = newtype (
+        | :Named String
+        | :Fn FnType
+    );
 
     const ExprShape = newtype (
         | :Then ArrayList.t[Expr]
@@ -60,6 +63,27 @@ const Ir = (
 
     const Print = (
         module:
+
+        const fn_type = (self :: &FnType) => (
+            let output = @current Output;
+            output.write("(");
+            for { i, arg_ty } in &self^.args |> ArrayList.iter |> std.iter.enumerate do (
+                if i != 0 then (
+                    output.write(", ");
+                );
+                Ir.Print.type_name(arg_ty);
+            );
+            output.write(") -> ");
+            Ir.Print.type_name(&self^.result);
+        );
+
+        const type_name = (self :: &TypeName) => (
+            let output = @current Output;
+            match self^ with (
+                | :Named name => output.write(name)
+                | :Fn ref ty => Print.fn_type(ty)
+            )
+        );
 
         const program = (self :: &Program) => (
             let output = @current Output;

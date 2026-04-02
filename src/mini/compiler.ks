@@ -1,3 +1,4 @@
+use (import "../log.ks").*;
 use (import "../output.ks").*;
 use (import "../diagnostic.ks").*;
 use (import "../tuple.ks").*;
@@ -20,6 +21,7 @@ const Compiler = (
     module:
 
     const TypeKind = newtype (
+        | :Opaque
         | :Enum
         | :Struct
         | :Union
@@ -36,15 +38,10 @@ const Compiler = (
         .def :: Ast.t,
     };
 
-    const FnType = newtype {
-        .args :: ArrayList.t[Ir.TypeName],
-        .result :: Ir.TypeName,
-    };
-
     const State = newtype {
         .top_level_items :: ArrayList.t[TopLevelItem],
         .type_names :: OrdSet.t[String],
-        .fn_types :: OrdMap.t[String, FnType],
+        .fn_types :: OrdMap.t[String, Ir.FnType],
         .program :: Ir.Program,
     };
 
@@ -63,7 +60,6 @@ const Compiler = (
             let def = (
                 &root.children
                     |> Tuple.get_named("def")
-                    |> Option.unwrap
             )^
                 |> Ast.unwrap_child_value;
             let def = def
@@ -80,14 +76,12 @@ const Compiler = (
             let name = (
                 &root.children
                     |> Tuple.get_named("name")
-                    |> Option.unwrap
             )^
                 |> Ast.unwrap_child_value
                 |> AstHelpers.expect_ident;
             let value = (
                 &root.children
                     |> Tuple.get_named("value")
-                    |> Option.unwrap
             )^
                 |> Ast.unwrap_child_value;
             if value.shape is :Rule { .rule, .root } then (
@@ -101,6 +95,15 @@ const Compiler = (
                 );
                 if rule.name == "union" then (
                     type_def(name, :Union, root);
+                    return;
+                );
+                if rule.name == "opaque_type" then (
+                    let item = {
+                        .name,
+                        .kind = :Type :Opaque,
+                        .def = value,
+                    };
+                    &mut state^.top_level_items |> ArrayList.push_back(item);
                     return;
                 );
                 if rule.name == "fn" then (
@@ -192,22 +195,111 @@ const Compiler = (
         state.program
     );
 
+    const parse_type = (ast :: Ast.t) -> Ir.TypeName => with_return (
+        match ast.shape with (
+            | :Rule { .rule, .root } => (
+                if rule.name == "fn_type" then (
+                    let { arg_asts, result } = root
+                        |> AstHelpers.expect_two_children(:Some { "args", "result" });
+                    let arg_asts = arg_asts
+                        |> AstHelpers.expect_rule("scope")
+                        |> AstHelpers.expect_single_child(:None);
+                    let mut args = ArrayList.new();
+                    for arg_ast in Ast.iter_list(
+                        arg_asts,
+                        .binary_rule_name = "comma",
+                        .trailing_or_leading_rule_name = :Some "trailing comma",
+                    ) do (
+                        &mut args |> ArrayList.push_back(parse_type(arg_ast));
+                    );
+                    let result = parse_type(result);
+                    return :Fn { .args, .result };
+                );
+            )
+            | :Token token => match token.shape with (
+                | :Ident ident => (
+                    let name = ident.name;
+                    if not &(@current Context).type_names |> OrdSet.contains(name) then (
+                        let diagnostic = {
+                            .severity = :Error,
+                            .source = :Compiler,
+                            .message = () => (
+                                let output = @current Output;
+                                output.write("Type ");
+                                output.write(String.escape(name));
+                                output.write(" not found");
+                            ),
+                            .span = token.span,
+                            .related = ArrayList.new(),
+                        };
+                        Diagnostic.report(diagnostic);
+                    );
+                    return :Named name;
+                )
+                | _ => ()
+            )
+            | _ => ()
+        );
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Compiler,
+            .message = () => (
+                (@current Output).write("Expected a type");
+            ),
+            .span = ast.span,
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
+    );
+
     const preprocess_fn = (
         name :: String,
         def :: Ast.t,
     ) => (
-        if def.shape is :Rule { .rule, .root } then (
-            if rule.name == "fn" then (
-
-
+        let { args, result_ty, body } = def
+            |> AstHelpers.expect_rule("fn")
+            |> AstHelpers.expect_three_children("args", "result_ty", "body");
+        let args = args
+            |> AstHelpers.expect_rule("scope")
+            |> AstHelpers.expect_single_child(:None);
+        let mut arg_types = ArrayList.new();
+        for arg in Ast.iter_list(
+            args,
+            .binary_rule_name = "comma",
+            .trailing_or_leading_rule_name = :Some "trailing comma",
+        ) do (
+            let { name, ty } = arg
+                |> AstHelpers.expect_rule("type ascribe")
+                |> AstHelpers.expect_two_children(:Some { "expr", "type" });
+            let ty = parse_type(ty);
+            &mut arg_types |> ArrayList.push_back(ty);
+        );
+        let result_ty = parse_type(result_ty);
+        let mut ctx = @current Context;
+        let fn_type = {
+            .args = arg_types,
+            .result = result_ty,
+        };
+        Log.info(
+            () => (
+                let output = @current Output;
+                output.write("fn ");
+                output.write(name);
+                output.write(" :: ");
+                Ir.Print.fn_type(&fn_type);
             )
         );
+        &mut ctx.fn_types |> OrdMap.add(name, fn_type);
     );
 
     const process_top_level_item = (item :: TopLevelItem) => (
+        let mut ctx = @current Context;
         let { .name, .kind, .def } = item;
         match kind with (
             | :Type kind => match kind with (
+                | :Opaque => (
+                    &mut ctx.program.types |> OrdMap.add(name, :Opaque);
+                )
                 | :Enum => process_enum(.name, .def)
                 | :Union => process_struct_or_union(.name, .kind, .def)
                 | :Struct => process_struct_or_union(.name, .kind, .def)
@@ -253,7 +345,7 @@ const Compiler = (
                 |> AstHelpers.expect_rule("field def")
                 |> AstHelpers.expect_two_children(:Some { "label", "type" });
             let name = name |> AstHelpers.expect_ident;
-            let ty = { .name = ty |> AstHelpers.expect_ident };
+            let ty = parse_type(ty);
             &mut fields |> OrdMap.add(name, ty);
         );
         let ty = match kind with (
