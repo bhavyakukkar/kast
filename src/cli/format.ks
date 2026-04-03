@@ -57,7 +57,7 @@ const Format = (
                     i += 1;
                     continue;
                 );
-                &mut paths |> ArrayList.push_back(arg);
+                &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
                 i += 1;
             );
             { .ruleset, .paths, .highlight, .inplace }

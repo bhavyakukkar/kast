@@ -69,7 +69,7 @@ const StructuralFindAndReplace = (
                     i += 1;
                     continue;
                 );
-                &mut paths |> ArrayList.push_back(arg);
+                &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
                 i += 1;
             );
             let pattern = pattern |> Option.unwrap_or_else(() => panic("missing --pattern arg"));

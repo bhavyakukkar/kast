@@ -78,7 +78,7 @@ const Mini = (
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
-                    &mut paths |> ArrayList.push_back(arg);
+                    &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
                     i += 1;
                 );
                 {

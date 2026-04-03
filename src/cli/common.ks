@@ -2,6 +2,17 @@ module:
 
 const Common = (
     module:
+    # Expect "file.ks" or "file.mks"
+    const ks_path_arg = (path :: String) -> String => (
+        let fail = () => panic("Expected .ks or .mks path, got " + String.escape(path));
+        if String.length(path) == 0 then fail();
+        if path |> String.at(0) == '-' then fail();
+        let last_dot = path |> String.last_index_of('.');
+        if last_dot < 0 then fail();
+        let ext = path |> String.substring_from(last_dot);
+        if not (ext == ".ks" or ext == ".mks") then fail();
+        path
+    );
 
     const Args = (
         module:
