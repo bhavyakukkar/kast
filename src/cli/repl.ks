@@ -4,6 +4,7 @@ use (import "../source.ks").*;
 use (import "../source_path.ks").*;
 use (import "../lexer.ks").*;
 use (import "../token_stream.ks").*;
+use (import "../syntax_ruleset.ks").*;
 use (import "../syntax_parser.ks").*;
 use (import "../parser.ks").*;
 use (import "../ast.ks").*;
@@ -21,14 +22,18 @@ const Repl = (
 
         const t = newtype {  };
 
-        const default = () -> t => {} ;
+        const default = () -> t => {  };
     );
 
-    const run = (common_args :: Common.Args.t, args :: Args.t) => (
-        let ruleset_path = "tests/syntax/kast.ks";
-        let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
-        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
-        let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
+    const Line = newtype {
+        .raw :: String,
+        .parsed :: Parser.Parsed,
+    };
+
+    const run_with = (
+        .ruleset :: SyntaxRuleset.t,
+        .eval :: Line -> (),
+    ) => (
         let tokenize = contents => (
             with Diagnostic.HandlerContext = {
                 .stop_on_error = false,
@@ -59,7 +64,7 @@ const Repl = (
             );
             ranges
         );
-        let highlight = contents => (
+        let parse = contents => (
             with Diagnostic.HandlerContext = {
                 .stop_on_error = false,
                 .handle = diagnostic => (
@@ -74,12 +79,15 @@ const Repl = (
             };
             let mut lexer = Lexer.new(source);
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
-            let parsed = Parser.parse(
+            Parser.parse(
                 .ruleset,
                 .entire_source_span = Source.entire_span(&source),
                 .path = source.path,
                 .token_stream = &mut token_stream,
-            );
+            )
+        );
+        let highlight = contents => (
+            let parsed = parse(contents);
             let mut result = "";
             with Output = new_output(
                 .write = s => (
@@ -99,6 +107,39 @@ const Repl = (
                 )
             )
         );
-        Readline.run(.tokenize, .highlight, .prompt);
+        let mut ctrl_c_pressed_times = 0;
+        loop (
+            let line = Readline.read_line(
+                .prompt,
+                .tokenize,
+                .highlight,
+                .handle_ctrl_c = () => (
+                    ctrl_c_pressed_times += 1;
+                    if ctrl_c_pressed_times == 1 then (
+                        let output = @current Output;
+                        output.write("\nPress Ctrl-C again to exit\n");
+                        continue;
+                    ) else (
+                        std.sys.exit(-1);
+                    );
+                ),
+            );
+            # reset if Ctrl-C was not pressed
+            ctrl_c_pressed_times = 0;
+            let parsed = parse(line);
+            eval({ .raw = line, .parsed });
+        );
+    );
+
+    const run = (common_args :: Common.Args.t, args :: Args.t) => (
+        let ruleset_path = "tests/syntax/kast.ks";
+        let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
+        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+        let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
+        let eval = (line :: Line) => (
+            Ast.print(&line.parsed.ast);
+            (@current Output).write("\n");
+        );
+        run_with(.ruleset, .eval);
     );
 );

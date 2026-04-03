@@ -343,7 +343,10 @@ const tty = (
         )
     );
 
-    const run = (f :: () -> ()) => (
+    const run = [T] (
+        f :: () -> T,
+        .handle_ctrl_c :: () -> (),
+    ) -> T => (
         const enter_raw_mode = () => (
             @native "process.stdin.setRawMode(true)";
             @native "process.stdin.resume()";
@@ -354,22 +357,18 @@ const tty = (
         );
 
         let f = () => (
-            with_return (
-                with Context = {
-                    .handle_ctrl_c = () => (
-                        print("Ctrl-C was pressed, exiting...");
-                        return;
-                    ),
-                    .last_read = "",
-                    .read_buffer = Queue.new(),
-                    .write_buffer = "",
-                    .cursor_position_report = :None,
-                };
-                f();
-            );
+            with Context = {
+                .handle_ctrl_c,
+                .last_read = "",
+                .read_buffer = Queue.new(),
+                .write_buffer = "",
+                .cursor_position_report = :None,
+            };
+            let result = f();
             set_cursor_type(:Default);
+            result
         );
         enter_raw_mode();
-        @native "await (async ()=>{try { \(f()) } finally { \(exit_raw_mode()) }})()"
+        @native "await (async ()=>{try { return \(f()) } finally { \(exit_raw_mode()) }})()"
     );
 );

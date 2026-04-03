@@ -20,7 +20,7 @@ const Readline = (
         .prompt :: String,
     };
 
-    const read_line = (prompt :: String) -> String => (
+    const read_line_impl = (prompt :: String) -> String => (
         let ctx = @current Context;
         tty.write(ctx.prompt);
         tty.flush();
@@ -225,24 +225,24 @@ const Readline = (
         result.before_cursor + result.after_cursor
     );
 
-    const run = (
+    const read_line = (
+        .prompt :: String,
         .tokenize :: String -> ArrayList.t[Range],
         .highlight :: String -> String,
-        .prompt :: String,
-    ) => (
-        let main_loop = () => (
-            tty.set_cursor_type(:BlinkingBar);
-            with Context = {
-                .tokenize,
-                .highlight,
-                .prompt,
-            };
-            loop (
-                let line = read_line(prompt);
-                dbg.print(line);
-            )
-        );
-        tty.run(main_loop);
+        .handle_ctrl_c :: () -> (),
+    ) -> String => (
+        tty.run(
+            () => (
+                tty.set_cursor_type(:BlinkingBar);
+                with Context = {
+                    .tokenize,
+                    .highlight,
+                    .prompt,
+                };
+                read_line_impl(prompt)
+            ),
+            .handle_ctrl_c,
+        )
     );
 );
 # Repl.run(.highlight = s => s, .prompt = "> ");
