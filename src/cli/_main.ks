@@ -17,6 +17,7 @@ use (import "./mini.ks").*;
 with Stdout = new_std_output(std.io.stdout.write, .color = true);
 with Stderr = new_std_output(std.io.stderr.write, .color = true);
 with Output = (@current Stdout);
+with Diagnostic.AbortHandler = Diagnostic.default_abort_handler;
 
 const Args = (
     module:

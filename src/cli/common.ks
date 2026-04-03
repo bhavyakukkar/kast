@@ -1,10 +1,12 @@
+use (import "../diagnostic.ks").*;
+
 module:
 
 const Common = (
     module:
     # Expect "file.ks" or "file.mks"
     const ks_path_arg = (path :: String) -> String => (
-        let fail = () => panic("Expected .ks or .mks path, got " + String.escape(path));
+        let fail = () => Diagnostic.abort("Expected .ks or .mks path, got " + String.escape(path));
         if String.length(path) == 0 then fail();
         if path |> String.at(0) == '-' then fail();
         let last_dot = path |> String.last_index_of('.');
@@ -44,7 +46,7 @@ const Common = (
                 ) else if mode == "json" then (
                     :Json
                 ) else (
-                    panic("Unknown output mode " + String.escape(mode))
+                    Diagnostic.abort("Unknown output mode " + String.escape(mode))
                 );
                 args^.output_mode = mode;
                 arg_idx^ += 2;
@@ -60,7 +62,7 @@ const Common = (
                 arg_idx^ += 2;
                 return;
             );
-            panic("Unexpected arg " + arg);
+            Diagnostic.abort("Unexpected arg " + arg);
         );
     );
 );

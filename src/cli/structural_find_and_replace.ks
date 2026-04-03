@@ -1,4 +1,5 @@
 use (import "./common.ks").*;
+use (import "../diagnostic.ks").*;
 use (import "../output.ks").*;
 use (import "../position.ks").*;
 use (import "../source.ks").*;
@@ -72,7 +73,7 @@ const StructuralFindAndReplace = (
                 &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
                 i += 1;
             );
-            let pattern = pattern |> Option.unwrap_or_else(() => panic("missing --pattern arg"));
+            let pattern = pattern |> Option.unwrap_or_else(() => Diagnostic.abort("missing --pattern arg"));
             {
                 .ruleset,
                 .paths,
@@ -168,7 +169,7 @@ const StructuralFindAndReplace = (
                         );
                         let path = match path |> SourcePath.file_path with (
                             | :Some path => path
-                            | :None => panic("Inplace is only available given file path")
+                            | :None => Diagnostic.abort("Inplace is only available given file path")
                         );
                         # TODO std.fs.write_file
                         @native "(await import('fs')).writeFileSync(\(path), \(result))";

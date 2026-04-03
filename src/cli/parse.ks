@@ -1,4 +1,5 @@
 use (import "./common.ks").*;
+use (import "../diagnostic.ks").*;
 use (import "../output.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
@@ -32,7 +33,7 @@ const Parse = (
                 let arg = std.sys.argv_at(i);
                 if arg == "--ruleset" and &fix_ruleset |> Option.is_none then (
                     if i + 1 >= std.sys.argc() then (
-                        panic("Expected ruleset path");
+                        Diagnostic.abort("Expected ruleset path");
                     );
                     ruleset_path = :Some std.sys.argv_at(i + 1);
                     i += 2;

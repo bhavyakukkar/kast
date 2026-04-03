@@ -1,4 +1,5 @@
 use (import "./common.ks").*;
+use (import "../diagnostic.ks").*;
 use (import "../output.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
@@ -42,7 +43,7 @@ const Mini = (
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
-                    panic("Unexpected arg " + String.escape(arg));
+                    Diagnostic.abort("Unexpected arg " + String.escape(arg));
                     i += 1;
                 );
                 {  }
@@ -90,7 +91,7 @@ const Mini = (
         const run = (common_args :: Common.Args.t, args :: Args.t) => (
             const Mini = root_scope.Mini;
             if &args.paths |> ArrayList.length == 0 then (
-                panic("Expected at least 1 path");
+                Diagnostic.abort("Expected at least 1 path");
             );
             let mut compiler = Mini.Compiler.init();
             for path in args.paths |> ArrayList.into_iter do (

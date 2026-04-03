@@ -1,4 +1,5 @@
 use (import "./output.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./source.ks").*;
 use (import "./source_path.ks").*;
 use (import "./position.ks").*;
@@ -133,9 +134,9 @@ const Highlight = (
                 :Terminal
             ) else if s == "html" then (
                 # :Html
-                panic("TODO html mode")
+                Diagnostic.abort("TODO html mode")
             ) else (
-                panic("Unknown highlight mode " + String.escape(s))
+                Diagnostic.abort("Unknown highlight mode " + String.escape(s))
             )
         ),
     };

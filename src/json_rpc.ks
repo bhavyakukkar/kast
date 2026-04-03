@@ -54,7 +54,7 @@ const JsonRpc = (
                 );
                 let { name, value } = s |> String.split_once(':');
                 if value |> String.at(0) != ' ' then (
-                    panic("Expected spance after :");
+                    panic("Expected space after :");
                 );
                 let value = value |> String.substring(1, String.length(value) - 1);
                 { .name, .value }

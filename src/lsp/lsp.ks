@@ -41,7 +41,7 @@ const Lsp = (
             let mut i = start_index;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
-                panic("Unexpected arg " + String.escape(arg));
+                Diagnostic.abort("Unexpected arg " + String.escape(arg));
                 i += 1;
             );
             {  }
@@ -49,6 +49,11 @@ const Lsp = (
     );
 
     const on_request = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
+        let abort_handler = [T] (msg :: String) -> T => (
+            # TODO show message
+            return :Null
+        );
+        with Diagnostic.AbortHandler = abort_handler;
         let :Object request_fields = request;
         let &(:String method) = &request_fields |> OrdMap.get("method") |> Option.unwrap;
         Log.info(

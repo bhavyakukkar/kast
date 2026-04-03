@@ -1,4 +1,5 @@
 use (import "./tuple.ks").*;
+use (import "./diagnostic.ks").*;
 use (import "./output.ks").*;
 use (import "./parser.ks").*;
 use (import "./source.ks").*;
@@ -206,7 +207,7 @@ const Format = (
                 );
             )
             | :Error { .parts } => (
-                panic("Refusing to format code with errors")
+                Diagnostic.abort("Refusing to format code with errors")
             )
         )
     );

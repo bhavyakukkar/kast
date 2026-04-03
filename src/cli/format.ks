@@ -1,4 +1,5 @@
 use (import "./common.ks").*;
+use (import "../diagnostic.ks").*;
 use (import "../output.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
@@ -87,7 +88,7 @@ const Format = (
                 let formatted = root_scope.Format.format_to_string(&parsed);
                 let path = match path |> SourcePath.file_path with (
                     | :Some path => path
-                    | :None => panic("Inplace formatting is only available given file path")
+                    | :None => Diagnostic.abort("Inplace formatting is only available given file path")
                 );
                 # TODO std.fs.write_file
                 @native "(await import('fs')).writeFileSync(\(path), \(formatted))";

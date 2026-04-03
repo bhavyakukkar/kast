@@ -6,6 +6,28 @@ module:
 const Diagnostic = (
     module:
 
+    const AbortHandlerT = type ([T] String -> T);
+    const AbortHandler = @context AbortHandlerT;
+
+    const default_abort_handler = [T] (msg :: String) -> T => (
+        with Output = (@current Stderr);
+        ansi.with_mode(
+            :Red,
+            () => (
+                let output = @current Output;
+                output.write(msg);
+                output.write("\n");
+            )
+        );
+        std.sys.exit(-1)
+    );
+
+    ## Similar to panic but we don't care about stacktrace in this case
+    ## Use for errors that are targeted at user
+    const abort = [T] (msg :: String) -> T => (
+        (@current AbortHandler)(msg)
+    );
+
     const t = newtype {
         .severity :: Severity,
         .source :: Source,

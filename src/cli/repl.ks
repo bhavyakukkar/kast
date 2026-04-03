@@ -1,4 +1,5 @@
 use (import "./common.ks").*;
+use (import "../diagnostic.ks").*;
 use (import "../output.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
@@ -28,7 +29,7 @@ const Repl = (
             let mut i = start_index;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
-                panic("unexpected arg " + String.escape(arg));
+                Diagnostic.abort("unexpected arg " + String.escape(arg));
                 i += 1;
             );
             {  }
