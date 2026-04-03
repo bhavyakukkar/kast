@@ -21,13 +21,16 @@ const Parse = (
             .paths :: ArrayList.t[String],
         };
 
-        const parse = start_index -> t => (
+        const parse = (
+            start_index :: Int32,
+            .fix_ruleset :: Option.t[String],
+        ) -> t => (
             let mut paths = ArrayList.new();
             let mut i = start_index;
-            let mut ruleset_path = :None;
+            let mut ruleset_path = fix_ruleset;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
-                if arg == "--ruleset" then (
+                if arg == "--ruleset" and &fix_ruleset |> Option.is_none then (
                     if i + 1 >= std.sys.argc() then (
                         panic("Expected ruleset path");
                     );

@@ -12,7 +12,7 @@ build *args:
         --use-numbers-instead-of-symbols false \
         --target js \
         --output target/kast.mjs \
-        src/cli/main.ks
+        src/cli/_main.ks
 
 watch:
     #!/usr/bin/env bash

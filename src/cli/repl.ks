@@ -23,6 +23,16 @@ const Repl = (
         const t = newtype {  };
 
         const default = () -> t => {  };
+
+        const parse = (start_index :: Int32) -> t => (
+            let mut i = start_index;
+            while i < std.sys.argc() do (
+                let arg = std.sys.argv_at(i);
+                panic("unexpected arg " + String.escape(arg));
+                i += 1;
+            );
+            {  }
+        );
     );
 
     const Line = newtype {

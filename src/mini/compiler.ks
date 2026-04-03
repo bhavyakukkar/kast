@@ -7,6 +7,7 @@ use (import "../source.ks").*;
 use (import "../source_path.ks").*;
 use (import "../token_stream.ks").*;
 use (import "../lexer.ks").*;
+use (import "../syntax_ruleset.ks").*;
 use (import "../syntax_parser.ks").*;
 use (import "../parser.ks").*;
 use (import "../ast.ks").*;
@@ -164,13 +165,18 @@ const Compiler = (
         );
     );
 
+    const ruleset_path = () -> String => (
+        std.path.dirname(__FILE__) + "/syntax.ks"
+    );
+
+    const ruleset = () -> SyntaxRuleset.t => (
+        let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path())));
+        let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
+        SyntaxParser.parse_syntax_ruleset(&mut token_stream)
+    );
+
     const add_source = (state :: &mut State, source :: Source) => (
-        let ruleset = (
-            let syntax_path = std.path.dirname(__FILE__) + "/syntax.ks";
-            let mut lexer = Lexer.new(Source.read(SourcePath.file(syntax_path)));
-            let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
-            SyntaxParser.parse_syntax_ruleset(&mut token_stream)
-        );
+        let ruleset = ruleset();
         let mut lexer = Lexer.new(source);
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         let parsed = Parser.parse(
