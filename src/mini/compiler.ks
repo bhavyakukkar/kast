@@ -315,6 +315,44 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "native" then (
+                        let inner = root |> AstHelpers.expect_single_child(:None);
+                        let mut native_parts = ArrayList.new();
+                        match inner.shape with (
+                            | :InterpolatedString { .parts, ... } => (
+                                for part in parts |> ArrayList.into_iter do (
+                                    match part with (
+                                        | :Content s => (
+                                            &mut native_parts |> ArrayList.push_back(:Raw s.contents);
+                                        )
+                                        | :Interpolated { .ast, ... } => (
+                                            let part = :Interpolated parse_expr(:None, ast);
+                                            &mut native_parts |> ArrayList.push_back(part);
+                                        )
+                                    )
+                                )
+                            )
+                            | :Token { .shape = :String s, ... } => (
+                                &mut native_parts |> ArrayList.push_back(:Raw s.contents);
+                            )
+                            | _ => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        (@current Output).write("Expected a native string");
+                                    ),
+                                    .span = inner.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            )
+                        );
+                        return {
+                            .shape = :Native { .parts = native_parts },
+                            .ty = expected_ty |> Option.unwrap_or(:Unit),
+                        };
+                    );
                     if rule.name == "stmt" then (
                         let inner = root |> AstHelpers.expect_single_child(:None);
                         return {
@@ -550,7 +588,7 @@ const Compiler = (
             .args = arg_types,
             .result = result_ty,
         };
-        Log.info(
+        Log.debug(
             () => (
                 let output = @current Output;
                 output.write("fn ");

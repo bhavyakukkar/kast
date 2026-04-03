@@ -13,9 +13,9 @@ use (import "./repl.ks").*;
 use (import "./structural_find_and_replace.ks").*;
 use (import "./tokenize.ks").*;
 use (import "./mini.ks").*;
-# @eval Serialize.do_impl();
-with Stdout = new_std_output(std.io.stdout.write);
-with Stderr = new_std_output(std.io.stderr.write);
+
+with Stdout = new_std_output(std.io.stdout.write, .color = true);
+with Stderr = new_std_output(std.io.stderr.write, .color = true);
 with Output = (@current Stdout);
 
 const Args = (
@@ -88,8 +88,11 @@ const Args = (
 );
 
 let { .common = common_args, .subcommand } = Args.parse();
-(@current Stdout).color = common_args.color;
-(@current Stderr).color = common_args.color;
+
+with Stdout = new_std_output(std.io.stdout.write, .color = common_args.color);
+with Stderr = new_std_output(std.io.stderr.write, .color = common_args.color);
+with Output = (@current Stdout);
+
 with Diagnostic.HandlerContext = Diagnostic.default_handler(.stop_on_error = common_args.stop_on_error);
 match subcommand with (
     | :Tokenize args => Tokenize.run(common_args, args)

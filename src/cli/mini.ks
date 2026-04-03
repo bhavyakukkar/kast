@@ -49,6 +49,7 @@ const Mini = (
             &mut compiler |> root_scope.Mini.Compiler.add_source(source);
         );
         let program = compiler |> root_scope.Mini.Compiler.compile;
-        &program |> root_scope.Mini.Ir.Print.program
+        let compiled = root_scope.Mini.Backends.JavaScript.compile(program);
+        root_scope.Mini.Backends.JavaScript.print(compiled);
     );
 );

@@ -36,8 +36,18 @@ const Ir = (
         | :Fn FnType
     );
 
+    const NativeExprPart = newtype (
+        | :Raw String
+        | :Interpolated Expr
+    );
+
+    const NativeExpr = newtype {
+        .parts :: ArrayList.t[NativeExprPart],
+    };
+
     const ExprShape = newtype (
         | :Unit
+        | :Native NativeExpr
         | :StringLiteral String
         | :Ident String
         | :Stmt Expr

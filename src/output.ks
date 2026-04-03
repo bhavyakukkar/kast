@@ -10,8 +10,9 @@ const Output = @context OutputT;
 const Stdout = @context OutputT;
 const Stderr = @context OutputT;
 
-const new_std_output = (write :: String -> ()) -> OutputT => (
-    new_output(.write, .indentation_string = "│   ", .color = true)
+const new_std_output = (write :: String -> (), .color :: Bool) -> OutputT => (
+    let indentation_string = if color then "│   " else "    ";
+    new_output(.write, .indentation_string, .color)
 );
 
 const output_to_string = (f :: () -> ()) -> String => (

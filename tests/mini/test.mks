@@ -29,7 +29,7 @@ const OptionData = union {
 };
 
 const print = (s :: String) -> () => (
-    # foo(s);
+    @native "console.log(\(s))";
 );
 
 const main = () -> () => (
