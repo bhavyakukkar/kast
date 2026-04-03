@@ -6,6 +6,7 @@ build *args:
     mkdir -p target
     # flock --exclusive target 
     time kast-bootstrap {{args}} compile \
+        --continuous \
         --js-ref-vars false \
         --async always \
         --use-numbers-instead-of-symbols false \
