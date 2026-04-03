@@ -1,5 +1,6 @@
-const Int32 = @opaque_type;
-const Bool = @opaque_type;
+const Int32 = @native "Int32";
+const Bool = @native "Bool";
+const String = @native "String";
 # const add = (a :: Int32, b :: Int32) -> Int32 => (
 #     @native "\(a) + \(b)"
 # );
@@ -26,10 +27,11 @@ const OptionData = union {
     .Some :: Int32,
     .None :: (),
 };
-# const main = () -> Unit => (
-#     print("Hello, world!");
-# );
+
+const print = (s :: String) -> () => (
+    # foo(s);
+);
 
 const main = () -> () => (
-    main;
+    print("Hello, world!");
 );

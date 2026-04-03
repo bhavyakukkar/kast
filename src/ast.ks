@@ -78,7 +78,11 @@ const Ast = (
         | :Value Ast.t
         | :Group Group
     );
-    const unwrap_child_value = (self :: Child) => match self with (
+    const unwrap_child_group = (self :: Child) -> Ast.Group => match self with (
+        | :Value _ => panic("expected group ast child, got value")
+        | :Group group => group
+    );
+    const unwrap_child_value = (self :: Child) -> Ast.t => match self with (
         | :Value value => value
         | :Group _ => panic("expected value ast child, got group")
     );

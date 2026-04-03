@@ -29,6 +29,8 @@ const Ir = (
 
     const Type = newtype (
         | :Unit
+        | :Int32
+        | :Bool
         | :String
         | :Named String
         | :Fn FnType
@@ -36,6 +38,7 @@ const Ir = (
 
     const ExprShape = newtype (
         | :Unit
+        | :StringLiteral String
         | :Ident String
         | :Stmt Expr
         | :Then ArrayList.t[Expr]
@@ -88,7 +91,9 @@ const Ir = (
             let output = @current Output;
             match self^ with (
                 | :Unit => output.write("()")
-                | :String => output.write("String")
+                | :Int32 => output.write("<Int32>")
+                | :Bool => output.write("<Bool>")
+                | :String => output.write("<String>")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type(ty)
             )

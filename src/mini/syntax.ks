@@ -34,7 +34,7 @@
 @syntax "instantiate_generic" 70 @wrap never = <- generic _=("[" ""/"\n\t" arg:any ""/"\n\\" "]");
 @syntax "." 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
-@syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" arg:any ""/"\n\\" ")");
+@syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");
 @syntax "newtype" 500 @wrap never = "newtype" " " _;
 @syntax "true" 500 @wrap never = "true";
 @syntax "false" 500 @wrap never = "false";

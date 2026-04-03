@@ -27,6 +27,7 @@ const Compiler = (
         | :Enum
         | :Struct
         | :Union
+        | :Native
     );
 
     const TopLevelKind = newtype (
@@ -104,6 +105,16 @@ const Compiler = (
                         .name,
                         .kind = :Type :Opaque,
                         .def = value,
+                    };
+                    &mut state^.top_level_items |> ArrayList.push_back(item);
+                    return;
+                );
+                if rule.name == "native" then (
+                    let def = root |> AstHelpers.expect_single_child(:None);
+                    let item = {
+                        .name,
+                        .kind = :Type :Native,
+                        .def,
                     };
                     &mut state^.top_level_items |> ArrayList.push_back(item);
                     return;
@@ -235,8 +246,50 @@ const Compiler = (
         Diagnostic.report_and_unwind(diagnostic)
     );
 
+    const resolve_type_aliases = (ty :: Ir.Type) -> Ir.Type => (
+        match ty with (
+            | :Unit => :Unit
+            | :Int32 => :Int32
+            | :Bool => :Bool
+            | :String => :String
+            | :Named name => (
+                let def = &(@current Context).program.types
+                    |> OrdMap.get(name)
+                    |> Option.unwrap;
+                match def^ with (
+                    | :Alias ty => (
+                        Log.trace(
+                            () => (
+                                let output = @current Output;
+                                output.write(name);
+                                output.write(" is alias to ");
+                                Ir.Print.type_name(&ty);
+                            )
+                        );
+                        resolve_type_aliases(ty)
+                    )
+                    | _ => :Named name
+                )
+            )
+            | :Fn { .args, .result } => (
+                let mut resolved_args = ArrayList.new();
+                for &arg in &args |> ArrayList.iter do (
+                    &mut resolved_args |> ArrayList.push_back(resolve_type_aliases(arg));
+                );
+                let result = resolve_type_aliases(result);
+                :Fn {
+                    .args = resolved_args,
+                    .result = resolve_type_aliases(result),
+                }
+            )
+        )
+    );
+
     const type_check = (span :: Span, expected :: Ir.Type, actual :: Ir.Type) => (
-        if not std.repr.structurally_equal(expected, actual) then (
+        if not std.repr.structurally_equal(
+            resolve_type_aliases(expected),
+            resolve_type_aliases(actual),
+        ) then (
             let diagnostic = {
                 .severity = :Error,
                 .source = :Compiler,
@@ -306,6 +359,67 @@ const Compiler = (
                             .ty = last_expr_ty,
                         };
                     );
+                    if rule.name == "apply" then (
+                        let f_ast = (&root.children |> Tuple.get_named("f"))^
+                            |> Ast.unwrap_child_value;
+                        let args_ast = (&root.children |> Tuple.get_unnamed(0))^
+                            |> Ast.unwrap_child_group;
+                        let args_ast = args_ast |> AstHelpers.expect_single_child(:Some "args");
+                        let f = parse_expr(:None, f_ast);
+                        let f_type = match f.ty with (
+                            | :Fn ty => ty
+                            | _ => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        (@current Output).write("Expected a function, got ");
+                                        Ir.Print.type_name(&f.ty);
+                                    ),
+                                    .span = f_ast.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            )
+                        );
+                        let mut arg_asts = ArrayList.new();
+                        for arg in Ast.iter_list(
+                            args_ast,
+                            .binary_rule_name = "comma",
+                            .trailing_or_leading_rule_name = :Some "trailing comma",
+                        ) do (
+                            &mut arg_asts |> ArrayList.push_back(arg);
+                        );
+
+                        let actual_arg_count = &arg_asts |> ArrayList.length;
+                        let expected_arg_count = &f_type.args |> ArrayList.length;
+                        if actual_arg_count != expected_arg_count then (
+                            let diagnostic = {
+                                .severity = :Error,
+                                .source = :Compiler,
+                                .message = () => (
+                                    let output = @current Output;
+                                    output.write("Expected ");
+                                    output.write(to_string(expected_arg_count));
+                                    output.write(" args, got ");
+                                    output.write(to_string(actual_arg_count));
+                                ),
+                                .span = args_ast.span,
+                                .related = ArrayList.new(),
+                            };
+                            Diagnostic.report_and_unwind(diagnostic)
+                        );
+                        let mut args = ArrayList.new();
+                        for { i, arg_ast } in arg_asts |> ArrayList.into_iter |> std.iter.enumerate do (
+                            let expected_arg_ty = :Some (&f_type.args |> ArrayList.at(i))^;
+                            let arg = parse_expr(expected_arg_ty, arg_ast);
+                            &mut args |> ArrayList.push_back(arg);
+                        );
+                        return {
+                            .shape = :Apply { .f, .args },
+                            .ty = f_type.result,
+                        };
+                    );
                 )
                 | :Token token => (
                     match token.shape with (
@@ -314,6 +428,12 @@ const Compiler = (
                                 .shape = :Ident ident.name,
                                 .ty = find_ident_ty(token.span, ident.name),
                             }
+                        )
+                        | :String str => (
+                            return {
+                                .shape = :StringLiteral str.contents,
+                                .ty = :String,
+                            };
                         )
                         | _ => ()
                     )
@@ -453,6 +573,7 @@ const Compiler = (
                 | :Enum => process_enum(.name, .def)
                 | :Union => process_struct_or_union(.name, .kind, .def)
                 | :Struct => process_struct_or_union(.name, .kind, .def)
+                | :Native => process_native_type(.name, .def)
             )
             | :Fn => process_fn(.name, .def)
         );
@@ -498,6 +619,55 @@ const Compiler = (
             .body,
         };
         &mut ctx.program.fns |> OrdMap.add(name, fn);
+    );
+
+    const process_native_type = (
+        .name :: String,
+        .def :: Ast.t,
+    ) => (
+        let mut ctx = @current Context;
+        let ty = with_return (
+            if def.shape is :Token token then (
+                if token.shape is :String s then (
+                    let name = s.contents;
+                    if name == "Int32" then (
+                        return :Int32;
+                    );
+                    if name == "Bool" then (
+                        return :Bool;
+                    );
+                    if name == "String" then (
+                        return :String;
+                    );
+                    if name == "Unit" then (
+                        return :Unit;
+                    );
+                    let diagnostic = {
+                        .severity = :Error,
+                        .source = :Compiler,
+                        .message = () => (
+                            let output = @current Output;
+                            output.write(String.escape(name));
+                            output.write(" is not valid native type");
+                        ),
+                        .span = def.span,
+                        .related = ArrayList.new(),
+                    };
+                    Diagnostic.report_and_unwind(diagnostic)
+                );
+            );
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    (@current Output).write("Expected a string literal as name of native type");
+                ),
+                .span = def.span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        );
+        &mut ctx.program.types |> OrdMap.add(name, :Alias ty);
     );
 
     const process_enum = (
