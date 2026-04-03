@@ -48,12 +48,10 @@ const Lsp = (
         );
     );
 
-    const on_request = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
-        let abort_handler = [T] (msg :: String) -> T => (
-            # TODO show message
-            return :Null
-        );
-        with Diagnostic.AbortHandler = abort_handler;
+    const on_request = (
+        state :: &mut State,
+        request :: Json.t,
+    ) -> Json.t => with_return (
         let :Object request_fields = request;
         let &(:String method) = &request_fields |> OrdMap.get("method") |> Option.unwrap;
         Log.info(
@@ -122,7 +120,11 @@ const Lsp = (
         JsonRpc.run(
             JsonRpc.stdio(),
             {
-                .on_request = request => (
+                .on_request = request => with_return (
+                    let abort_handler = [T] (msg :: String) -> T => (
+                        return :Error msg
+                    );
+                    with Diagnostic.AbortHandler = abort_handler;
                     :Ok on_request(&mut state, request)
                 ),
                 .on_notification = notification => (
