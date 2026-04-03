@@ -243,6 +243,16 @@ const StructuralFindAndReplace = (
         ) else match ast^.shape with (
             | :Empty => ()
             | :Token _ => ()
+            | :InterpolatedString { .parts = ref parts, ... } => (
+                for part in parts |> ArrayList.iter do (
+                    match part^ with (
+                        | :Content _ => ()
+                        | :Interpolated { .ast = ref ast, ... } => (
+                            walk_ast(ast);
+                        )
+                    )
+                );
+            )
             | :Rule { .root = ref root, ... } => walk_ast_group(root)
             | :Syntax { .value_after = ref value_after, ... } => (
                 if value_after^ is :Some ref ast then (
