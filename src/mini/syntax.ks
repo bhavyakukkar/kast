@@ -44,3 +44,6 @@
 @syntax "record" 1000 @wrap if_any = "{" " "/"\n\t" _:any " "/"\n\\" "}";
 @syntax "target_dependent" 1000 @wrap always = "@cfg" " " "(" ""/"\n\t" branches:any ""/"\n\\" ")";
 @syntax "__FILE__" 1000 @wrap never = "__FILE__";
+
+# this one is needed for structural find & replace
+@syntax "core:unquote" 1000 @wrap never = "$" _ ->;
