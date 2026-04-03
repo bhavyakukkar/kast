@@ -19,6 +19,7 @@ const JavaScript = (
             | :RawConcat {
                 .parts :: ArrayList.t[Expr],
             }
+            | :Undefined
             | :Null
             | :StringLiteral String
             | :Var Var
@@ -37,6 +38,15 @@ const JavaScript = (
             | :Let {
                 .var :: Var,
                 .value :: Expr,
+            }
+            | :Assign {
+                .var :: Var,
+                .value :: Expr,
+            }
+            | :If {
+                .cond :: Expr,
+                .then_case :: Block,
+                .else_case :: Option.t[Block],
             }
             | :Scope Block
             | :Return Expr
@@ -64,6 +74,7 @@ const JavaScript = (
                         );
                     )
                     | :Null => output.write("null")
+                    | :Undefined => output.write("undefined")
                     | :StringLiteral s => output.write(String.escape(s))
                     | :Var var => output.write(var.name)
                     | :Fn { .args, .body } => (
@@ -102,10 +113,25 @@ const JavaScript = (
                         output.write(" = ");
                         Print.expr(value);
                     )
+                    | :Assign { .var, .value } => (
+                        output.write(var.name);
+                        output.write(" = ");
+                        Print.expr(value);
+                    )
                     | :Scope block => Print.block(block)
                     | :Return expr => (
                         output.write("return ");
                         Print.expr(expr);
+                    )
+                    | :If { .cond, .then_case, .else_case } => (
+                        output.write("if (");
+                        Print.expr(cond);
+                        output.write(") ");
+                        Print.block(then_case);
+                        if else_case is :Some else_case then (
+                            output.write(" else ");
+                            Print.block(else_case);
+                        );
                     )
                 )
             );
@@ -175,6 +201,34 @@ const JavaScript = (
                 calculate(expr);
                 :Null
             )
+            | :If { .cond, .then_case, .else_case } => (
+                let result_var = new_var("if_result");
+                let_var(result_var, :Undefined);
+                let cond = calculate(cond);
+                let then_case = (
+                    let mut block = new_block();
+                    with Scope = &mut block;
+                    assign(result_var, :Var calculate(then_case));
+                    block
+                );
+                let else_case = match else_case with (
+                    | :Some else_case => :Some (
+                        let mut block = new_block();
+                        with Scope = &mut block;
+                        assign(result_var, :Var calculate(else_case));
+                        block
+                    )
+                    | :None => :None
+                );
+                insert_stmt(
+                    :If {
+                        .cond = :Var cond,
+                        .then_case,
+                        .else_case,
+                    }
+                );
+                return result_var
+            )
             | :Then exprs => (
                 let mut result = :Null;
                 for expr in exprs |> ArrayList.into_iter do (
@@ -219,6 +273,11 @@ const JavaScript = (
 
     const let_var = (var :: Ast.Var, value :: Ast.Expr) => (
         let stmt = :Let { .var, .value };
+        insert_stmt(stmt);
+    );
+
+    const assign = (var :: Ast.Var, value :: Ast.Expr) => (
+        let stmt = :Assign { .var, .value };
         insert_stmt(stmt);
     );
 

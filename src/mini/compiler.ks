@@ -307,14 +307,43 @@ const Compiler = (
         );
     );
 
+    const ParsedExpr = newtype {
+        .shape :: Ir.ExprShape,
+        .ty :: Ir.Type,
+    };
+
+    const parse_if = (expected_ty :: Option.t[Ir.Type], root :: Ast.Group) -> ParsedExpr => (
+        let cond = (&root.children |> Tuple.get_named("cond"))^
+            |> Ast.unwrap_child_value;
+        let then_case = (&root.children |> Tuple.get_named("then_case"))^
+            |> Ast.unwrap_child_value;
+        let else_case = &root.children
+            |> Tuple.get_named_opt("else_case")
+            |> Option.map(child => child^ |> Ast.unwrap_child_value);
+        let cond = parse_expr(:Some :Bool, cond);
+        let then_case = parse_expr(expected_ty, then_case);
+        let else_case = else_case
+            |> Option.map(ast => parse_expr(:Some then_case.ty, ast));
+        {
+            .shape = :If { .cond, .then_case, .else_case },
+            .ty = then_case.ty,
+        }
+    );
+
     const parse_expr = (expected_ty :: Option.t[Ir.Type], ast :: Ast.t) -> Ir.Expr => (
-        let { .shape, .ty } = with_return (
+        let { .shape, .ty } :: ParsedExpr = with_return (
             match ast.shape with (
                 | :Empty => return {
                     .shape = :Unit,
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "if" then (
+                        return parse_if(expected_ty, root);
+                    );
+                    if rule.name == "if_without_else" then (
+                        return parse_if(expected_ty, root);
+                    );
                     if rule.name == "native" then (
                         let inner = root |> AstHelpers.expect_single_child(:None);
                         let mut native_parts = ArrayList.new();

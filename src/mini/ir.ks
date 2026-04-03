@@ -53,6 +53,11 @@ const Ir = (
         | :Stmt Expr
         | :Then ArrayList.t[Expr]
         | :Scope Expr
+        | :If {
+            .cond :: Expr,
+            .then_case :: Expr,
+            .else_case :: Option.t[Expr],
+        }
         | :Apply {
             .f :: Expr,
             .args :: ArrayList.t[Expr],
