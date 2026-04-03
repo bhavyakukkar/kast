@@ -54,7 +54,14 @@ const TokenStream = (
     );
 
     const advance = (self :: &mut TokenStream.t) => (
-        self^.prev = :Some self^.peeked;
+        let token = self^.peeked;
+        for &mut {
+            .key = _,
+            .value = ref mut tokens,
+        } in &mut self^.recordings |> OrdMap.iter_mut do (
+            tokens |> ArrayList.push_back(token);
+        );
+        self^.prev = :Some token;
         self^.index += 1;
         self^.peeked = (self^.next)();
     );

@@ -88,7 +88,10 @@ const Parser = (
             let peek_raw = peek.shape |> Token.Shape.raw;
             if peek_raw == "@syntax" then (
                 let syntax_token = peek;
-                let recording = ctx.token_stream |> TokenStream.start_recording;
+                let command_raw_tokens = ctx.token_stream
+                    |> TokenStream.start_recording;
+                let recording = ctx.token_stream
+                    |> TokenStream.start_recording;
                 let ignored_tokens_before = claim_ignored_tokens();
                 ctx.token_stream |> TokenStream.advance;
                 with Diagnostic.UnwindableHandler = {
@@ -110,8 +113,10 @@ const Parser = (
                 };
                 let {
                     .command,
-                    .raw_tokens = command_raw_tokens,
+                    .raw_tokens = _,
                 } = SyntaxParser.parse_syntax_command(ctx.token_stream);
+                let command_raw_tokens = ctx.token_stream
+                    |> TokenStream.finish_recording(command_raw_tokens);
                 let command = match command with (
                     | :FromScratch => (
                         dyn_ctx.ruleset = SyntaxRuleset.new();
@@ -126,13 +131,11 @@ const Parser = (
                     | :MadeProgress ast => :Some ast
                     | :NoProgress => :None
                 );
-                let raw_tokens = ctx.token_stream
-                    |> TokenStream.finish_recording(recording);
                 return :MadeProgress {
                     .shape = :Syntax {
                         .command = {
                             .shape = command,
-                            .raw_tokens,
+                            .raw_tokens = command_raw_tokens,
                         },
                         .value_after,
                     },
