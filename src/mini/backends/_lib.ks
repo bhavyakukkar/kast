@@ -3,5 +3,5 @@ module:
 const Backends = (
     module:
 
-    use (import "./javascript.ks").*;
+    use (import "./javascript/_lib.ks").*;
 );
