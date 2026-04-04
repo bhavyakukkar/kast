@@ -1,7 +1,7 @@
 use (import "../diagnostic.ks").*;
 use (import "../log.ks").*;
 use (import "../ast.ks").*;
-use (import "../lexer.ks").*;
+use (import "../lexer/_lib.ks").*;
 use (import "../token_stream.ks").*;
 use (import "../syntax_ruleset.ks").*;
 use (import "../syntax_parser.ks").*;

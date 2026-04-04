@@ -5,7 +5,7 @@ use (import "./tuple.ks").*;
 use (import "./source.ks").*;
 use (import "./source_path.ks").*;
 use (import "../deps/uri/src/lib.ks").*;
-use (import "./lexer.ks").*;
+use (import "./lexer/_lib.ks").*;
 use (import "./token.ks").*;
 use (import "./token_stream.ks").*;
 use (import "./position.ks").*;

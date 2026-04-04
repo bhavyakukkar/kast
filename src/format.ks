@@ -4,7 +4,7 @@ use (import "./output.ks").*;
 use (import "./parser.ks").*;
 use (import "./source.ks").*;
 use (import "./source_path.ks").*;
-use (import "./lexer.ks").*;
+use (import "./lexer/_lib.ks").*;
 use (import "./syntax_rule.ks").*;
 use (import "./syntax_parser.ks").*;
 use (import "./token_stream.ks").*;
