@@ -42,8 +42,15 @@ const Compiler = (
         .def :: Ast.t,
     };
 
+    const Const = newtype {
+        .name :: String,
+        .ty :: Ast.t,
+        .value :: Ast.t,
+    };
+
     const State = newtype {
         .top_level_items :: ArrayList.t[TopLevelItem],
+        .consts :: ArrayList.t[Const],
         .type_names :: OrdSet.t[String],
         .fn_types :: OrdMap.t[String, Ir.FnType],
         .program :: Ir.Program,
@@ -53,8 +60,10 @@ const Compiler = (
         .top_level_items = ArrayList.new(),
         .type_names = OrdSet.new(),
         .fn_types = OrdMap.new(),
+        .consts = ArrayList.new(),
         .program = {
             .types = OrdMap.new(),
+            .consts = OrdMap.new(),
             .fns = OrdMap.new(),
         },
     };
@@ -81,13 +90,27 @@ const Compiler = (
                 &root.children
                     |> Tuple.get_named("name")
             )^
-                |> Ast.unwrap_child_value
-                |> AstHelpers.expect_ident;
+                |> Ast.unwrap_child_value;
             let value = (
                 &root.children
                     |> Tuple.get_named("value")
             )^
                 |> Ast.unwrap_child_value;
+            if name.shape is :Rule { .rule, .root } then (
+                if rule.name == "type ascribe" then (
+                    let { name, ty } = root
+                        |> AstHelpers.expect_two_children(:Some { "expr", "type" });
+                    let name = name |> AstHelpers.expect_ident;
+                    let @"const" = {
+                        .name,
+                        .ty,
+                        .value,
+                    };
+                    &mut state^.consts |> ArrayList.push_back(@"const");
+                    return;
+                );
+            );
+            let name = name |> AstHelpers.expect_ident;
             if value.shape is :Rule { .rule, .root } then (
                 if rule.name == "enum" then (
                     type_def(name, :Enum, root);
@@ -209,7 +232,29 @@ const Compiler = (
             )
         );
         for item in &state.top_level_items |> ArrayList.iter do (
-            process_top_level_item(item^);
+            let { .name, .kind, .def } = item^;
+            match kind with (
+                | :Type kind => match kind with (
+                    | :Opaque => (
+                        &mut state.program.types |> OrdMap.add(name, :Opaque);
+                    )
+                    | :Enum => process_enum(.name, .def)
+                    | :Union => process_struct_or_union(.name, .kind, .def)
+                    | :Struct => process_struct_or_union(.name, .kind, .def)
+                    | :Native => process_native_type(.name, .def)
+                )
+                | _ => ()
+            );
+        );
+        for c in state.consts |> ArrayList.into_iter do (
+            process_const(c);
+        );
+        for item in &state.top_level_items |> ArrayList.iter do (
+            let { .name, .kind, .def } = item^;
+            match kind with (
+                | :Fn => process_fn(.name, .def)
+                | _ => ()
+            );
         );
         state.program
     );
@@ -237,6 +282,9 @@ const Compiler = (
         );
         if &ctx.fn_types |> OrdMap.get(name) is :Some &fn_type then (
             return :Fn fn_type;
+        );
+        if &ctx.program.consts |> OrdMap.get(name) is :Some c then (
+            return c^.ty;
         );
         let diagnostic = {
             .severity = :Error,
@@ -344,11 +392,40 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "type ascribe" then (
+                        let { expr, ty } = root
+                            |> AstHelpers.expect_two_children(:Some { "expr", "type" });
+                        let ty = parse_type(ty);
+                        let expr = parse_expr(:Some ty, expr);
+                        return { .shape = expr.shape, .ty = expr.ty };
+                    );
                     if rule.name == "if" then (
                         return parse_if(expected_ty, root);
                     );
                     if rule.name == "if_without_else" then (
                         return parse_if(expected_ty, root);
+                    );
+                    if rule.name == "let" then (
+                        let { pattern, value } = root
+                            |> AstHelpers.expect_two_children(:Some { "pattern", "value" });
+                        let { name, expected_ty } = with_return (
+                            if pattern.shape is :Rule { .rule, .root } then (
+                                if rule.name == "type ascribe" then (
+                                    let { name, ty } = root
+                                        |> AstHelpers.expect_two_children(:Some { "expr", "type" });
+                                    let name = name |> AstHelpers.expect_ident;
+                                    return { name, :Some parse_type(ty) };
+                                );
+                            );
+                            let name = pattern |> AstHelpers.expect_ident;
+                            { name, :None }
+                        );
+                        let value = parse_expr(expected_ty, value);
+                        &mut (@current ScopeContext).vars |> OrdMap.add(name, value.ty);
+                        return {
+                            .shape = :Let { .name, .value },
+                            .ty = :Unit,
+                        };
                     );
                     if rule.name == "native" then (
                         let inner = root |> AstHelpers.expect_single_child(:None);
@@ -561,6 +638,10 @@ const Compiler = (
             | :Token token => match token.shape with (
                 | :Ident ident => (
                     let name = ident.name;
+                    if name == "Unit" then return :Unit;
+                    if name == "Bool" then return :Bool;
+                    if name == "Int32" then return :Int32;
+                    if name == "String" then return :String;
                     if not &(@current Context).type_names |> OrdSet.contains(name) then (
                         let diagnostic = {
                             .severity = :Error,
@@ -635,21 +716,11 @@ const Compiler = (
         &mut ctx.fn_types |> OrdMap.add(name, fn_type);
     );
 
-    const process_top_level_item = (item :: TopLevelItem) => (
+    const process_const = (@"const" :: Const) => (
+        let { .name, .ty, .value } = @"const";
         let mut ctx = @current Context;
-        let { .name, .kind, .def } = item;
-        match kind with (
-            | :Type kind => match kind with (
-                | :Opaque => (
-                    &mut ctx.program.types |> OrdMap.add(name, :Opaque);
-                )
-                | :Enum => process_enum(.name, .def)
-                | :Union => process_struct_or_union(.name, .kind, .def)
-                | :Struct => process_struct_or_union(.name, .kind, .def)
-                | :Native => process_native_type(.name, .def)
-            )
-            | :Fn => process_fn(.name, .def)
-        );
+        let value = parse_expr(:Some parse_type(ty), value);
+        &mut ctx.program.consts |> OrdMap.add(name, value);
     );
 
     const process_fn = (

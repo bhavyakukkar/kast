@@ -69,20 +69,28 @@ const Mini = (
             module:
 
             const t = newtype {
+                .js_runtime :: Option.t[String],
                 .paths :: ArrayList.t[String],
             };
 
             const parse = (
                 start_index :: Int32,
             ) -> t => (
+                let mut js_runtime = :None;
                 let mut paths = ArrayList.new();
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
+                    if arg == "--js-runtime" then (
+                        js_runtime = :Some std.sys.argv_at(i + 1);
+                        i += 2;
+                        continue;
+                    );
                     &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
                     i += 1;
                 );
                 {
+                    .js_runtime,
                     .paths,
                 }
             );
@@ -100,6 +108,9 @@ const Mini = (
             );
             let program = compiler |> Mini.Compiler.compile;
             let compiled = Mini.Backends.JavaScript.compile(program);
+            if args.js_runtime is :Some path then (
+                print(std.fs.read_file(path));
+            );
             Mini.Backends.JavaScript.print(compiled);
         );
     );

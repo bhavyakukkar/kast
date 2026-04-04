@@ -33,6 +33,8 @@
           shellHook = ''
             echo Hello from Kast dev shell
           '';
+          KAST_JS_RUNTIME =
+            "${inputs.kast.packages.${system}.js-runtime}/runtime.js";
         };
       });
 }

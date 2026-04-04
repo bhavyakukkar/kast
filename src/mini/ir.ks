@@ -51,6 +51,10 @@ const Ir = (
         | :StringLiteral String
         | :Ident String
         | :Stmt Expr
+        | :Let {
+            .name :: String,
+            .value :: Expr,
+        }
         | :Then ArrayList.t[Expr]
         | :Scope Expr
         | :If {
@@ -83,6 +87,7 @@ const Ir = (
 
     const Program = newtype {
         .types :: OrdMap.t[String, TypeDef],
+        .consts :: OrdMap.t[String, Expr],
         .fns :: OrdMap.t[String, FnDef],
     };
 

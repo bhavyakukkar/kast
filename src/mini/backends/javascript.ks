@@ -14,6 +14,14 @@ const JavaScript = (
             .name :: String,
         };
 
+        const ObjPart = newtype (
+            | :Field {
+                .name :: String,
+                .value :: Expr,
+            }
+            | :Unpack Expr
+        );
+
         const Expr = newtype (
             | :Raw String
             | :RawConcat {
@@ -23,6 +31,7 @@ const JavaScript = (
             | :Null
             | :StringLiteral String
             | :Var Var
+            | :Obj ArrayList.t[ObjPart]
             | :Fn {
                 .args :: ArrayList.t[Var],
                 .body :: Block,
@@ -72,6 +81,26 @@ const JavaScript = (
                                 Print.expr(part);
                             );
                         );
+                    )
+                    | :Obj parts => (
+                        output.write("{\n");
+                        output.inc_indentation();
+                        for part in parts |> ArrayList.into_iter do (
+                            match part with (
+                                | :Field { .name, .value } => (
+                                    output.write(name);
+                                    output.write(": ");
+                                    Print.expr(value);
+                                )
+                                | :Unpack packed => (
+                                    output.write("...");
+                                    Print.expr(packed);
+                                )
+                            );
+                            output.write(",");
+                        );
+                        output.dec_indentation();
+                        output.write("}");
                     )
                     | :Null => output.write("null")
                     | :Undefined => output.write("undefined")
@@ -160,14 +189,19 @@ const JavaScript = (
         .top_level :: Ast.Block,
     };
     const Context = @context State;
-    const Scope = @context type (&mut Ast.Block);
+
+    const ScopeT = newtype {
+        .block :: &mut Ast.Block,
+        .ctx_var :: Ast.Var,
+    };
+    const Scope = @context ScopeT;
 
     const new_block = () -> Ast.Block => {
         .stmts = ArrayList.new(),
     };
 
     const insert_stmt = (stmt :: Ast.Stmt) => (
-        &mut (@current Scope)^.stmts |> ArrayList.push_back(stmt);
+        &mut (@current Scope).block^.stmts |> ArrayList.push_back(stmt);
     );
 
     const var = (name :: String) -> Ast.Var => (
@@ -185,6 +219,11 @@ const JavaScript = (
         let value :: Ast.Expr = match expr.shape with (
             | :Unit => :Null
             | :StringLiteral s => :StringLiteral s
+            | :Let { .name, .value } => (
+                let value = calculate(value);
+                let_var(var(name), :Var value);
+                :Undefined
+            )
             | :Native { .parts = ir_parts } => (
                 let mut parts = ArrayList.new();
                 for part in ir_parts |> ArrayList.into_iter do (
@@ -207,14 +246,20 @@ const JavaScript = (
                 let cond = calculate(cond);
                 let then_case = (
                     let mut block = new_block();
-                    with Scope = &mut block;
+                    with Scope = {
+                        .block = &mut block,
+                        .ctx_var = (@current Scope).ctx_var,
+                    };
                     assign(result_var, :Var calculate(then_case));
                     block
                 );
                 let else_case = match else_case with (
                     | :Some else_case => :Some (
                         let mut block = new_block();
-                        with Scope = &mut block;
+                        with Scope = {
+                            .block = &mut block,
+                            .ctx_var = (@current Scope).ctx_var,
+                        };
                         assign(result_var, :Var calculate(else_case));
                         block
                     )
@@ -240,6 +285,7 @@ const JavaScript = (
             | :Apply { .f, .args = ir_args } => (
                 let f :: Ast.Var = calculate(f);
                 let mut args :: ArrayList.t[Ast.Expr] = ArrayList.new();
+                &mut args |> ArrayList.push_back(:Var (@current Scope).ctx_var);
                 for arg in ir_args |> ArrayList.into_iter do (
                     let arg :: Ast.Expr = :Var calculate(arg);
                     &mut args |> ArrayList.push_back(arg);
@@ -257,12 +303,17 @@ const JavaScript = (
 
     const compile_fn = (fn :: Ir.FnDef) -> Ast.Expr => (
         let mut args = ArrayList.new();
+        let ctx_var = new_var("ctx");
+        &mut args |> ArrayList.push_back(ctx_var);
         for arg in fn.args |> ArrayList.into_iter do (
             let arg = var(arg.name);
             &mut args |> ArrayList.push_back(arg);
         );
         let mut body = new_block();
-        with Scope = &mut body;
+        with Scope = {
+            .block = &mut body,
+            .ctx_var,
+        };
         let result_var = calculate(fn.body);
         insert_stmt(:Return :Var result_var);
         :Fn {
@@ -296,15 +347,27 @@ const JavaScript = (
             .top_level = new_block(),
         };
         with Context = state;
-        with Scope = &mut state.top_level;
+        let ctx_var = new_var("ctx");
+        with Scope = {
+            .block = &mut state.top_level,
+            .ctx_var,
+        };
+        let_var(ctx_var, :Obj ArrayList.new());
         for { .key = name, .value = def } in program.fns |> OrdMap.into_iter do (
             let_var(var(name), compile_fn(def));
+        );
+        for { .key = name, .value } in program.consts |> OrdMap.into_iter do (
+            let_var(var(name), :Var calculate(value));
         );
         if &program.fns |> OrdMap.get("main") is :Some _ then (
             insert_stmt(
                 :Expr :Apply {
                     .f = :Var var("main"),
-                    .args = ArrayList.new(),
+                    .args = (
+                        let mut args = ArrayList.new();
+                        &mut args |> ArrayList.push_back(:Var ctx_var);
+                        args
+                    ),
                 }
             );
         );
