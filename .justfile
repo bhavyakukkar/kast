@@ -2,11 +2,12 @@ default:
     echo Hello there!
     just --list
 
-build *args:
+[arg("continuous", long="continuous", value="--continuous")]
+build continuous="":
     mkdir -p target
     # flock --exclusive target 
-    time kast-bootstrap {{args}} compile \
-        --continuous \
+    time kast-bootstrap compile \
+        {{continuous}} \
         --js-ref-vars false \
         --async always \
         --use-numbers-instead-of-symbols false \
