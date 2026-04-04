@@ -24,26 +24,29 @@ const Parse = (
 
         const parse = (
             start_index :: Int32,
-            .fix_ruleset :: Option.t[String],
+            .fix_syntax :: Option.t[Common.Syntax],
         ) -> t => (
+            let mut @"syntax" = fix_syntax;
             let mut paths = ArrayList.new();
             let mut i = start_index;
-            let mut ruleset_path = fix_ruleset;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
-                if arg == "--ruleset" and &fix_ruleset |> Option.is_none then (
+                if arg == "--ruleset" and &@"syntax" |> Option.is_none then (
                     if i + 1 >= std.sys.argc() then (
                         Diagnostic.abort("Expected ruleset path");
                     );
-                    ruleset_path = :Some std.sys.argv_at(i + 1);
+                    @"syntax" = :Some {
+                        .ruleset = std.sys.argv_at(i + 1),
+                        .ext = :None,
+                    };
                     i += 2;
                     continue;
                 );
-                &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
+                &mut paths |> ArrayList.push_back(Common.path_arg_for_syntax(arg, .@"syntax"));
                 i += 1;
             );
             {
-                .ruleset_path,
+                .ruleset_path = @"syntax" |> Option.map(s => s.ruleset),
                 .paths,
             }
         );

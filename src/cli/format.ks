@@ -29,17 +29,20 @@ const Format = (
 
         const parse = (
             start_index :: Int32,
-            .fix_ruleset :: Option.t[String],
+            .fix_syntax :: Option.t[Common.Syntax],
         ) -> t => (
-            let mut ruleset = fix_ruleset;
+            let mut @"syntax" = fix_syntax;
             let mut paths = ArrayList.new();
             let mut i = start_index;
             let mut highlight = :Some :Terminal;
             let mut inplace = false;
             while i < std.sys.argc() do (
                 let arg = std.sys.argv_at(i);
-                if arg == "--ruleset" and &fix_ruleset |> Option.is_none then (
-                    ruleset = :Some std.sys.argv_at(i + 1);
+                if arg == "--ruleset" and &@"syntax" |> Option.is_none then (
+                    @"syntax" = :Some {
+                        .ruleset = std.sys.argv_at(i + 1),
+                        .ext = :None,
+                    };
                     i += 2;
                     continue;
                 );
@@ -58,10 +61,15 @@ const Format = (
                     i += 1;
                     continue;
                 );
-                &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
+                &mut paths |> ArrayList.push_back(Common.path_arg_for_syntax(arg, .@"syntax"));
                 i += 1;
             );
-            { .ruleset, .paths, .highlight, .inplace }
+            {
+                .ruleset = @"syntax" |> Option.map(s => s.ruleset),
+                .paths,
+                .highlight,
+                .inplace,
+            }
         );
     );
 

@@ -29,7 +29,7 @@ const ParseJson = (
                     i += 1;
                     continue;
                 );
-                &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
+                &mut paths |> ArrayList.push_back(Common.path_arg(arg, .ext = :Some "json"));
                 i += 1;
             );
             {

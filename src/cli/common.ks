@@ -4,15 +4,37 @@ module:
 
 const Common = (
     module:
-    # Expect "file.ks" or "file.mks"
-    const ks_path_arg = (path :: String) -> String => (
-        let fail = () => Diagnostic.abort("Expected .ks or .mks path, got " + String.escape(path));
+
+    const Syntax = newtype {
+        .ruleset :: String,
+        .ext :: Option.t[String],
+    };
+
+    const path_arg_for_syntax = (path :: String, .@"syntax" :: Option.t[Syntax]) -> String => (
+        let ext = match @"syntax" with (
+            | :None => :Some "ks"
+            | :Some s => s.ext
+        );
+        path_arg(path, .ext)
+    );
+
+    const path_arg = (path :: String, .ext :: Option.t[String]) -> String => (
+        let fail = () => (
+            let mut message = "Expected a path";
+            if ext is :Some ext then (
+                message += " with ." + ext + " extension";
+            );
+            message += ", got " + String.escape(path);
+            Diagnostic.abort(message)
+        );
         if String.length(path) == 0 then fail();
         if path |> String.at(0) == '-' then fail();
         let last_dot = path |> String.last_index_of('.');
         if last_dot < 0 then fail();
-        let ext = path |> String.substring_from(last_dot);
-        if not (ext == ".ks" or ext == ".mks") then fail();
+        let actual_ext = path |> String.substring_from(last_dot + 1);
+        if ext is :Some ext then (
+            if actual_ext != ext then fail();
+        );
         path
     );
 

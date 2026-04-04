@@ -57,22 +57,22 @@ const Args = (
                     unwind subcommand (:ParseSyntaxRuleset ParseSyntaxRuleset.Args.parse(i + 1));
                 );
                 if arg == "parse" then (
-                    unwind subcommand (:Parse Parse.Args.parse(i + 1, .fix_ruleset = :None));
+                    unwind subcommand (:Parse Parse.Args.parse(i + 1, .fix_syntax = :None));
                 );
                 if arg == "parse-json" then (
                     unwind subcommand (:ParseJson ParseJson.Args.parse(i + 1));
                 );
                 if arg == "highlight" then (
-                    unwind subcommand (:Highlight Highlight.Args.parse(i + 1, .fix_ruleset = :None));
+                    unwind subcommand (:Highlight Highlight.Args.parse(i + 1, .fix_syntax = :None));
                 );
                 if arg == "fmt" or arg == "format" then (
-                    unwind subcommand (:Format Format.Args.parse(i + 1, .fix_ruleset = :None));
+                    unwind subcommand (:Format Format.Args.parse(i + 1, .fix_syntax = :None));
                 );
                 if arg == "lsp" then (
                     unwind subcommand (:Lsp Lsp.CliArgs.parse(i + 1));
                 );
                 if arg == "find-ast" then (
-                    unwind subcommand (:StructuralFindAndReplace StructuralFindAndReplace.Args.parse(i + 1, .fix_ruleset = :None));
+                    unwind subcommand (:StructuralFindAndReplace StructuralFindAndReplace.Args.parse(i + 1, .fix_syntax = :None));
                 );
                 if arg == "repl" then (
                     unwind subcommand (:Repl Repl.Args.parse(i + 1));

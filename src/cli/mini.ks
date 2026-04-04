@@ -86,7 +86,7 @@ const Mini = (
                         i += 2;
                         continue;
                     );
-                    &mut paths |> ArrayList.push_back(Common.ks_path_arg(arg));
+                    &mut paths |> ArrayList.push_back(Common.path_arg(arg, .ext = :Some "mks"));
                     i += 1;
                 );
                 {
@@ -132,23 +132,26 @@ const Mini = (
         };
 
         const parse = (start_index :: Int32) -> t => (
-            let fix_ruleset = :Some syntax_ruleset_path;
+            let fix_syntax = :Some {
+                .ruleset = syntax_ruleset_path,
+                .ext = :Some "mks",
+            };
             let mut common = Common.Args.default();
             let subcommand = unwindable subcommand (
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
                     if arg == "parse" then (
-                        unwind subcommand (:Parse Cli.Parse.Args.parse(i + 1, .fix_ruleset));
+                        unwind subcommand (:Parse Cli.Parse.Args.parse(i + 1, .fix_syntax));
                     );
                     if arg == "highlight" then (
-                        unwind subcommand (:Highlight Cli.Highlight.Args.parse(i + 1, .fix_ruleset));
+                        unwind subcommand (:Highlight Cli.Highlight.Args.parse(i + 1, .fix_syntax));
                     );
                     if arg == "fmt" or arg == "format" then (
-                        unwind subcommand (:Format Cli.Format.Args.parse(i + 1, .fix_ruleset));
+                        unwind subcommand (:Format Cli.Format.Args.parse(i + 1, .fix_syntax));
                     );
                     if arg == "find-ast" then (
-                        unwind subcommand (:StructuralFindAndReplace Cli.StructuralFindAndReplace.Args.parse(i + 1, .fix_ruleset));
+                        unwind subcommand (:StructuralFindAndReplace Cli.StructuralFindAndReplace.Args.parse(i + 1, .fix_syntax));
                     );
                     if arg == "repl" then (
                         unwind subcommand (:Repl Repl.Args.parse(i + 1));
