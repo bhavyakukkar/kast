@@ -27,12 +27,12 @@ watch:
     wait
 
 test:
-    just build
-    fd --type file --extension ks --exec-batch kast tokenize
-    kast parse-syntax-rules tests/syntax/*.ks
-    kast parse-json tests/json/*.json
-    kast parse-json --use-kast-parser tests/json/*.json
-    fd --type file --extension ks --exec-batch kast parse
+    # just build
+    fd --type file --extension ks --exec-batch kast tokenize > /dev/null
+    kast parse-syntax-rules tests/syntax/*.ks > /dev/null
+    kast parse-json tests/json/*.json > /dev/null
+    kast parse-json --use-kast-parser tests/json/*.json > /dev/null
+    fd --type file --extension ks --exec-batch kast parse > /dev/null
 
 lsp-stress-test:
     kast-bootstrap --target js lsp-stress-test/main.ks | kast lsp
