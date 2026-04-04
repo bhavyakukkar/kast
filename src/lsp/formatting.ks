@@ -1,15 +1,7 @@
-const position_to_lsp = (position :: Position) -> Json.t => (
-    let mut fields = OrdMap.new();
-    let line :: Json.t = :Number (
-        std.convert.int32_to_float64(position.line)
-    );
-    &mut fields |> OrdMap.add("line", line);
-    let character :: Json.t = :Number (
-        std.convert.int32_to_float64(position.column.string_encoding)
-    );
-    &mut fields |> OrdMap.add("character", character);
-    :Object fields
-);
+use (import "./common.ks").*;
+use (import "./state.ks").*;
+
+module:
 
 const formatting = (
     module:

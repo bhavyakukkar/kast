@@ -1,3 +1,8 @@
+use (import "./common.ks").*;
+use (import "./state.ks").*;
+
+module:
+
 const hover = (state :: &mut State, request :: Json.t) -> Json.t => with_return (
     let :Object fields = request;
     let &(:Object params) = &fields |> OrdMap.get("params") |> Option.unwrap;

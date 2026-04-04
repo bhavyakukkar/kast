@@ -1,3 +1,7 @@
+use (import "./common.ks").*;
+
+module:
+
 const FileState = newtype {
     .contents :: String,
     .lines :: ArrayList.t[String],

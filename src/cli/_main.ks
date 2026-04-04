@@ -1,7 +1,7 @@
 use (import "../diagnostic.ks").*;
 use (import "../log.ks").*;
 use (import "../output.ks").*;
-use (import "../lsp/lsp.ks").*;
+use (import "../lsp/_lib.ks").*;
 use (import "./common.ks").*;
 use (import "./format.ks").*;
 use (import "./highlight.ks").*;

@@ -1,3 +1,25 @@
+module:
+
+use (import "../diagnostic.ks").*;
+use (import "../log.ks").*;
+use (import "../ast.ks").*;
+use (import "../lexer/_lib.ks").*;
+use (import "../token_stream.ks").*;
+use (import "../syntax_ruleset.ks").*;
+use (import "../syntax_parser.ks").*;
+use (import "../parser.ks").*;
+use (import "../source.ks").*;
+use (import "../source_path.ks").*;
+use (import "../position.ks").*;
+use (import "../span.ks").*;
+use (import "../output.ks").*;
+use (import "../json.ks").*;
+use (import "../highlight.ks").*;
+use (import "../format.ks").*;
+use (import "../json_rpc.ks").*;
+use (import "../../deps/uri/src/lib.ks").*;
+use std.collections.OrdMap;
+
 const span_to_lsp_range = (span :: Span) -> Json.t => (
     let mut fields = OrdMap.new();
     &mut fields |> OrdMap.add("start", position_to_lsp(span.start));
@@ -13,5 +35,18 @@ const span_to_lsp_location = (span :: Span) -> Json.t => (
         | _ => panic("Was trying to report to lsp this path which is not uri: " + to_string(span.path))
     );
     &mut fields |> OrdMap.add("uri", uri);
+    :Object fields
+);
+
+const position_to_lsp = (position :: Position) -> Json.t => (
+    let mut fields = OrdMap.new();
+    let line :: Json.t = :Number (
+        std.convert.int32_to_float64(position.line)
+    );
+    &mut fields |> OrdMap.add("line", line);
+    let character :: Json.t = :Number (
+        std.convert.int32_to_float64(position.column.string_encoding)
+    );
+    &mut fields |> OrdMap.add("character", character);
     :Object fields
 );

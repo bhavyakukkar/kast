@@ -1,36 +1,16 @@
-use (import "../diagnostic.ks").*;
-use (import "../log.ks").*;
-use (import "../ast.ks").*;
-use (import "../lexer/_lib.ks").*;
-use (import "../token_stream.ks").*;
-use (import "../syntax_ruleset.ks").*;
-use (import "../syntax_parser.ks").*;
-use (import "../parser.ks").*;
-use (import "../source.ks").*;
-use (import "../source_path.ks").*;
-use (import "../position.ks").*;
-use (import "../span.ks").*;
-use (import "../output.ks").*;
-use (import "../json.ks").*;
-use (import "../highlight.ks").*;
-use (import "../format.ks").*;
-use (import "../json_rpc.ks").*;
-use (import "../../deps/uri/src/lib.ks").*;
-use std.collections.OrdMap;
+use (import "./common.ks").*;
+use (import "./state.ks").*;
+use (import "./init.ks").*;
+use (import "./hover.ks").*;
+use (import "./selection_range.ks").*;
+use (import "./semantic_tokens.ks").*;
+use (import "./formatting.ks").*;
+use (import "./diagnostics.ks").*;
 
 module:
 
 const Lsp = (
     module:
-
-    include "./common.ks";
-    include "./state.ks";
-    include "./init.ks";
-    include "./hover.ks";
-    include "./selection_range.ks";
-    include "./semantic_tokens.ks";
-    include "./formatting.ks";
-    include "./diagnostics.ks";
 
     const CliArgs = (
         module:

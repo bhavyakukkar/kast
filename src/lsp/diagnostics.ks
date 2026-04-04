@@ -1,3 +1,8 @@
+use (import "./common.ks").*;
+use (import "./state.ks").*;
+
+module:
+
 const diagnostics = (
     module:
 

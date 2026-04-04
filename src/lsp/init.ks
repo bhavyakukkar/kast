@@ -1,3 +1,9 @@
+use (import "./common.ks").*;
+use (import "./state.ks").*;
+use (import "./semantic_tokens.ks").*;
+
+module:
+
 const initialize = (state :: &mut State, request :: Json.t) -> Json.t => (
     let mut response = Json.parse(@eval std.fs.read_file(std.path.dirname(__FILE__) + "/init.json"))
         |> Result.unwrap;
