@@ -7,7 +7,7 @@ use (import "../source_path.ks").*;
 use (import "../token.ks").*;
 use (import "../token_stream.ks").*;
 use (import "../lexer/_lib.ks").*;
-use (import "../json.ks").*;
+use (import "../json/_lib.ks").*;
 
 module:
 

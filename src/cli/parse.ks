@@ -53,7 +53,7 @@ const Parse = (
     );
 
     const run = (common_args :: Common.Args.t, args :: Args.t) => (
-        let ruleset_path = args.ruleset_path |> Option.unwrap_or("tests/syntax/kast.ks");
+        let ruleset_path = args.ruleset_path |> Option.unwrap_or("std/syntax.ks");
         ansi.with_mode(
             :Bold,
             () => (@current Output).write("Parsing syntax rules from " + ruleset_path + "\n\n"),

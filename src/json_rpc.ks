@@ -1,4 +1,4 @@
-use (import "./json.ks").*;
+use (import "./json/_lib.ks").*;
 const dep_json = import "../deps/json/lib.ks";
 use std.collections.OrdMap;
 

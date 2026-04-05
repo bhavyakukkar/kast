@@ -20,7 +20,7 @@
             name = "kast-js";
             src = filter {
               root = ./.;
-              include = [ ".justfile" "src" "deps" ];
+              include = [ ".justfile" "src" "deps" "std" ];
             };
             buildInputs = [ kast-bootstrap just ];
             buildPhase = ''

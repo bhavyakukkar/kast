@@ -189,7 +189,7 @@ const Compiler = (
     );
 
     const ruleset_path = () -> String => (
-        std.path.dirname(__FILE__) + "/syntax.ks"
+        "src/mini/syntax.ks"
     );
 
     const ruleset = () -> SyntaxRuleset.t => (
