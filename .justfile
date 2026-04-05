@@ -27,7 +27,7 @@ watch:
     wait
 
 test:
-    # just build
+    just build
     fd --type file --extension ks --exec-batch kast tokenize > /dev/null
     kast parse-syntax-rules tests/syntax/*.ks > /dev/null
     kast parse-json tests/json/*.json > /dev/null
