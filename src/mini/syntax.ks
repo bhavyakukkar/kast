@@ -32,7 +32,7 @@
 @syntax "cast" 60.5 @wrap never = value " " "as" " " target;
 @syntax "ref" 61 @wrap never = "&" _ ->;
 @syntax "instantiate_generic" 70 @wrap never = <- generic _=("[" ""/"\n\t" arg:any ""/"\n\\" "]");
-@syntax "." 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
+@syntax "field" 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
 @syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");
 @syntax "newtype" 500 @wrap never = "newtype" " " _;
@@ -44,6 +44,8 @@
 @syntax "record" 1000 @wrap if_any = "{" " "/"\n\t" _:any " "/"\n\\" "}";
 @syntax "target_dependent" 1000 @wrap always = "@cfg" " " "(" ""/"\n\t" branches:any ""/"\n\\" ")";
 @syntax "__FILE__" 1000 @wrap never = "__FILE__";
-
+@syntax "uninitialized" 1000 @wrap never = "uninitialized";
 # this one is needed for structural find & replace
 @syntax "core:unquote" 1000 @wrap never = "$" _ ->;
+
+

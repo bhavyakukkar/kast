@@ -27,6 +27,10 @@ const Ast = (
         | :StringLiteral String
         | :Var Var
         | :Obj ArrayList.t[ObjPart]
+        | :Field {
+            .obj :: Expr,
+            .field :: String,
+        }
         | :Fn {
             .args :: ArrayList.t[Var],
             .body :: Block,
@@ -44,7 +48,7 @@ const Ast = (
             .value :: Expr,
         }
         | :Assign {
-            .var :: Var,
+            .assignee :: Expr,
             .value :: Expr,
         }
         | :If {
@@ -76,6 +80,11 @@ const Ast = (
                             Print.expr(part);
                         );
                     );
+                )
+                | :Field { .obj, .field } => (
+                    Print.expr(obj);
+                    output.write(".");
+                    output.write(field);
                 )
                 | :Obj parts => (
                     output.write("{\n");
@@ -137,8 +146,8 @@ const Ast = (
                     output.write(" = ");
                     Print.expr(value);
                 )
-                | :Assign { .var, .value } => (
-                    output.write(var.name);
+                | :Assign { .assignee, .value } => (
+                    Print.expr(assignee);
                     output.write(" = ");
                     Print.expr(value);
                 )

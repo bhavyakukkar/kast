@@ -47,14 +47,21 @@ const Ir = (
 
     const ExprShape = newtype (
         | :Unit
+        | :Uninitialized
+        | :Claim PlaceExpr
+        | :Ref PlaceExpr
         | :Native NativeExpr
         | :StringLiteral String
-        | :Ident String
         | :Stmt Expr
         | :Let {
             .name :: String,
             .value :: Expr,
         }
+        | :Assign {
+            .assignee :: PlaceExpr,
+            .value :: Expr,
+        }
+        | :Fn FnDef
         | :Then ArrayList.t[Expr]
         | :Scope Expr
         | :If {
@@ -70,6 +77,22 @@ const Ir = (
 
     const Expr = newtype {
         .shape :: ExprShape,
+        .ty :: Type,
+        .span :: Span,
+    };
+
+    const PlaceExprShape = newtype (
+        | :Ident String
+        | :Field {
+            .obj :: PlaceExpr,
+            .field :: String,
+        }
+        | :Deref Expr
+        | :Temp Expr
+    );
+
+    const PlaceExpr = newtype {
+        .shape :: PlaceExprShape,
         .ty :: Type,
         .span :: Span,
     };

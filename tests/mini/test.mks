@@ -36,7 +36,21 @@ const int32_to_string = (x :: Int32) -> String => (
     @native "\(x).toString()"
 );
 
+const Foo = struct {
+    .f :: (Int32) -> (),
+    .g :: (Int32) -> (),
+};
+
 const main = () -> () => (
+    # print(int32_to_string(fib(@native "10")));
+    let foo :: Foo = uninitialized;
+    foo.f = (depth :: Int32) -> () => (
+        print(int32_to_string(depth));
+        if less(depth, @native "10") then (
+            foo.g(add(depth, @native "1"));
+        );
+    );
+    foo.g = (depth :: Int32) -> () => foo.f(depth);
+    foo.g(@native "0");
     print("Hello, world!");
-    print(int32_to_string(fib(@native "10")));
 );

@@ -38,16 +38,58 @@ const JavaScript = (
         ctx.next_var_id += 1;
         { .name }
     );
+
+    const Place = newtype {
+        .get :: () -> Ast.Expr,
+        .set :: Ast.Expr -> (),
+    };
+
+    const place_of_var = (var :: Ast.Var) -> Place => {
+        .get = () => :Var var,
+        .set = value => assign(:Var var, value),
+    };
+
+    const place_of_field = (obj :: Place, field :: String) -> Place => {
+        .get = () => :Field { .obj = obj.get(), .field },
+        .set = value => assign(:Field { .obj = obj.get(), .field }, value),
+    };
+
+    const calculate_place = (expr :: Ir.PlaceExpr) -> Place => with_return (
+        match expr.shape with (
+            | :Ident name => place_of_var(var(name))
+            | :Field { .obj, .field } => (
+                place_of_field(
+                    calculate_place(obj),
+                    field,
+                )
+            )
+            | :Deref ref_expr => panic("TODO deref")
+            | :Temp expr => (
+                let temp_var = new_var("temp");
+                let_var(temp_var, :Var calculate(expr));
+                place_of_var(temp_var)
+            )
+        )
+    );
+
     ## calculates expr and stores it in a var
     const calculate = (expr :: Ir.Expr) -> Ast.Var => with_return (
         let value :: Ast.Expr = match expr.shape with (
             | :Unit => :Null
+            | :Uninitialized => :Obj ArrayList.new()
             | :StringLiteral s => :StringLiteral s
+            | :Claim place => calculate_place(place).get()
             | :Let { .name, .value } => (
                 let value = calculate(value);
                 let_var(var(name), :Var value);
                 :Undefined
             )
+            | :Assign { .assignee, .value } => (
+                let assignee = calculate_place(assignee);
+                assignee.set(:Var calculate(value));
+                :Undefined
+            )
+            | :Fn def => compile_fn(def)
             | :Native { .parts = ir_parts } => (
                 let mut parts = ArrayList.new();
                 for part in ir_parts |> ArrayList.into_iter do (
@@ -59,7 +101,6 @@ const JavaScript = (
                 );
                 :RawConcat { .parts }
             )
-            | :Ident name => :Var var(name)
             | :Stmt expr => (
                 calculate(expr);
                 :Null
@@ -74,7 +115,7 @@ const JavaScript = (
                         .block = &mut block,
                         .ctx_var = (@current Scope).ctx_var,
                     };
-                    assign(result_var, :Var calculate(then_case));
+                    assign(:Var result_var, :Var calculate(then_case));
                     block
                 );
                 let else_case = match else_case with (
@@ -84,7 +125,7 @@ const JavaScript = (
                             .block = &mut block,
                             .ctx_var = (@current Scope).ctx_var,
                         };
-                        assign(result_var, :Var calculate(else_case));
+                        assign(:Var result_var, :Var calculate(else_case));
                         block
                     )
                     | :None => :None
@@ -151,8 +192,8 @@ const JavaScript = (
         insert_stmt(stmt);
     );
 
-    const assign = (var :: Ast.Var, value :: Ast.Expr) => (
-        let stmt = :Assign { .var, .value };
+    const assign = (assignee :: Ast.Expr, value :: Ast.Expr) => (
+        let stmt = :Assign { .assignee, .value };
         insert_stmt(stmt);
     );
 
