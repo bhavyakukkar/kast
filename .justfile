@@ -32,7 +32,7 @@ test:
     kast parse-syntax-rules tests/syntax/*.ks > /dev/null
     kast parse-json tests/json/*.json > /dev/null
     kast parse-json --use-kast-parser tests/json/*.json > /dev/null
-    fd --type file --extension ks --exec-batch kast parse > /dev/null
+    fd --exclude '**/doesnt-parse/*' --type file --extension ks --exec-batch kast parse > /dev/null
 
 lsp-stress-test:
     kast-bootstrap --target js lsp-stress-test/main.ks | kast lsp
