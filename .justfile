@@ -32,7 +32,7 @@ test:
     kast parse-syntax-rules tests/syntax/simple.ks > /dev/null
     kast parse-syntax-rules src/mini/syntax.ks > /dev/null
     kast parse-syntax-rules src/json/syntax.ks > /dev/null
-    kast parse-syntax-rules std/syntax/*.ks > /dev/null
+    kast parse-syntax-rules std/syntax.ks > /dev/null
     kast parse-json tests/json/*.json > /dev/null
     kast parse-json --use-kast-parser tests/json/*.json > /dev/null
     fd --exclude '**/doesnt-parse/*' --type file --extension ks --exec-batch kast parse > /dev/null

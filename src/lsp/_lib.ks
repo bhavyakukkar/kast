@@ -85,7 +85,7 @@ const Lsp = (
     const run = (arg :: CliArgs.t) => (
         (@current Stdout).color = false;
         (@current Stderr).color = false;
-        const kast_syntax_file :: Source = Source.read(SourcePath.file("std/syntax/kast.ks"));
+        const kast_syntax_file :: Source = Source.read(SourcePath.file("std/syntax.ks"));
         const minikast_syntax_file :: Source = Source.read(SourcePath.file("src/mini/syntax.ks"));
         let get_syntax = source => (
             let mut lexer = Lexer.new(source);
