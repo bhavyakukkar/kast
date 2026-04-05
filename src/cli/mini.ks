@@ -156,6 +156,9 @@ const Mini = (
                     if arg == "repl" then (
                         unwind subcommand (:Repl Repl.Args.parse(i + 1));
                     );
+                    if arg == "compile" then (
+                        unwind subcommand (:Compile Compile.Args.parse(i + 1));
+                    );
                     break;
                     i += 1;
                 );
