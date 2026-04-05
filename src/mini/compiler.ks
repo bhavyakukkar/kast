@@ -189,7 +189,7 @@ const Compiler = (
     );
 
     const ruleset_path = () -> String => (
-        "std/syntax/minikast.ks"
+        "src/mini/syntax.ks"
     );
 
     const ruleset = () -> SyntaxRuleset.t => (
