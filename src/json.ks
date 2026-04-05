@@ -101,7 +101,7 @@ const Json = (
     };
 
     const ruleset = () => (
-        let path = std.path.dirname(__FILE__) + "/../tests/syntax/json.ks";
+        let path = "std/syntax/json.ks";
         let mut lexer = Lexer.new(Source.read(SourcePath.file(path)));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         SyntaxParser.parse_syntax_ruleset(&mut token_stream)

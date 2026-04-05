@@ -60,7 +60,7 @@ const Highlight = (
     );
 
     const run = (common_args :: Common.Args.t, args :: Args.t) => (
-        let ruleset_path = args.ruleset |> Option.unwrap_or("tests/syntax/kast.ks");
+        let ruleset_path = args.ruleset |> Option.unwrap_or("std/syntax/kast.ks");
         let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
