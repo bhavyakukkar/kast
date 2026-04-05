@@ -1,19 +1,19 @@
-use (import "./output.ks").*;
-use (import "./span.ks").*;
-use (import "./diagnostic.ks").*;
-use (import "./tuple.ks").*;
-use (import "./source.ks").*;
-use (import "./source_path.ks").*;
-use (import "../deps/uri/src/lib.ks").*;
-use (import "./lexer/_lib.ks").*;
-use (import "./token.ks").*;
-use (import "./token_stream.ks").*;
-use (import "./position.ks").*;
-use (import "./syntax_rule.ks").*;
-use (import "./syntax_parser.ks").*;
-use (import "./ast.ks").*;
-use (import "./parser.ks").*;
-const dep = import "../deps/json/lib.ks";
+use (import "../output.ks").*;
+use (import "../span.ks").*;
+use (import "../diagnostic.ks").*;
+use (import "../tuple.ks").*;
+use (import "../source.ks").*;
+use (import "../source_path.ks").*;
+use (import "../../deps/uri/src/lib.ks").*;
+use (import "../lexer/_lib.ks").*;
+use (import "../token.ks").*;
+use (import "../token_stream.ks").*;
+use (import "../position.ks").*;
+use (import "../syntax_rule.ks").*;
+use (import "../syntax_parser.ks").*;
+use (import "../ast.ks").*;
+use (import "../parser.ks").*;
+const dep = import "../../deps/json/lib.ks";
 use std.collections.OrdMap;
 
 const error = [T] (span :: Span, message :: () -> ()) -> T => (
@@ -101,7 +101,7 @@ const Json = (
     };
 
     const ruleset = () => (
-        const path = "std/syntax/json.ks";
+        const path = "src/json/syntax.ks";
         const source = Source.read(SourcePath.file(path));
         let mut lexer = Lexer.new(source);
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));

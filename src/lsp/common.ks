@@ -13,7 +13,7 @@ use (import "../source_path.ks").*;
 use (import "../position.ks").*;
 use (import "../span.ks").*;
 use (import "../output.ks").*;
-use (import "../json.ks").*;
+use (import "../json/_lib.ks").*;
 use (import "../highlight.ks").*;
 use (import "../format.ks").*;
 use (import "../json_rpc.ks").*;

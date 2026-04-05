@@ -29,6 +29,7 @@ watch:
 test:
     just build
     fd --type file --extension ks --exec-batch kast tokenize > /dev/null
+    kast parse-syntax-rules src/json/syntax.ks > /dev/null
     kast parse-syntax-rules std/syntax/*.ks > /dev/null
     kast parse-json tests/json/*.json > /dev/null
     kast parse-json --use-kast-parser tests/json/*.json > /dev/null

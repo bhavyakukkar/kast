@@ -1,6 +1,6 @@
 use (import "./common.ks").*;
 use (import "../output.ks").*;
-use (import "../json.ks").*;
+use (import "../json/_lib.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
 const dep_json = import "../../deps/json/lib.ks";

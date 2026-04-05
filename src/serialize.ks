@@ -1,4 +1,4 @@
-use (import "./json.ks").*;
+use (import "./json/_lib.ks").*;
 use (import "./token.ks").*;
 use std.Ast;
 use std.collections.OrdMap;
