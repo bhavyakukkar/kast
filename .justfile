@@ -6,7 +6,7 @@ default:
 build continuous="":
     mkdir -p target
     # flock --exclusive target 
-    time kast-bootstrap compile \
+    time ${KAST_BIN:-kast-bootstrap} compile \
         {{continuous}} \
         --js-ref-vars false \
         --async always \
