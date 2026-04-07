@@ -54,7 +54,44 @@ const JavaScript = (
         .set = value => assign(:Field { .obj = obj.get(), .field }, value),
     };
 
-    const calculate_place = (expr :: Ir.PlaceExpr) -> Place => with_return (
+    const place_to_js = (place :: Place) -> Ast.Expr => (
+        let mut fields = ArrayList.new();
+        let get = :Fn {
+            .args = ArrayList.new(),
+            .body = (
+                let mut block = new_block();
+                with Scope = {
+                    .block = &mut block,
+                    .ctx_var = (@current Scope).ctx_var,
+                };
+                let result = place.get();
+                &mut block.stmts |> ArrayList.push_back(:Return result);
+                block
+            ),
+        };
+        let set_arg = new_var("new_value");
+        let set = :Fn {
+            .args = (
+                let mut args = ArrayList.new();
+                &mut args |> ArrayList.push_back(set_arg);
+                args
+            ),
+            .body = (
+                let mut block = new_block();
+                with Scope = {
+                    .block = &mut block,
+                    .ctx_var = (@current Scope).ctx_var,
+                };
+                place.set(:Var set_arg);
+                block
+            ),
+        };
+        &mut fields |> ArrayList.push_back(:Field { .name = "get", .value = get });
+        &mut fields |> ArrayList.push_back(:Field { .name = "set", .value = set });
+        :Obj fields
+    );
+
+    const calculate_place = (expr :: Ir.PlaceExpr) -> Place => (
         match expr.shape with (
             | :Ident name => place_of_var(var(name))
             | :Field { .obj, .field } => (
@@ -69,7 +106,28 @@ const JavaScript = (
                     name,
                 )
             )
-            | :Deref ref_expr => panic("TODO deref")
+            | :Deref reference => (
+                let var = new_var("ref");
+                let_var(var, :Var calculate(reference));
+                {
+                    .get = () => :Apply {
+                        .f = :Field { .obj = :Var var, .field = "get" },
+                        .args = ArrayList.new(),
+                    },
+                    .set = new_value => (
+                        insert_stmt(
+                            :Expr :Apply {
+                                .f = :Field { .obj = :Var var, .field = "set" },
+                                .args = (
+                                    let mut args = ArrayList.new();
+                                    &mut args |> ArrayList.push_back(new_value);
+                                    args
+                                ),
+                            }
+                        );
+                    ),
+                }
+            )
             | :Temp expr => (
                 let temp_var = new_var("temp");
                 let_var(temp_var, :Var calculate(expr));
@@ -89,6 +147,7 @@ const JavaScript = (
                 | :Char c => :StringLiteral to_string(c)
                 | :String s => :StringLiteral s
             )
+            | :Ref place => place_to_js(calculate_place(place))
             | :Claim place => calculate_place(place).get()
             | :Let { .name, .value } => (
                 let value = calculate(value);
