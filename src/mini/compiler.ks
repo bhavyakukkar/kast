@@ -5,6 +5,7 @@ use (import "../tuple.ks").*;
 use (import "../span.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
+use (import "../token.ks").*;
 use (import "../token_stream.ks").*;
 use (import "../lexer/_lib.ks").*;
 use (import "../syntax_ruleset.ks").*;
@@ -69,6 +70,7 @@ const Compiler = (
             .types = OrdMap.new(),
             .contexts = OrdMap.new(),
             .consts = OrdMap.new(),
+            .consts_order = ArrayList.new(),
             .fns = OrdMap.new(),
         },
     };
@@ -269,6 +271,12 @@ const Compiler = (
 
     const compile = (mut state :: State) -> Ir.Program => (
         with Context = state;
+        # Empty scope is need for initializing consts (they do name lookups)
+        let mut scope = {
+            .parent = :None,
+            .vars = OrdMap.new(),
+        };
+        with ScopeContext = scope;
         for item in &state.top_level_items |> ArrayList.iter do (
             match item^.kind with (
                 | :Type _ => (
@@ -363,8 +371,12 @@ const Compiler = (
 
     const resolve_type_aliases = (ty :: Ir.Type) -> Ir.Type => (
         match ty with (
+            | :Any => :Any
             | :Unit => :Unit
             | :Int32 => :Int32
+            | :Int64 => :Int64
+            | :Float64 => :Float64
+            | :Char => :Char
             | :Bool => :Bool
             | :String => :String
             | :Named name => (
@@ -386,6 +398,8 @@ const Compiler = (
                     | _ => :Named name
                 )
             )
+            | :Ref referenced => :Ref resolve_type_aliases(referenced)
+            | :List element => :List resolve_type_aliases(element)
             | :Fn { .args, .result } => (
                 let mut resolved_args = ArrayList.new();
                 for &arg in &args |> ArrayList.iter do (
@@ -400,25 +414,177 @@ const Compiler = (
         )
     );
 
-    const type_check = (span :: Span, expected :: Ir.Type, actual :: Ir.Type) => (
-        if not std.repr.structurally_equal(
-            resolve_type_aliases(expected),
-            resolve_type_aliases(actual),
-        ) then (
-            let diagnostic = {
-                .severity = :Error,
-                .source = :Compiler,
-                .message = () => (
+    const TypeCheckContext = @context newtype {
+        .fail :: [T] (() -> ()) -> T,
+    };
+
+    const short_type_name = (ty :: &Ir.Type) -> String => (
+        match ty^ with (
+            | :Any => "Any"
+            | :Ref _ => "a reference"
+            | :List _ => "a list"
+            | :Unit => "()"
+            | :Int32 => "Int32"
+            | :Int64 => "Int64"
+            | :Float64 => "Float64"
+            | :Bool => "Bool"
+            | :Char => "Char"
+            | :String => "String"
+            | :Named name => (
+                let ctx = @current Context;
+                let def = &ctx.program.types |> OrdMap.get(name) |> Option.unwrap;
+                let short_def = match def^ with (
+                    | :Opaque => "opaque"
+                    | :Enum _ => "enum"
+                    | :Union _ => "union"
+                    | :Struct _ => "struct"
+                    | :Alias _ => "alias"
+                );
+                name + " (" + short_def + ")"
+            )
+            | :Fn _ => "a function"
+        )
+    );
+
+    const type_check_impl = (expected :: &Ir.Type, actual :: &Ir.Type) => (
+        match { expected^, actual^ } with (
+            | { :Any, _ } => ()
+            | { _, :Any } => ()
+            | { :Ref ref a, :Ref ref b } => (
+                let parent_ctx = @current TypeCheckContext;
+                with TypeCheckContext = {
+                    .fail = [T] msg -> T => (
+                        parent_ctx.fail(
+                            () => (
+                                let output = @current Output;
+                                output.write("referenced types are different");
+                                msg()
+                            )
+                        )
+                    ),
+                };
+                type_check_impl(a, b);
+            )
+            | { :List ref a, :List ref b } => (
+                let parent_ctx = @current TypeCheckContext;
+                with TypeCheckContext = {
+                    .fail = [T] msg -> T => (
+                        parent_ctx.fail(
+                            () => (
+                                let output = @current Output;
+                                output.write("list element types are different");
+                                msg()
+                            )
+                        )
+                    ),
+                };
+                type_check_impl(a, b);
+            )
+            | { :Unit, :Unit } => ()
+            | { :Int32, :Int32 } => ()
+            | { :Int64, :Int64 } => ()
+            | { :Float64, :Float64 } => ()
+            | { :Bool, :Bool } => ()
+            | { :Char, :Char } => ()
+            | { :String, :String } => ()
+            | { :Named a, :Named b } => (
+                if a != b then (
+                    (@current TypeCheckContext).fail(
+                        () => (
+                            let output = @current Output;
+                            output.write("Expected ");
+                            output.write(a);
+                            output.write(", got ");
+                            output.write(b);
+                        )
+                    );
+                );
+            )
+            | { :Fn ref a, :Fn ref b } => (
+                if &a^.args |> ArrayList.length != &b^.args |> ArrayList.length then (
+                    (@current TypeCheckContext).fail(
+                        () => (
+                            let output = @current Output;
+                            output.write("Expected ");
+                            output.write(to_string(&a^.args |> ArrayList.length));
+                            output.write(" args, got ");
+                            output.write(to_string(&b^.args |> ArrayList.length));
+                        )
+                    );
+                );
+                for i in 0..&a^.args |> ArrayList.length do (
+                    let parent_ctx = @current TypeCheckContext;
+                    with TypeCheckContext = {
+                        .fail = [T] msg -> T => (
+                            parent_ctx.fail(
+                                () => (
+                                    let output = @current Output;
+                                    output.write("argument #");
+                                    output.write(to_string(i));
+                                    output.write(" is different\n");
+                                    msg()
+                                )
+                            )
+                        ),
+                    };
+                    type_check_impl(
+                        &a^.args |> ArrayList.at(i),
+                        &b^.args |> ArrayList.at(i),
+                    );
+                );
+                let parent_ctx = @current TypeCheckContext;
+                with TypeCheckContext = {
+                    .fail = [T] msg -> T => (
+                        parent_ctx.fail(
+                            () => (
+                                let output = @current Output;
+                                output.write("result type is different\n");
+                                msg()
+                            )
+                        )
+                    ),
+                };
+                type_check_impl(
+                    &a^.result,
+                    &b^.result,
+                );
+            )
+            | _ => (@current TypeCheckContext).fail(
+                () => (
                     let output = @current Output;
-                    output.write("Expected type ");
-                    Ir.Print.type_name(&expected);
+                    output.write("Expected ");
+                    output.write(short_type_name(expected));
                     output.write(", got ");
-                    Ir.Print.type_name(&actual);
-                ),
-                .span,
-                .related = ArrayList.new(),
-            };
-            Diagnostic.report_and_unwind(diagnostic)
+                    output.write(short_type_name(actual));
+                )
+            )
+        );
+    );
+
+    const type_check = (span :: Span, expected :: Ir.Type, actual :: Ir.Type) => (
+        with TypeCheckContext = {
+            .fail = [T] (inner_msg) -> T => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        let output = @current Output;
+                        output.write("Expected type ");
+                        Ir.Print.type_name(&expected);
+                        output.write(", got ");
+                        Ir.Print.type_name(&actual);
+                        output.write("\n");
+                        inner_msg();
+                    ),
+                    .span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
+        };
+        type_check_impl(
+            &resolve_type_aliases(expected),
+            &resolve_type_aliases(actual),
         );
     );
 
@@ -571,6 +737,61 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "deref" then (
+                        let reference_ast = root |> AstHelpers.expect_single_child(:None);
+                        let expected_reference_ty = match expected_ty with (
+                            | :None => :None
+                            | :Some ty => :Some :Ref ty
+                        );
+                        let reference = parse_expr(expected_reference_ty, reference_ast);
+                        let ty = match resolve_type_aliases(reference.ty) with (
+                            | :Ref referenced => referenced
+                            | _ => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        (@current Output).write("Expected a reference, got");
+                                        Ir.Print.type_name(&reference.ty);
+                                    ),
+                                    .span = reference_ast.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            )
+                        );
+                        return {
+                            .shape = :Place :Deref reference,
+                            .ty,
+                        };
+                    );
+                    if rule.name == "ref" then (
+                        let referenced = root |> AstHelpers.expect_single_child(:None);
+                        let expected_referenced_ty = match expected_ty with (
+                            | :None => :None
+                            | :Some ty => match resolve_type_aliases(ty) with (
+                                | :Ref referenced => :Some referenced
+                                | _ => (
+                                    let diagnostic = {
+                                        .severity = :Error,
+                                        .source = :Compiler,
+                                        .message = () => (
+                                            (@current Output).write("Expected not a reference but ");
+                                            Ir.Print.type_name(&ty);
+                                        ),
+                                        .span = ast.span,
+                                        .related = ArrayList.new(),
+                                    };
+                                    Diagnostic.report_and_unwind(diagnostic)
+                                )
+                            )
+                        );
+                        let referenced = parse_place_expr(expected_referenced_ty, referenced);
+                        return {
+                            .shape = :Expr :Ref referenced,
+                            .ty = :Ref referenced.ty
+                        };
+                    );
                     if rule.name == "record" then (
                         let ty = match expected_ty with (
                             | :Some ty => ty
@@ -869,6 +1090,7 @@ const Compiler = (
                                 expected_ty
                             );
                             let expr = parse_expr(expected_ty, expr);
+                            last_expr_ty = expr.ty;
                             &mut exprs |> ArrayList.push_back(expr);
                         );
                         return {
@@ -883,7 +1105,7 @@ const Compiler = (
                             |> Ast.unwrap_child_group;
                         let args_ast = args_ast |> AstHelpers.expect_single_child(:Some "args");
                         let f = parse_expr(:None, f_ast);
-                        let f_type = match f.ty with (
+                        let f_type = match resolve_type_aliases(f.ty) with (
                             | :Fn ty => ty
                             | _ => (
                                 let diagnostic = {
@@ -946,10 +1168,69 @@ const Compiler = (
                                 .ty = find_ident_ty(token.span, ident.name),
                             }
                         )
-                        | :String str => (
+                        | :Number { .raw, ... } => (
+                            let ty = expect_known_type(expected_ty, token.span);
+                            # TODO catch parse errors
+                            let literal = match resolve_type_aliases(ty) with (
+                                | :Int32 => :Int32 parse(raw)
+                                | :Int64 => :Int64 parse(raw)
+                                | :Float64 => :Float64 parse(raw)
+                                | _ => (
+                                    let diagnostic = {
+                                        .severity = :Error,
+                                        .source = :Compiler,
+                                        .message = () => (
+                                            (@current Output).write("Number literal can't be ");
+                                            Ir.Print.type_name(&ty);
+                                        ),
+                                        .span = token.span,
+                                        .related = ArrayList.new(),
+                                    };
+                                    Diagnostic.report_and_unwind(diagnostic)
+                                )
+                            );
                             return {
-                                .shape = :Expr :StringLiteral str.contents,
-                                .ty = :String,
+                                .shape = :Expr :Literal literal,
+                                .ty,
+                            };
+                        )
+                        | :String str => (
+                            let open_raw = Token.raw(str.open);
+                            let { ty, literal } = if open_raw == "\"" then (
+                                { :String, :String str.contents }
+                            ) else if open_raw == "'" then (
+                                if String.length(str.contents) == 0 then (
+                                    let diagnostic = {
+                                        .severity = :Error,
+                                        .source = :Compiler,
+                                        .message = () => (
+                                            (@current Output).write("Char literal can't be empty");
+                                        ),
+                                        .span = token.span,
+                                        .related = ArrayList.new(),
+                                    };
+                                    Diagnostic.report_and_unwind(diagnostic)
+                                );
+                                let c = String.at(str.contents, 0);
+                                if Char.string_encoding_len(c) != String.length(str.contents) then (
+                                    let diagnostic = {
+                                        .severity = :Error,
+                                        .source = :Compiler,
+                                        .message = () => (
+                                            (@current Output).write("Char literal must have exactly 1 char");
+                                        ),
+                                        .span = token.span,
+                                        .related = ArrayList.new(),
+                                    };
+                                    Diagnostic.report_and_unwind(diagnostic)
+                                );
+                                { :Char, :Char c }
+                            ) else (
+                                panic("Unkown string delimeter")
+                            );
+                            return {
+                                .shape = :Expr :Literal literal,
+                                .ty,
                             };
                         )
                         | _ => ()
@@ -1123,6 +1404,7 @@ const Compiler = (
         let { .name, .ty, .value } = @"const";
         let mut ctx = @current Context;
         let value = parse_expr(:Some parse_type(ty), value);
+        &mut ctx.program.consts_order |> ArrayList.push_back(name);
         &mut ctx.program.consts |> OrdMap.add(name, value);
     );
 

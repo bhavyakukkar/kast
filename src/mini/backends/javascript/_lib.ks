@@ -82,7 +82,13 @@ const JavaScript = (
         let value :: Ast.Expr = match expr.shape with (
             | :Unit => :Null
             | :Uninitialized => :Obj ArrayList.new()
-            | :StringLiteral s => :StringLiteral s
+            | :Literal literal => match literal with (
+                | :Int32 x => :NumberLiteral parse(to_string(x))
+                | :Int64 x => :NumberLiteral parse(to_string(x))
+                | :Float64 x => :NumberLiteral x
+                | :Char c => :StringLiteral to_string(c)
+                | :String s => :StringLiteral s
+            )
             | :Claim place => calculate_place(place).get()
             | :Let { .name, .value } => (
                 let value = calculate(value);
@@ -239,7 +245,7 @@ const JavaScript = (
         Ast.Print.stmts(compiled.top_level.stmts);
     );
 
-    const compile = (program :: Ir.Program) -> Compiled => (
+    const compile = (mut program :: Ir.Program) -> Compiled => (
         let mut state :: State = {
             .next_var_id = 0,
             .top_level = new_block(),
@@ -254,7 +260,8 @@ const JavaScript = (
         for { .key = name, .value = def } in program.fns |> OrdMap.into_iter do (
             let_var(var(name), compile_fn(def));
         );
-        for { .key = name, .value } in program.consts |> OrdMap.into_iter do (
+        for name in program.consts_order |> ArrayList.into_iter do (
+            let value = &mut program.consts |> OrdMap.remove(name) |> Option.unwrap;
             let_var(var(name), :Var calculate(value));
         );
         if &program.fns |> OrdMap.get("main") is :Some _ then (

@@ -51,13 +51,22 @@ const Ir = (
         .parts :: ArrayList.t[NativeExprPart],
     };
 
+    const Literal = newtype (
+        | :Bool Bool
+        | :Int32 Int32
+        | :Int64 Int64
+        | :Float64 Float64
+        | :Char Char
+        | :String String
+    );
+
     const ExprShape = newtype (
         | :Unit
         | :Uninitialized
         | :Claim PlaceExpr
         | :Ref PlaceExpr
         | :Native NativeExpr
-        | :StringLiteral String
+        | :Literal Literal
         | :Stmt Expr
         | :Let {
             .name :: String,
@@ -129,6 +138,7 @@ const Ir = (
         .types :: OrdMap.t[String, TypeDef],
         .contexts :: OrdMap.t[String, Type],
         .consts :: OrdMap.t[String, Expr],
+        .consts_order :: ArrayList.t[String],
         .fns :: OrdMap.t[String, FnDef],
     };
 
@@ -151,10 +161,14 @@ const Ir = (
         const type_name = (self :: &Type) => (
             let output = @current Output;
             match self^ with (
+                | :Any => output.write("Any")
                 | :Unit => output.write("()")
-                | :Int32 => output.write("<Int32>")
-                | :Bool => output.write("<Bool>")
-                | :String => output.write("<String>")
+                | :Bool => output.write("Bool")
+                | :Int32 => output.write("Int32")
+                | :Int64 => output.write("Int64")
+                | :Float64 => output.write("Float64")
+                | :Char => output.write("Char")
+                | :String => output.write("String")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type(ty)
             )

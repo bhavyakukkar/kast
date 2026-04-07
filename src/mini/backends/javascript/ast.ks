@@ -24,6 +24,7 @@ const Ast = (
         }
         | :Undefined
         | :Null
+        | :NumberLiteral Float64
         | :StringLiteral String
         | :Var Var
         | :Obj ArrayList.t[ObjPart]
@@ -108,6 +109,7 @@ const Ast = (
                 )
                 | :Null => output.write("null")
                 | :Undefined => output.write("undefined")
+                | :NumberLiteral x => output.write(to_string(x))
                 | :StringLiteral s => output.write(String.escape(s))
                 | :Var var => output.write(var.name)
                 | :Fn { .args, .body } => (
