@@ -73,6 +73,10 @@ const Ir = (
             .f :: Expr,
             .args :: ArrayList.t[Expr],
         }
+        | :InjectContext {
+            .name :: String,
+            .value :: Expr,
+        }
     );
 
     const Expr = newtype {
@@ -87,6 +91,7 @@ const Ir = (
             .obj :: PlaceExpr,
             .field :: String,
         }
+        | :CurrentContext String
         | :Deref Expr
         | :Temp Expr
     );
@@ -110,6 +115,7 @@ const Ir = (
 
     const Program = newtype {
         .types :: OrdMap.t[String, TypeDef],
+        .contexts :: OrdMap.t[String, Type],
         .consts :: OrdMap.t[String, Expr],
         .fns :: OrdMap.t[String, FnDef],
     };

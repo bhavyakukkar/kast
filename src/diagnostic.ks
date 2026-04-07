@@ -21,7 +21,6 @@ const Diagnostic = (
         );
         std.sys.exit(-1)
     );
-
     ## Similar to panic but we don't care about stacktrace in this case
     ## Use for errors that are targeted at user
     const abort = [T] (msg :: String) -> T => (
@@ -71,6 +70,7 @@ const Diagnostic = (
     const default_handler = (.stop_on_error :: Bool) -> Handler => {
         .stop_on_error,
         .handle = (diagnostic :: Diagnostic.t) => (
+            with Output = (@current Stderr);
             let output = @current Output;
             ansi.with_mode(
                 :Red,

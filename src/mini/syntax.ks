@@ -7,6 +7,7 @@
 @syntax "union" 2.5 @wrap never = "union" " " def;
 @syntax "struct" 2.5 @wrap never = "struct" " " def;
 @syntax "let" 3 @wrap never = "let" " " pattern " " "=" " " value;
+@syntax "type alias" 3.5 @wrap never = "type" " " _;
 @syntax "leading union" 3.99 @wrap never = "|" " " _;
 @syntax "union" 4 @wrap if_any_assoc = <- _ " "/"\n" "|" " " _;
 @syntax "comma" 5 @wrap if_any_assoc = <- _ "," " "/"\n" _;
@@ -21,13 +22,14 @@
 @syntax "if_without_else" 7.5 @wrap never = "if" " " cond " " "then" " " then_case;
 @syntax "if" 7.5 @wrap never = "if" " " cond " " "then" " " then_case " " "else" " " else_case ->;
 @syntax "unwindable" 7.7 @wrap never = "unwindable" " " token: >=1000 " " body;
-@syntax "unwind" 7.7 @wrap never = "unwind" " " token: >=1000 " " value;
+@syntax "unwind" 7.7 @wrap never = "unwind" " " token: >=1000 " " "with" " " value;
 @syntax "create_context_type" 9 @wrap never = "@context" " " type;
 @syntax "native" 9 @wrap never = "@native" " " _;
 @syntax "inject_context" 9.5 @wrap never = "with" " " context_type " " "=" " " value;
 @syntax "current_context" 9.5 @wrap never = "@current" " " context_type;
 @syntax "or" 10 @wrap if_any_assoc = <- _ " "/"\n" "or" " " _;
 @syntax "and" 11 @wrap if_any_assoc = <- _ " "/"\n" "and" " " _;
+@syntax "==" 15 @wrap never = _ " " "==" " " _;
 @syntax "variant" 42 @wrap never = ":" label: >=1000;
 @syntax "cast" 60.5 @wrap never = value " " "as" " " target;
 @syntax "ref" 61 @wrap never = "&" _ ->;

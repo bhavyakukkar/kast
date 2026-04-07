@@ -63,6 +63,12 @@ const JavaScript = (
                     field,
                 )
             )
+            | :CurrentContext name => (
+                place_of_field(
+                    place_of_var((@current Scope).ctx_var),
+                    name,
+                )
+            )
             | :Deref ref_expr => panic("TODO deref")
             | :Temp expr => (
                 let temp_var = new_var("temp");
@@ -71,7 +77,6 @@ const JavaScript = (
             )
         )
     );
-
     ## calculates expr and stores it in a var
     const calculate = (expr :: Ir.Expr) -> Ast.Var => with_return (
         let value :: Ast.Expr = match expr.shape with (
@@ -100,6 +105,21 @@ const JavaScript = (
                     &mut parts |> ArrayList.push_back(part);
                 );
                 :RawConcat { .parts }
+            )
+            | :InjectContext { .name, .value } => (
+                let value = :Var calculate(value);
+                let ctx_var = new_var("ctx");
+                let_var(
+                    ctx_var,
+                    :Obj (
+                        let mut parts = ArrayList.new();
+                        &mut parts |> ArrayList.push_back(:Unpack :Var (@current Scope).ctx_var);
+                        &mut parts |> ArrayList.push_back(:Field { .name, .value });
+                        parts
+                    )
+                );
+                (@current Scope).ctx_var = ctx_var;
+                :Null
             )
             | :Stmt expr => (
                 calculate(expr);
@@ -146,7 +166,10 @@ const JavaScript = (
                 );
                 result
             )
-            | :Scope expr => return calculate(expr)
+            | :Scope expr => (
+                with Scope = { ...(@current Scope) };
+                return calculate(expr)
+            )
             | :Apply { .f, .args = ir_args } => (
                 let f :: Ast.Var = calculate(f);
                 let mut args :: ArrayList.t[Ast.Expr] = ArrayList.new();

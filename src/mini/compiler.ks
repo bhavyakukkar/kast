@@ -28,12 +28,14 @@ const Compiler = (
         | :Enum
         | :Struct
         | :Union
+        | :Alias
         | :Native
     );
 
     const TopLevelKind = newtype (
         | :Type TypeKind
         | :Fn
+        | :Context
     );
 
     const TopLevelItem = newtype {
@@ -63,6 +65,7 @@ const Compiler = (
         .consts = ArrayList.new(),
         .program = {
             .types = OrdMap.new(),
+            .contexts = OrdMap.new(),
             .consts = OrdMap.new(),
             .fns = OrdMap.new(),
         },
@@ -112,6 +115,15 @@ const Compiler = (
             );
             let name = name |> AstHelpers.expect_ident;
             if value.shape is :Rule { .rule, .root } then (
+                if rule.name == "type alias" then (
+                    let item = {
+                        .name,
+                        .kind = :Type :Alias,
+                        .def = root |> AstHelpers.expect_single_child(:None),
+                    };
+                    &mut state^.top_level_items |> ArrayList.push_back(item);
+                    return;
+                );
                 if rule.name == "enum" then (
                     type_def(name, :Enum, root);
                     return;
@@ -148,6 +160,15 @@ const Compiler = (
                         .name,
                         .kind = :Fn,
                         .def = value,
+                    };
+                    &mut state^.top_level_items |> ArrayList.push_back(item);
+                    return;
+                );
+                if rule.name == "create_context_type" then (
+                    let item = {
+                        .name,
+                        .kind = :Context,
+                        .def = root |> AstHelpers.expect_single_child(:Some "type"),
                     };
                     &mut state^.top_level_items |> ArrayList.push_back(item);
                     return;
@@ -220,15 +241,19 @@ const Compiler = (
                 | :Type _ => (
                     &mut state.type_names |> OrdSet.add(item^.name);
                 )
-                | :Fn => ()
+                | _ => ()
             )
         );
         for item in &state.top_level_items |> ArrayList.iter do (
             match item^.kind with (
-                | :Type _ => ()
                 | :Fn => (
                     preprocess_toplevel_fn(item^.name, item^.def);
                 )
+                | :Context => (
+                    &mut state.program.contexts
+                        |> OrdMap.add(item^.name, parse_type(item^.def));
+                )
+                | _ => ()
             )
         );
         for item in &state.top_level_items |> ArrayList.iter do (
@@ -237,6 +262,9 @@ const Compiler = (
                 | :Type kind => match kind with (
                     | :Opaque => (
                         &mut state.program.types |> OrdMap.add(name, :Opaque);
+                    )
+                    | :Alias => (
+                        &mut state.program.types |> OrdMap.add(name, :Alias parse_type(def));
                     )
                     | :Enum => process_enum(.name, .def)
                     | :Union => process_struct_or_union(.name, .kind, .def)
@@ -475,10 +503,34 @@ const Compiler = (
         Diagnostic.report_and_unwind(diagnostic)
     );
 
+    const parse_context_type = (ast :: Ast.t) -> { String, Ir.Type } => (
+        let ctx = @current Context;
+        let context_name = ast |> AstHelpers.expect_ident;
+        let context_ty = match &ctx.program.contexts |> OrdMap.get(context_name) with (
+            | :Some &ty => ty
+            | :None => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        let output = @current Output;
+                        output.write("Unknown context ");
+                        output.write(String.escape(context_name));
+                    ),
+                    .span = ast.span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
+        );
+        { context_name, context_ty }
+    );
+
     const parse_expr_impl = (
         expected_ty :: Option.t[Ir.Type],
         ast :: Ast.t,
     ) -> ParsedExpr => (
+        let ctx = @current Context;
         let { .shape, .ty } = with_return (
             match ast.shape with (
                 | :Empty => return {
@@ -628,6 +680,28 @@ const Compiler = (
                         return {
                             .shape = :Expr :Scope inner,
                             .ty = inner.ty,
+                        };
+                    );
+                    if rule.name == "inject_context" then (
+                        let { context_type, value } = root
+                            |> AstHelpers.expect_two_children(:Some { "context_type", "value" });
+                        let { context_name, context_ty } = parse_context_type(context_type);
+                        return {
+                            .shape = :Expr :InjectContext {
+                                .name = context_name,
+                                .value = parse_expr(:Some context_ty, value),
+                            },
+                            .ty = :Unit,
+                        };
+
+                    );
+                    if rule.name == "current_context" then (
+                        let context_type = root
+                            |> AstHelpers.expect_single_child(:Some "context_type");
+                        let { context_name, context_ty } = parse_context_type(context_type);
+                        return {
+                            .shape = :Place :CurrentContext context_name,
+                            .ty = context_ty,
                         };
                     );
                     if rule.name == "then" then (

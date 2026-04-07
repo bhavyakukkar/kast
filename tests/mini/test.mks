@@ -40,8 +40,25 @@ const Foo = struct {
     .f :: (Int32) -> (),
     .g :: (Int32) -> (),
 };
+# const Parse = struct {
+#     .parse :: String -> Any,
+# };
+# const parse = (T :: Type) -> (String -> Any) => (
+#     (s :: String) -> Any => (
+#         (T as Parse).parse(s)
+#     )
+# );
+
+const Ctx = @context String;
 
 const main = () -> () => (
+    with Ctx = "outside";
+    (
+        print(@current Ctx);
+        with Ctx = "inside";
+        print(@current Ctx);
+    );
+    print(@current Ctx);
     # print(int32_to_string(fib(@native "10")));
     let foo :: Foo = uninitialized;
     foo.f = (depth :: Int32) -> () => (
@@ -53,4 +70,5 @@ const main = () -> () => (
     foo.g = (depth :: Int32) -> () => foo.f(depth);
     foo.g(@native "0");
     print("Hello, world!");
+# let x :: Int32 = parse(Type_Int32)("123");
 );
