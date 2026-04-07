@@ -31,6 +31,7 @@ const Ir = (
         | :Any
         | :Ref Type
         | :List Type
+        | :UnwindToken Type
         | :Unit
         | :Int32
         | :Int64
@@ -171,6 +172,16 @@ const Ir = (
                 | :String => output.write("String")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type(ty)
+                | :List ref element_ty => (
+                    output.write("List[");
+                    Print.type_name(element_ty);
+                    output.write("]");
+                )
+                | :UnwindToken ref result_ty => (
+                    output.write("UnwindToken[");
+                    Print.type_name(result_ty);
+                    output.write("]");
+                )
             )
         );
 

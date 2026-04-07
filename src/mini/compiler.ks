@@ -480,6 +480,21 @@ const Compiler = (
                 };
                 type_check_impl(a, b);
             )
+            | { :UnwindToken ref a, :UnwindToken ref b } => (
+                let parent_ctx = @current TypeCheckContext;
+                with TypeCheckContext = {
+                    .fail = [T] msg -> T => (
+                        parent_ctx.fail(
+                            () => (
+                                let output = @current Output;
+                                output.write("unwind tokens' result types are different");
+                                msg()
+                            )
+                        )
+                    ),
+                };
+                type_check_impl(a, b);
+            )
             | { :Unit, :Unit } => ()
             | { :Int32, :Int32 } => ()
             | { :Int64, :Int64 } => ()
@@ -1287,6 +1302,10 @@ const Compiler = (
                 if rule.name == "ref" then (
                     let referenced = root |> AstHelpers.expect_single_child(:None);
                     return :Ref parse_type(referenced);
+                );
+                if rule.name == "unwind_token" then (
+                    let result_ty = root |> AstHelpers.expect_single_child(:None);
+                    return :UnwindToken parse_type(result_ty);
                 );
                 if rule.name == "list" then (
                     let element = root |> AstHelpers.expect_single_child(:None);

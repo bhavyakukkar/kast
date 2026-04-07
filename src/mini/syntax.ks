@@ -34,6 +34,7 @@
 @syntax "cast" 60.5 @wrap never = value " " "as" " " target;
 @syntax "ref" 61 @wrap never = "&" _ ->;
 @syntax "list" 70 @wrap never = <- "List" "[" _:any "]";
+@syntax "unwind_token" 70 @wrap never = <- "UnwindToken" "[" _:any "]";
 @syntax "field" 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
 @syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");
