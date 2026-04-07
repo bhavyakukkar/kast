@@ -51,7 +51,30 @@ const Foo = struct {
 
 const Ctx = @context String;
 
+const S = struct {
+    .a :: Int32,
+    .b :: String,
+};
+
+const U = union {
+    .a :: String,
+    .b :: (),
+};
+
+const dbg_print_S = (s :: S) -> () => (
+    @native "console.log(\(s))"
+);
+const dbg_print_U = (u :: U) -> () => (
+    @native "console.log(\(u))"
+);
+
 const main = () -> () => (
+    let s :: S = { .a = @native "1", .b = "2" };
+    dbg_print_S(s);
+    print(s.b);
+    let u :: U = { .b = () };
+    dbg_print_U(u);
+    print(u.a);
     with Ctx = "outside";
     (
         print(@current Ctx);

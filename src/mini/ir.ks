@@ -28,9 +28,15 @@ const Ir = (
     };
 
     const Type = newtype (
+        | :Any
+        | :Ref Type
+        | :List Type
         | :Unit
         | :Int32
+        | :Int64
+        | :Float64
         | :Bool
+        | :Char
         | :String
         | :Named String
         | :Fn FnType
@@ -77,7 +83,13 @@ const Ir = (
             .name :: String,
             .value :: Expr,
         }
+        | :Record ArrayList.t[Field]
     );
+
+    const Field = newtype {
+        .name :: String,
+        .value :: Expr,
+    };
 
     const Expr = newtype {
         .shape :: ExprShape,

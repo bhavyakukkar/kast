@@ -33,7 +33,7 @@
 @syntax "variant" 42 @wrap never = ":" label: >=1000;
 @syntax "cast" 60.5 @wrap never = value " " "as" " " target;
 @syntax "ref" 61 @wrap never = "&" _ ->;
-@syntax "instantiate_generic" 70 @wrap never = <- generic _=("[" ""/"\n\t" arg:any ""/"\n\\" "]");
+@syntax "list" 70 @wrap never = <- "List" "[" _:any "]";
 @syntax "field" 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
 @syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");

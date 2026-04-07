@@ -89,6 +89,17 @@ const JavaScript = (
                 let_var(var(name), :Var value);
                 :Undefined
             )
+            | :Record fields => (
+                let mut js_fields = ArrayList.new();
+                for field in fields |> ArrayList.into_iter do (
+                    let field = {
+                        .name = field.name,
+                        .value = :Var calculate(field.value),
+                    };
+                    &mut js_fields |> ArrayList.push_back(:Field field)
+                );
+                :Obj js_fields
+            )
             | :Assign { .assignee, .value } => (
                 let assignee = calculate_place(assignee);
                 assignee.set(:Var calculate(value));

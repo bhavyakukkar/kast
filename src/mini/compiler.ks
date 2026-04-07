@@ -51,6 +51,7 @@ const Compiler = (
     };
 
     const State = newtype {
+        .top_level_item_def_span :: OrdMap.t[String, Span],
         .top_level_items :: ArrayList.t[TopLevelItem],
         .consts :: ArrayList.t[Const],
         .type_names :: OrdSet.t[String],
@@ -59,6 +60,7 @@ const Compiler = (
     };
 
     const init = () -> State => {
+        .top_level_item_def_span = OrdMap.new(),
         .top_level_items = ArrayList.new(),
         .type_names = OrdSet.new(),
         .fn_types = OrdMap.new(),
@@ -88,8 +90,37 @@ const Compiler = (
             };
             &mut state^.top_level_items |> ArrayList.push_back(item);
         );
+        let set_top_level_def = (name :: String, span :: Span) => (
+            if &state^.top_level_item_def_span |> OrdMap.get(name) is :Some &other_span then (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        let output = @current Output;
+                        output.write("Top level item ");
+                        output.write(String.escape(name));
+                        output.write(" has already been defined");
+                    ),
+                    .span,
+                    .related = (
+                        let mut related = ArrayList.new();
+                        let info = {
+                            .span = other_span,
+                            .message = () => (
+                                let output = @current Output;
+                                output.write("Previous definition is here");
+                            ),
+                        };
+                        &mut related |> ArrayList.push_back(info);
+                        related
+                    ),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            );
+            &mut state^.top_level_item_def_span |> OrdMap.add(name, span);
+        );
         let top_level_item = (root :: Ast.Group) => with_return (
-            let name = (
+            let name_ast = (
                 &root.children
                     |> Tuple.get_named("name")
             )^
@@ -99,11 +130,12 @@ const Compiler = (
                     |> Tuple.get_named("value")
             )^
                 |> Ast.unwrap_child_value;
-            if name.shape is :Rule { .rule, .root } then (
+            if name_ast.shape is :Rule { .rule, .root } then (
                 if rule.name == "type ascribe" then (
-                    let { name, ty } = root
+                    let { name_ast, ty } = root
                         |> AstHelpers.expect_two_children(:Some { "expr", "type" });
-                    let name = name |> AstHelpers.expect_ident;
+                    let name = name_ast |> AstHelpers.expect_ident;
+                    set_top_level_def(name, name_ast.span);
                     let @"const" = {
                         .name,
                         .ty,
@@ -113,7 +145,8 @@ const Compiler = (
                     return;
                 );
             );
-            let name = name |> AstHelpers.expect_ident;
+            let name = name_ast |> AstHelpers.expect_ident;
+            set_top_level_def(name, name_ast.span);
             if value.shape is :Rule { .rule, .root } then (
                 if rule.name == "type alias" then (
                     let item = {
@@ -538,6 +571,120 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "record" then (
+                        let ty = match expected_ty with (
+                            | :Some ty => ty
+                            | :None => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        (@current Output).write("Couldn't figure out the type of this record");
+                                    ),
+                                    .span = ast.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            )
+                        );
+                        const Kind = newtype (
+                            | :Union
+                            | :Struct
+                        );
+                        let {
+                            kind :: Kind,
+                            field_types :: OrdMap.t[String, Ir.Type],
+                        } = with_return (
+                            match resolve_type_aliases(ty) with (
+                                | :Named name => (
+                                    let def = &ctx.program.types |> OrdMap.get(name) |> Option.unwrap;
+                                    match def^ with (
+                                        | :Struct { .fields } => return { :Struct, fields }
+                                        | :Union { .variants } => return { :Union, variants }
+                                        | _ => ()
+                                    )
+                                )
+                                | _ => ()
+                            );
+                            let diagnostic = {
+                                .severity = :Error,
+                                .source = :Compiler,
+                                .message = () => (
+                                    let output = @current Output;
+                                    output.write("Type ");
+                                    Ir.Print.type_name(&ty);
+                                    output.write("can't be used as record");
+                                ),
+                                .span = ast.span,
+                                .related = ArrayList.new(),
+                            };
+                            Diagnostic.report_and_unwind(diagnostic)
+                        );
+                        let mut fields_initialized = OrdMap.new();
+                        let mut fields = ArrayList.new();
+                        for field in Ast.iter_list(
+                            root |> AstHelpers.expect_single_child(:None),
+                            .binary_rule_name = "comma",
+                            .trailing_or_leading_rule_name = :Some "trailing comma",
+                        ) do (
+                            let { name_ast, value } = field
+                                |> AstHelpers.expect_rule("field init")
+                                |> AstHelpers.expect_two_children(:Some { "label", "value" });
+                            let name = name_ast |> AstHelpers.expect_ident;
+                            let field_ty = match &field_types |> OrdMap.get(name) with (
+                                | :Some &ty => ty
+                                | :None => (
+                                    let diagnostic = {
+                                        .severity = :Error,
+                                        .source = :Compiler,
+                                        .message = () => (
+                                            let output = @current Output;
+                                            output.write("Type ");
+                                            Ir.Print.type_name(&ty);
+                                            output.write("doesn't have field ");
+                                            output.write(String.escape(name));
+                                        ),
+                                        .span = name_ast.span,
+                                        .related = ArrayList.new(),
+                                    };
+                                    Diagnostic.report_and_unwind(diagnostic)
+                                )
+                            );
+                            if &fields_initialized |> OrdMap.get(name) is :Some &other_span then (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        let output = @current Output;
+                                        output.write("Field ");
+                                        output.write(String.escape(name));
+                                        output.write(" has already been initialized");
+                                    ),
+                                    .span = name_ast.span,
+                                    .related = (
+                                        let mut related = ArrayList.new();
+                                        let info = {
+                                            .span = other_span,
+                                            .message = () => (
+                                                let output = @current Output;
+                                                output.write("Previously field was initialized here");
+                                            ),
+                                        };
+                                        &mut related |> ArrayList.push_back(info);
+                                        related
+                                    ),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            );
+                            &mut fields_initialized |> OrdMap.add(name, name_ast.span);
+                            let value = parse_expr(:Some field_ty, value);
+                            &mut fields |> ArrayList.push_back({ .name, .value });
+                        );
+                        return {
+                            .shape = :Expr :Record fields,
+                            .ty,
+                        };
+                    );
                     if rule.name == "fn" then (
                         let fn = parse_fn_def(
                             ast,
@@ -856,6 +1003,14 @@ const Compiler = (
         match ast.shape with (
             | :Empty => return :Unit
             | :Rule { .rule, .root } => (
+                if rule.name == "ref" then (
+                    let referenced = root |> AstHelpers.expect_single_child(:None);
+                    return :Ref parse_type(referenced);
+                );
+                if rule.name == "list" then (
+                    let element = root |> AstHelpers.expect_single_child(:None);
+                    return :List parse_type(element);
+                );
                 if rule.name == "fn_type" then (
                     let { arg_asts, result } = root
                         |> AstHelpers.expect_two_children(:Some { "args", "result" });
@@ -882,9 +1037,13 @@ const Compiler = (
             | :Token token => match token.shape with (
                 | :Ident ident => (
                     let name = ident.name;
+                    if name == "Any" then return :Any;
                     if name == "Unit" then return :Unit;
                     if name == "Bool" then return :Bool;
                     if name == "Int32" then return :Int32;
+                    if name == "Int64" then return :Int64;
+                    if name == "Float64" then return :Float64;
+                    if name == "Char" then return :Char;
                     if name == "String" then return :String;
                     if not &(@current Context).type_names |> OrdSet.contains(name) then (
                         let diagnostic = {
