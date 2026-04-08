@@ -1,0 +1,56 @@
+const AllocateInfo = struct {
+    .stride :: Int32,
+    .size :: Int32,
+};
+
+const MemberOffsetOrName = type Int32;
+
+const initialize_offset_or_name = (
+    name :: String,
+) -> MemberOffsetOrName => (
+    0
+);
+
+const MemberInfo = struct {
+    .offset_or_name :: MemberOffsetOrName,
+    .ty :: &TypeInfo,
+};
+
+const TypeInfo = struct {
+    .members :: List[MemberInfo],
+    .allocate_info :: AllocateInfo,
+};
+
+const get_member = (
+    obj :: &Any,
+    member :: &MemberInfo,
+) -> &Any => (
+    @native "\(obj) + \(member^.offset_or_name)"
+);
+
+const allocate_type_on_stack = (
+    T :: &TypeInfo,
+) -> &Any => (
+    # TODO this fn must be inlined
+    @native "alloca(\(T^.allocate_info.size))"
+);
+
+const allocate_type_on_heap = (
+    T :: &TypeInfo,
+) -> &Any => (
+    @native "malloc(\(T^.allocate_info.size))"
+);
+
+const initialize_T_for_struct = (
+    T :: &TypeInfo,
+) -> () => (
+    # TODO calculate member offsets and size
+);
+
+const copy = (
+    target :: &Any,
+    source :: &Any,
+    T :: &TypeInfo,
+) -> () => (
+    @native "memcpy(\(target), \(source), \(T^.allocate_info.size))"
+);

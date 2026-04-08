@@ -1,0 +1,70 @@
+const AllocateInfo = struct {
+    .is_object :: Bool,
+};
+
+const MemberOffsetOrName = type String;
+
+const initialize_offset_or_name = (
+    name :: String,
+) -> MemberOffsetOrName => (
+    name
+);
+
+const MemberInfo = struct {
+    .offset_or_name :: MemberOffsetOrName,
+    .ty :: &TypeInfo,
+};
+
+const TypeInfo = struct {
+    .members :: List[MemberInfo],
+    .allocate_info :: AllocateInfo,
+};
+
+const get_member = (obj :: &Any, member :: &MemberInfo) -> &Any => (
+    @native "{get:()=>\(obj).get()[\(member^.offset_or_name)],set:value=>\(obj).get()[\(member^.offset_or_name)]=value}"
+);
+
+const allocate_type_on_stack = (
+    T :: &TypeInfo,
+) -> &Any => (
+    if T^.allocate_info.is_object then (
+        let result :: Any = @native "{}";
+        let setup_member = (member :: MemberInfo) -> () => (
+            get_member(&result, &member)^ = allocate_type(member.ty)
+        );
+        @native "for (let member of \(T^.members)) { \(setup_member)(undefined, member) }";
+        &result
+    ) else (
+        &uninitialized
+    )
+);
+
+const allocate_type_on_heap = (T :: &TypeInfo) -> &Any => (
+    allocate_type_on_stack(T)
+);
+
+const initialize_type_info_for_struct = (
+    T :: &TypeInfo,
+) -> () => (
+    T^.allocate_info.is_object = true;
+);
+
+const copy = (
+    target :: &Any,
+    source :: &Any,
+    T :: &TypeInfo,
+) -> () => (
+    if T^.allocate_info.is_object then (
+        target^ = @native "{}";
+        let copy_member = (member :: MemberInfo) -> () => (
+            copy(
+                get_member(target, &member),
+                get_member(source, &member),
+                member.ty,
+            );
+        );
+        @native "for (let member of \(T^.members)) { \(copy_member)(undefined, member) }";
+    ) else (
+        target^ = source^;
+    );
+);

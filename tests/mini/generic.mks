@@ -1,0 +1,44 @@
+# const GenericType = [T] newtype {
+#     .field :: T,
+# };
+# const generic_fn = [T] (field :: T) -> GenericType[T] => (
+#     { .field }
+# );
+# let x = generic_fn[Int32](123);
+
+const TypeInfo_TypeInfo :: TypeInfo = @TypeInfo(TypeInfo);
+
+const Int32_TypeInfo :: TypeInfo = @TypeInfo(Int32);
+
+const GenericType = (T :: &TypeInfo) -> &TypeInfo => (
+    # TODO memoization
+    let result :: &TypeInfo = allocate_type_on_heap(TypeInfo_TypeInfo);
+    let member_field :: MemberInfo = {
+        .offset_or_name = initialize_offset_or_name("field"),
+    };
+    result^.members = List[member_field];
+    initialize_type_info_for_struct(result);
+    result
+);
+
+const generic_fn = (T :: &TypeInfo) -> ((&Any, &Any) -> ()) => (
+    (field :: &Any, result :: &Any) -> () => (
+        let GenericType_of_T = GenericType(T);
+        let result_field = get_member(
+            result,
+            &GenericType_of_T^.members.(0),
+        );
+        copy(result_field, field, T);
+    )
+);
+
+const const_123 :: Int32 = 123;
+
+const GenericType_of_Int32 = struct {
+    .field :: Int32,
+};
+
+const main = () -> () => (
+    let x :: GenericType_of_Int32 = uninitialized;
+    generic_fn(&Int32_TypeInfo)(&const_123, x);
+);
