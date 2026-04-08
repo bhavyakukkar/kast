@@ -2,6 +2,7 @@ use (import "../log.ks").*;
 use (import "../output.ks").*;
 use (import "../diagnostic.ks").*;
 use (import "../tuple.ks").*;
+use (import "../position.ks").*;
 use (import "../span.ks").*;
 use (import "../source.ks").*;
 use (import "../source_path.ks").*;
@@ -740,6 +741,127 @@ const Compiler = (
         { context_name, context_ty }
     );
 
+    const type_info = (ty :: &Ir.Type) -> Ir.PlaceExpr => with_return (
+        let span :: Span = {
+            .start = Position.beginning(),
+            .end = Position.beginning(),
+            .path = :Special __FILE__
+        };
+        let name = output_to_string(
+            () => (
+                Ir.Print.type_name_as_ident(ty);
+                (@current Output).write("_TypeInfo");
+            )
+        );
+        let place_of_result :: Ir.PlaceExpr = {
+            .shape = :Ident name,
+            .ty = :Named "TypeInfo",
+            .span,
+        };
+        let mut ctx = @current Context;
+        if &ctx.program.consts |> OrdMap.get(name) is :Some _ then (
+            return place_of_result;
+        );
+        # Temp add uninitialized to prevent cycles
+        &mut ctx.program.consts
+            |> OrdMap.add(
+                name,
+                {
+                    .shape = :Uninitialized,
+                    .ty = :Named name,
+                    .span,
+                }
+            );
+        # TODO make work with other targets than JavaScript
+        let mut fields = ArrayList.new();
+        let mut members = ArrayList.new();
+        let add_members = (members_map :: &OrdMap.t[String, Ir.Type]) => (
+            for &{
+                .key = name,
+                .value = ref ty,
+            } in members_map |> OrdMap.iter do (
+                let mut fields = ArrayList.new();
+                let offset_or_name = {
+                    .name = "offset_or_name",
+                    .value = {
+                        .shape = :Literal :String name,
+                        .ty = :String,
+                        .span,
+                    },
+                };
+                &mut fields |> ArrayList.push_back(offset_or_name);
+                let ty = {
+                    .name = "ty",
+                    .value = {
+                        .shape = :Ref type_info(ty),
+                        .ty = :Ref :Named "TypeInfo",
+                        .span,
+                    },
+                };
+                &mut fields |> ArrayList.push_back(ty);
+                &mut members
+                    |> ArrayList.push_back(
+                        {
+                            .shape = :Record fields,
+                            .ty = :Named "MemberInfo",
+                            .span,
+                        }
+                    );
+            );
+        );
+        let kind = match ty^ with (
+            | :List _ => "Array"
+            | :Named name => (
+                let def = &ctx.program.types
+                    |> OrdMap.get(name)
+                    |> Option.unwrap;
+                match def^ with (
+                    | :Struct { .fields = ref fields } => (
+                        add_members(fields);
+                        "Object"
+                    )
+                    | :Union { .variants = ref variants } => (
+                        add_members(variants);
+                        "Object"
+                    )
+                    | :Enum _ => "Primitive"
+                    | :Opaque => "Primitive"
+                    | :Alias _ => panic("type info is supposed to get alias-resolved type")
+                )
+            )
+            | _ => "Primitive"
+        );
+        let members = {
+            .name = "members",
+            .value = {
+                .shape = :List members,
+                .ty = :List :Named "MemberInfo",
+                .span,
+            },
+        };
+        &mut fields |> ArrayList.push_back(members);
+        let kind = {
+            .name = "kind",
+            .value = {
+                .shape = :Variant kind,
+                .ty = :Named "TypeKind",
+                .span,
+            },
+        };
+        &mut fields |> ArrayList.push_back(kind);
+        &mut ctx.program.consts
+            |> OrdMap.add(
+                name,
+                {
+                    .shape = :Record fields,
+                    .ty = :Named name,
+                    .span,
+                }
+            );
+        &mut ctx.program.consts_order |> ArrayList.push_back(name);
+        place_of_result
+    );
+
     const parse_expr_impl = (
         expected_ty :: Option.t[Ir.Type],
         ast :: Ast.t,
@@ -752,6 +874,80 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "type_info" then (
+                        let ty = root
+                            |> AstHelpers.expect_single_child(:Some "type")
+                            |> parse_type;
+                        let type_info = type_info(&ty);
+                        return {
+                            .shape = :Place type_info.shape,
+                            .ty = type_info.ty,
+                        };
+                    );
+                    if rule.name == "index" then (
+                        let { list_ast, index_ast } = root
+                            |> AstHelpers.expect_two_children(:Some { "list", "index" });
+                        let list = parse_place_expr(:None, list_ast);
+                        let element_ty = match list.ty with (
+                            | :List ty => ty
+                            | other => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        let output = @current Output;
+                                        output.write("Expected a list, got ");
+                                        Ir.Print.type_name(&other);
+                                    ),
+                                    .span = list_ast.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            )
+                        );
+                        let index = parse_expr(:Some :Int32, index_ast);
+                        return {
+                            .shape = :Place :Index {
+                                .list,
+                                .index,
+                            },
+                            .ty = element_ty,
+                        };
+                    );
+                    if rule.name == "list" then (
+                        let inner = root |> AstHelpers.expect_single_child(:None);
+                        let element_ty = match expected_ty |> expect_known_type(ast.span) with (
+                            | :List ty => ty
+                            | other => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        let output = @current Output;
+                                        output.write("Expected ");
+                                        Ir.Print.type_name(&other);
+                                        output.write(", got a list");
+                                    ),
+                                    .span = ast.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report_and_unwind(diagnostic)
+                            )
+                        );
+                        let mut elements = ArrayList.new();
+                        for element in Ast.iter_list(
+                            inner,
+                            .binary_rule_name = "comma",
+                            .trailing_or_leading_rule_name = :Some "trailing comma",
+                        ) do (
+                            let element = parse_expr(:Some element_ty, element);
+                            &mut elements |> ArrayList.push_back(element);
+                        );
+                        return {
+                            .shape = :Expr :List elements,
+                            .ty = :List element_ty,
+                        };
+                    );
                     if rule.name == "deref" then (
                         let reference_ast = root |> AstHelpers.expect_single_child(:None);
                         let expected_reference_ty = match expected_ty with (
@@ -1265,8 +1461,11 @@ const Compiler = (
             };
             Diagnostic.report_and_unwind(diagnostic)
         );
-        if expected_ty is :Some expected_ty then (
+        let ty = if expected_ty is :Some expected_ty then (
             type_check(ast.span, expected_ty, ty);
+            expected_ty
+        ) else (
+            ty
         );
         { .shape, .ty }
     );

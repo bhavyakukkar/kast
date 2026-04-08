@@ -1,7 +1,3 @@
-const AllocateInfo = struct {
-    .is_object :: Bool,
-};
-
 const MemberOffsetOrName = type String;
 
 const initialize_offset_or_name = (
@@ -15,9 +11,15 @@ const MemberInfo = struct {
     .ty :: &TypeInfo,
 };
 
+const TypeKind = enum {
+    | :Primitive
+    | :Object
+    | :Array
+};
+
 const TypeInfo = struct {
     .members :: List[MemberInfo],
-    .allocate_info :: AllocateInfo,
+    .kind :: TypeKind,
 };
 
 const get_member = (obj :: &Any, member :: &MemberInfo) -> &Any => (
@@ -27,7 +29,7 @@ const get_member = (obj :: &Any, member :: &MemberInfo) -> &Any => (
 const allocate_type_on_stack = (
     T :: &TypeInfo,
 ) -> &Any => (
-    if T^.allocate_info.is_object then (
+    if T^.kind == :Object then (
         let result :: Any = @native "{}";
         let setup_member = (member :: MemberInfo) -> () => (
             get_member(&result, &member)^ = allocate_type(member.ty)
@@ -46,15 +48,14 @@ const allocate_type_on_heap = (T :: &TypeInfo) -> &Any => (
 const initialize_type_info_for_struct = (
     T :: &TypeInfo,
 ) -> () => (
-    T^.allocate_info.is_object = true;
+    T^.kind = :Object;
 );
 
-const copy = (
-    target :: &Any,
-    source :: &Any,
+const copy_impl = (
+    value :: Any,
     T :: &TypeInfo,
-) -> () => (
-    if T^.allocate_info.is_object then (
+) -> Any => (
+    if T^.kind == :Object then (
         target^ = @native "{}";
         let copy_member = (member :: MemberInfo) -> () => (
             copy(
@@ -64,7 +65,25 @@ const copy = (
             );
         );
         @native "for (let member of \(T^.members)) { \(copy_member)(undefined, member) }";
+    ) else if T^.kind == :Array then (
+        target^ = @native "[]";
+        let copy_element = (source_element :: Any) -> Any => (
+            copy(
+                get_member(target, &member),
+                get_member(source, &member),
+                member.ty,
+            );
+        );
+        @native "for (let e of \(source^)) { \(copy_member)(undefined, member) }";
     ) else (
-        target^ = source^;
-    );
+        value
+    )
+);
+
+const copy = (
+    target :: &Any,
+    source :: &Any,
+    T :: &TypeInfo,
+) -> () => (
+    target^ = copy_impl(T, source);
 );

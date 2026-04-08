@@ -68,6 +68,7 @@ const Ir = (
         | :Ref PlaceExpr
         | :Native NativeExpr
         | :Literal Literal
+        | :Variant String
         | :Stmt Expr
         | :Let {
             .name :: String,
@@ -77,6 +78,7 @@ const Ir = (
             .assignee :: PlaceExpr,
             .value :: Expr,
         }
+        | :List ArrayList.t[Expr]
         | :Fn FnDef
         | :Then ArrayList.t[Expr]
         | :Scope Expr
@@ -112,6 +114,10 @@ const Ir = (
         | :Field {
             .obj :: PlaceExpr,
             .field :: String,
+        }
+        | :Index {
+            .list :: PlaceExpr,
+            .index :: Expr,
         }
         | :CurrentContext String
         | :Deref Expr
@@ -185,6 +191,46 @@ const Ir = (
                     output.write("UnwindToken[");
                     Print.type_name(result_ty);
                     output.write("]");
+                )
+            )
+        );
+
+        const fn_type_as_ident = (self :: &FnType) => (
+            let output = @current Output;
+            output.write("Fn");
+            for arg_ty in &self^.args |> ArrayList.iter do (
+                output.write("_");
+                Ir.Print.type_name_as_ident(arg_ty);
+            );
+            output.write("_");
+            Ir.Print.type_name_as_ident(&self^.result);
+            output.write("_nF");
+        );
+
+        const type_name_as_ident = (self :: &Type) => (
+            let output = @current Output;
+            match self^ with (
+                | :Any => output.write("Any")
+                | :Unit => output.write("Unit")
+                | :Bool => output.write("Bool")
+                | :Int32 => output.write("Int32")
+                | :Int64 => output.write("Int64")
+                | :Float64 => output.write("Float64")
+                | :Char => output.write("Char")
+                | :String => output.write("String")
+                | :Named name => output.write(name)
+                | :Fn ref ty => Print.fn_type_as_ident(ty)
+                | :Ref ref referenced => (
+                    output.write("Ref_");
+                    Print.type_name_as_ident(referenced);
+                )
+                | :List ref element_ty => (
+                    output.write("List_");
+                    Print.type_name_as_ident(element_ty);
+                )
+                | :UnwindToken ref result_ty => (
+                    output.write("UnwindToken_");
+                    Print.type_name_as_ident(result_ty);
                 )
             )
         );

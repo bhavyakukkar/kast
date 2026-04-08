@@ -1,8 +1,3 @@
-const AllocateInfo = struct {
-    .stride :: Int32,
-    .size :: Int32,
-};
-
 const MemberOffsetOrName = type Int32;
 
 const initialize_offset_or_name = (
@@ -18,7 +13,8 @@ const MemberInfo = struct {
 
 const TypeInfo = struct {
     .members :: List[MemberInfo],
-    .allocate_info :: AllocateInfo,
+    .stride :: Int32,
+    .size :: Int32,
 };
 
 const get_member = (
@@ -32,16 +28,16 @@ const allocate_type_on_stack = (
     T :: &TypeInfo,
 ) -> &Any => (
     # TODO this fn must be inlined
-    @native "alloca(\(T^.allocate_info.size))"
+    @native "alloca(\(T^.size))"
 );
 
 const allocate_type_on_heap = (
     T :: &TypeInfo,
 ) -> &Any => (
-    @native "malloc(\(T^.allocate_info.size))"
+    @native "malloc(\(T^.size))"
 );
 
-const initialize_T_for_struct = (
+const initialize_type_info_for_struct = (
     T :: &TypeInfo,
 ) -> () => (
     # TODO calculate member offsets and size
@@ -52,5 +48,5 @@ const copy = (
     source :: &Any,
     T :: &TypeInfo,
 ) -> () => (
-    @native "memcpy(\(target), \(source), \(T^.allocate_info.size))"
+    @native "memcpy(\(target), \(source), \(T^.size))"
 );

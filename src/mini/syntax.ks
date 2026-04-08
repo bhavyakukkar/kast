@@ -36,6 +36,7 @@
 @syntax "list" 70 @wrap never = <- "List" "[" _:any "]";
 @syntax "unwind_token" 70 @wrap never = <- "UnwindToken" "[" _:any "]";
 @syntax "field" 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
+@syntax "index" 70 @wrap never = <- list ""/"\n\t" "." "[" index "]" ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
 @syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");
 @syntax "newtype" 500 @wrap never = "newtype" " " _;
@@ -48,7 +49,7 @@
 @syntax "target_dependent" 1000 @wrap always = "@cfg" " " "(" ""/"\n\t" branches:any ""/"\n\\" ")";
 @syntax "__FILE__" 1000 @wrap never = "__FILE__";
 @syntax "uninitialized" 1000 @wrap never = "uninitialized";
-@syntax "type_info" 1000 @wrap never = "@TypeInfo" "(" ty ")";
+@syntax "type_info" 1000 @wrap never = "@TypeInfo" "(" type ")";
 # this one is needed for structural find & replace
 @syntax "core:unquote" 1000 @wrap never = "$" _ ->;
 
