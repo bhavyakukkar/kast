@@ -172,6 +172,10 @@ const Ir = (
                 | :String => output.write("String")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type(ty)
+                | :Ref ref referenced => (
+                    output.write("&");
+                    Print.type_name(referenced);
+                )
                 | :List ref element_ty => (
                     output.write("List[");
                     Print.type_name(element_ty);
