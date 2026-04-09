@@ -1,4 +1,34 @@
+const add = (a :: Int32, b :: Int32) -> Int32 => (
+    @native "\(a) + \(b)"
+);
+
+const sub = (a :: Int32, b :: Int32) -> Int32 => (
+    @native "\(a) - \(b)"
+);
+
+const less = (a :: Int32, b :: Int32) -> Bool => (
+    @native "\(a) < \(b)"
+);
+
+const fib = (n :: Int32) -> Int32 => (
+    if less(n, 2) then (
+        1
+    ) else (
+        add(fib(sub(n, 1)), fib(sub(n, 2)))
+    )
+);
+# const print_string = (s :: String) -> () => (
+#     @native "fwrite(\(s).content, sizeof(char), \(s).length, stdout)";
+# );
+# const print_int32 = (x :: Int32) -> () => (
+#     @native "printf(\"%d\", \(x))";
+# );
+
 const main = () -> () => (
     @native "#include <stdio.h>";
-    @native "printf(\"Hello, world!\\n\")";
+
+    @native "printf(\"fib(10) = %d\\n\", \(fib(10)))";
+# print_string("fib(10) = ");
+# print_int32(fib(10));
+# print_string("\n");
 );

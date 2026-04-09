@@ -74,12 +74,51 @@ const C = (
         )
     );
 
+    const Place = newtype {
+        .get :: () -> Pure,
+        .set :: Ast.Expr -> (),
+    };
+
+    const calculate_place = (ir_expr :: &Ir.PlaceExpr) -> Place => with_return (
+        match ir_expr^.shape with (
+            | :Ident name => {
+                .get = () => { .expr = :Some :Ident ident(name) },
+                .set = value => (
+                    insert_stmt(:Assign { .assignee = :Ident ident(name), .value });
+                )
+            }
+            # | :Field 
+            # | :Index 
+            # | :CurrentContext String
+            # | :Deref Expr
+            | :Temp ref expr => (
+                let value = calculate(expr);
+                {
+                    .get = () => value,
+                    .set = _ => panic("can't assign to temp expr"),
+                }
+            )
+        )
+    );
+
+    const calculate_literal = (literal :: &Ir.Literal) -> Pure => (
+        let literal :: Ast.Literal = match literal^ with (
+            | :Bool x => :Bool x
+            | :Int32 x => :Int32 x
+            | :Int64 x => :Int64 x
+            | :Float64 x => :Float64 x
+            | :Char x => :Char x
+            | :String x => :String x
+        );
+        { .expr = :Some :Literal literal }
+    );
+
     const calculate = (ir_expr :: &Ir.Expr) -> Pure => with_return (
         let mut ctx = @current Context;
         let expr :: Ast.Expr = match ir_expr^.shape with (
-            # | :Unit
+            | :Unit => return void()
             # | :Uninitialized
-            # | :Claim PlaceExpr
+            | :Claim ref place => return calculate_place(place).get()
             # | :Ref PlaceExpr
             | :Native { .parts = ref parts } => (
                 let mut raw_parts = ArrayList.new();
@@ -99,7 +138,7 @@ const C = (
                 );
                 :RawParts raw_parts
             )
-            # | :Literal Literal
+            | :Literal ref literal => return calculate_literal(literal)
             # | :Variant String
             | :Stmt ref expr => (
                 calculate(expr);
@@ -112,6 +151,45 @@ const C = (
                 );
                 return result
             )
+            | :If { .cond = ref cond, .then_case = ref then_case, .else_case = ref else_case } => (
+                let ident = new_ident("if_result");
+                let is_void = if ir_expr^.ty is :Unit then true else false;
+                if not is_void then (
+                    insert_stmt(
+                        :LetVar {
+                            .ty = convert_ty(&ir_expr^.ty),
+                            .ident,
+                            .value = :None,
+                        }
+                    );
+                );
+                let cond = pure(calculate(cond));
+                let then_case = (
+                    let mut block = new_block();
+                    with Scope = {
+                        .block = &mut block,
+                    };
+                    if calculate(then_case).expr is :Some result then (
+                        insert_stmt(:Assign { .assignee = :Ident ident, .value = result });
+                    );
+                    block
+                );
+                let else_case = match else_case^ with (
+                    | :None => :None
+                    | :Some ref else_case => (
+                        let mut block = new_block();
+                        with Scope = {
+                            .block = &mut block,
+                        };
+                        if calculate(else_case).expr is :Some result then (
+                            insert_stmt(:Assign { .assignee = :Ident ident, .value = result });
+                        );
+                        :Some block
+                    )
+                );
+                insert_stmt(:If {.cond, .then_case, .else_case });
+                return { .expr = if is_void then :None else :Some :Ident ident }
+            )
             # | :Let { .name, .value }
             # | :Assign { .assignee, .value }
             # | :List
@@ -122,7 +200,6 @@ const C = (
                 };
                 return calculate(expr)
             )
-            # | :If
             | :Apply { .f = ref f, .args = ref ir_args } => (
                 let f = pure(calculate(f));
                 let mut args = ArrayList.new();
@@ -151,7 +228,7 @@ const C = (
             :LetVar {
                 .ty = convert_ty(ty),
                 .ident,
-                .value,
+                .value = :Some value,
             }
         );
     );
@@ -216,7 +293,10 @@ const C = (
             },
             .next_id = 0,
         };
-        let ctx = @current Context;
+        let mut ctx = @current Context;
+        # for int32_t and similar
+        &mut ctx.result.includes |> OrdSet.add("<stdint.h>");
+        &mut ctx.result.includes |> OrdSet.add("<stdbool.h>");
         for &{ .key = name, .value = ref def } in &ctx.program.fns |> OrdMap.iter do (
             add_fn(name, def);
         );

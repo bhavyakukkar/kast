@@ -40,7 +40,11 @@ const Ast = (
     };
 
     const Literal = newtype (
+        | :Bool Bool
         | :Int Int32
+        | :Int32 Int32
+        | :Int64 Int64
+        | :Float64 Float64
         | :Char Char
         | :String String
     );
@@ -62,7 +66,16 @@ const Ast = (
         | :LetVar {
             .ty :: Ty,
             .ident :: Ident,
+            .value :: Option.t[Expr],
+        }
+        | :Assign {
+            .assignee :: Expr,
             .value :: Expr,
+        }
+        | :If {
+            .cond :: Expr,
+            .then_case :: Block,
+            .else_case :: Option.t[Block],
         }
     );
 
@@ -94,7 +107,23 @@ const Ast = (
 
         const literal = (literal :: &Literal) => (
             match literal^ with (
+                | :Bool x => ansi.with_mode(
+                    :Magenta,
+                    () => write(to_string(x)),
+                )
                 | :Int x => ansi.with_mode(
+                    :Italic,
+                    () => write(to_string(x)),
+                )
+                | :Int32 x => ansi.with_mode(
+                    :Italic,
+                    () => write(to_string(x)),
+                )
+                | :Int64 x => ansi.with_mode(
+                    :Italic,
+                    () => write(to_string(x)),
+                )
+                | :Float64 x => ansi.with_mode(
                     :Italic,
                     () => write(to_string(x)),
                 )
@@ -181,8 +210,26 @@ const Ast = (
                     Print.ty(ty);
                     write(" ");
                     Print.ident(ident);
+                    if value^ is :Some ref value then (
+                        write(" = ");
+                        Print.expr(value);
+                    );
+                )
+                | :Assign { .assignee = ref assignee, .value = ref value } => (
+                    Print.expr(assignee);
                     write(" = ");
                     Print.expr(value);
+                )
+                | :If { .cond = ref cond, .then_case = ref then_case, .else_case = ref else_case } => (
+                    write_keyword("if");
+                    write(" (");
+                    Print.expr(cond);
+                    write(") ");
+                    Print.block(then_case);
+                    if else_case^ is :Some ref else_case then (
+                        write_keyword(" else ");
+                        Print.block(else_case);
+                    );
                 )
             );
         );
