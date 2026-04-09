@@ -11,10 +11,10 @@ const less = (a :: Int32, b :: Int32) -> Bool => (
 );
 
 const fib = (n :: Int32) -> Int32 => (
-    if less(n, @native "2") then (
-        @native "1"
+    if less(n, 2) then (
+        1
     ) else (
-        add(fib(sub(n, @native "1")), fib(sub(n, @native "2")))
+        add(fib(sub(n, 1)), fib(sub(n, 2)))
     )
 );
 
@@ -69,7 +69,7 @@ const dbg_print_U = (u :: U) -> () => (
 );
 
 const main = () -> () => (
-    let s :: S = { .a = @native "1", .b = "2" };
+    let s :: S = { .a = 1, .b = "2" };
     dbg_print_S(s);
     print(s.b);
     let u :: U = { .b = () };
@@ -86,12 +86,12 @@ const main = () -> () => (
     let foo :: Foo = uninitialized;
     foo.f = (depth :: Int32) -> () => (
         print(int32_to_string(depth));
-        if less(depth, @native "10") then (
-            foo.g(add(depth, @native "1"));
+        if less(depth, 10) then (
+            foo.g(add(depth, 1));
         );
     );
     foo.g = (depth :: Int32) -> () => foo.f(depth);
-    foo.g(@native "0");
+    foo.g(0);
     print("Hello, world!");
 # let x :: Int32 = parse(Type_Int32)("123");
 );

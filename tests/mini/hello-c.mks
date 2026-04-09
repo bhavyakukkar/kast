@@ -1,0 +1,4 @@
+const main = () -> () => (
+    @native "#include <stdio.h>";
+    @native "printf(\"Hello, world!\")";
+);

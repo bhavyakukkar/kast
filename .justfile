@@ -15,6 +15,11 @@ build continuous="":
         --output target/kast.mjs \
         src/cli/_main.ks
 
+c path:
+    kast --color false mini compile --target c {{path}} > target/compiled.c
+    clang target/compiled.c -o target/compiled
+    ./target/compiled
+
 watch:
     #!/usr/bin/env bash
     trap 'kill $(jobs -p); exit' INT

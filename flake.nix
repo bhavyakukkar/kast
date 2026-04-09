@@ -13,8 +13,7 @@
         pkgs = import inputs.nixpkgs { inherit system overlays; };
         kast-bootstrap = inputs.kast.packages.${system}.default;
         filter = inputs.nix-filter.lib;
-      in
-      with pkgs; {
+      in with pkgs; {
         packages = rec {
           kast-js = stdenv.mkDerivation {
             name = "kast-js";
@@ -57,10 +56,13 @@
             fd
             inotify-tools
             hyperfine
+            clang
           ];
           shellHook = ''
             echo Hello from Kast dev shell
           '';
+          # Since I dont have cmake or whatever
+          CLANGD_FLAGS = "--query-driver=${pkgs.clang}/bin/clang*";
           KAST_JS_RUNTIME =
             "${inputs.kast.packages.${system}.js-runtime}/runtime.js";
         };

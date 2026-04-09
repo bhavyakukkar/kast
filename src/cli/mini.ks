@@ -69,6 +69,7 @@ const Mini = (
             module:
 
             const t = newtype {
+                .target :: Option.t[String],
                 .js_runtime :: Option.t[String],
                 .paths :: ArrayList.t[String],
             };
@@ -76,11 +77,17 @@ const Mini = (
             const parse = (
                 start_index :: Int32,
             ) -> t => (
+                let mut target = :None;
                 let mut js_runtime = :None;
                 let mut paths = ArrayList.new();
                 let mut i = start_index;
                 while i < std.sys.argc() do (
                     let arg = std.sys.argv_at(i);
+                    if arg == "--target" then (
+                        target = :Some std.sys.argv_at(i + 1);
+                        i += 2;
+                        continue;
+                    );
                     if arg == "--js-runtime" then (
                         js_runtime = :Some std.sys.argv_at(i + 1);
                         i += 2;
@@ -90,6 +97,7 @@ const Mini = (
                     i += 1;
                 );
                 {
+                    .target,
                     .js_runtime,
                     .paths,
                 }
@@ -97,6 +105,16 @@ const Mini = (
         );
 
         const run = (common_args :: Common.Args.t, args :: Args.t) => (
+            let target = args.target |> Option.unwrap_or_else(
+                () => Diagnostic.abort("Specify compilation --target")
+            );
+            let target = if target == "javascript" or target == "js" then (
+                :JavaScript
+            ) else if target == "c" then (
+                :C
+            ) else (
+                Diagnostic.abort("Unknown target " + String.escape(target))
+            );
             const Mini = root_scope.Mini;
             if &args.paths |> ArrayList.length == 0 then (
                 Diagnostic.abort("Expected at least 1 path");
@@ -107,11 +125,19 @@ const Mini = (
                 &mut compiler |> Mini.Compiler.add_source(source);
             );
             let program = compiler |> Mini.Compiler.compile;
-            let compiled = Mini.Backends.JavaScript.compile(program);
-            if args.js_runtime is :Some path then (
-                print(std.fs.read_file(path));
+            match target with (
+                | :JavaScript => (
+                    let compiled = Mini.Backends.JavaScript.compile(program);
+                    if args.js_runtime is :Some path then (
+                        print(std.fs.read_file(path));
+                    );
+                    Mini.Backends.JavaScript.print(compiled);
+                )
+                | :C => (
+                    let compiled = Mini.Backends.C.compile(program);
+                    Mini.Backends.C.print(compiled);
+                )
             );
-            Mini.Backends.JavaScript.print(compiled);
         );
     );
 
