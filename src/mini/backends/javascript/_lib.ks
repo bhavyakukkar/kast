@@ -128,6 +128,17 @@ const JavaScript = (
                     ),
                 }
             )
+            | :Index { .list, .index } => (
+                let obj = calculate_place(list).get();
+                let index = calculate(index);
+                {
+                    .get = () => :Index { .obj, .index = :Var index },
+                    .set = new_value => assign(
+                        :Index { .obj, .index = :Var index },
+                        new_value
+                    ),
+                }
+            )
             | :Temp expr => (
                 let temp_var = new_var("temp");
                 let_var(temp_var, :Var calculate(expr));
@@ -173,14 +184,30 @@ const JavaScript = (
             | :Fn def => compile_fn(def)
             | :Native { .parts = ir_parts } => (
                 let mut parts = ArrayList.new();
+                let mut first = true;
+                let mut stmt = false;
                 for part in ir_parts |> ArrayList.into_iter do (
                     let part = match part with (
-                        | :Raw s => :Raw s
+                        | :Raw s => with_return (
+                            if first then (
+                                if s |> String.strip_prefix(.prefix = "stmt: ") is :Some s then (
+                                    stmt = true;
+                                    return :Raw s;
+                                )
+                            );
+                            :Raw s
+                        )
                         | :Interpolated expr => :Var calculate(expr)
                     );
+                    first = false;
                     &mut parts |> ArrayList.push_back(part);
                 );
-                :RawConcat { .parts }
+                if stmt then (
+                    insert_stmt(:RawConcat { .parts });
+                    :Undefined
+                ) else (
+                    :RawConcat { .parts }
+                )
             )
             | :InjectContext { .name, .value } => (
                 let value = :Var calculate(value);
@@ -259,6 +286,18 @@ const JavaScript = (
                     .args,
                 }
             )
+            | :List elements => :Array (
+                let mut elements_js = ArrayList.new();
+                for element in elements |> ArrayList.into_iter do (
+                    &mut elements_js |> ArrayList.push_back(:Var calculate(element));
+                );
+                elements_js
+            )
+            | :EnumIs { .enum, .variant } => :Equal {
+                .lhs = :Var calculate(enum),
+                .rhs = :StringLiteral variant,
+            }
+            | :Variant name => :StringLiteral name
         );
         let result_var = new_var("temp");
         let_var(result_var, value);

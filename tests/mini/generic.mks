@@ -12,8 +12,7 @@ const GenericType = (T :: &TypeInfo) -> &TypeInfo => (
     let member_field :: MemberInfo = {
         .offset_or_name = initialize_offset_or_name("field"),
     };
-    result^.members = List[member_field];
-    initialize_type_info_for_struct(result);
+    initialize_type_info_for_struct(result, List[member_field]);
     result
 );
 
@@ -22,9 +21,9 @@ const generic_fn = (T :: &TypeInfo) -> ((&Any, &Any) -> ()) => (
         let GenericType_of_T = GenericType(T);
         let result_field = get_member(
             result,
-            &GenericType_of_T^.members.[0],
+            &GenericType_of_T^.details.members.[0],
         );
-        copy(result_field, field, T);
+        move(T, result_field, field);
     )
 );
 
@@ -37,4 +36,5 @@ const GenericType_of_Int32 = struct {
 const main = () -> () => (
     let x :: GenericType_of_Int32 = uninitialized;
     generic_fn(&@TypeInfo(Int32))(&const_123, &x);
+    @native "stmt: console.log(\(x))";
 );

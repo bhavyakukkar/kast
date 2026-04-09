@@ -96,6 +96,10 @@ const Ir = (
             .value :: Expr,
         }
         | :Record ArrayList.t[Field]
+        | :EnumIs {
+            .enum :: Expr,
+            .variant :: String,
+        }
     );
 
     const Field = newtype {

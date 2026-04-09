@@ -50,3 +50,11 @@ const copy = (
 ) -> () => (
     @native "memcpy(\(target), \(source), \(T^.size))"
 );
+
+const move = (
+    target :: &Any,
+    source :: &Any,
+    T :: &TypeInfo,
+) -> () => (
+    @native "memcpy(\(target), \(source), \(T^.size))"
+);

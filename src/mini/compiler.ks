@@ -369,7 +369,7 @@ const Compiler = (
         };
         Diagnostic.report_and_unwind(diagnostic)
     );
-
+    # TODO should take &
     const resolve_type_aliases = (ty :: Ir.Type) -> Ir.Type => (
         match ty with (
             | :Any => :Any
@@ -742,6 +742,8 @@ const Compiler = (
     );
 
     const type_info = (ty :: &Ir.Type) -> Ir.PlaceExpr => with_return (
+        let ty = resolve_type_aliases(ty^);
+        let ty = &ty;
         let span :: Span = {
             .start = Position.beginning(),
             .end = Position.beginning(),
@@ -773,9 +775,10 @@ const Compiler = (
                 }
             );
         # TODO make work with other targets than JavaScript
-        let mut fields = ArrayList.new();
-        let mut members = ArrayList.new();
-        let add_members = (members_map :: &OrdMap.t[String, Ir.Type]) => (
+        let details_members = (
+            members_map :: &OrdMap.t[String, Ir.Type],
+        ) -> Ir.Expr => (
+            let mut members = ArrayList.new();
             for &{
                 .key = name,
                 .value = ref ty,
@@ -808,38 +811,101 @@ const Compiler = (
                         }
                     );
             );
+            let mut details = ArrayList.new();
+            &mut details
+                |> ArrayList.push_back(
+                    {
+                        .name = "members",
+                        .value = {
+                            .shape = :List members,
+                            .ty = :List :Named "MemberInfo",
+                            .span,
+                        },
+                    }
+                );
+            {
+                .shape = :Record details,
+                .ty = :Named "TypeInfoDefails",
+                .span,
+            }
         );
-        let kind = match ty^ with (
-            | :List _ => "Array"
+        let details_primitive = () -> Ir.Expr => {
+            .shape = :Record (
+                let mut fields = ArrayList.new();
+                &mut fields |> ArrayList.push_back(
+                    {
+                        .name = "primitive",
+                        .value = {
+                            .shape = :Unit,
+                            .ty = :Unit,
+                            .span,
+                        },
+                    }
+                );
+                fields
+            ),
+            .ty = :Named "TypeInfoDefails",
+            .span,
+        };
+        let details_inner_ty = (
+            inner_ty :: &Ir.Type,
+        ) -> Ir.Expr => {
+            .shape = :Record (
+                let mut fields = ArrayList.new();
+                &mut fields |> ArrayList.push_back(
+                    {
+                        .name = "inner_ty",
+                        .value = {
+                            .shape = :Ref type_info(inner_ty),
+                            .ty = :Unit,
+                            .span,
+                        },
+                    }
+                );
+                fields
+            ),
+            .ty = :Named "TypeInfoDefails",
+            .span,
+        };
+        let { kind, details } = match ty^ with (
+            | :List ref inner_ty => { "Array", details_inner_ty(inner_ty) }
             | :Named name => (
                 let def = &ctx.program.types
                     |> OrdMap.get(name)
                     |> Option.unwrap;
                 match def^ with (
                     | :Struct { .fields = ref fields } => (
-                        add_members(fields);
-                        "Object"
+                        { "Object", details_members(fields) }
                     )
                     | :Union { .variants = ref variants } => (
-                        add_members(variants);
-                        "Object"
+                        { "Object", details_members(variants) }
                     )
-                    | :Enum _ => "Primitive"
-                    | :Opaque => "Primitive"
-                    | :Alias _ => panic("type info is supposed to get alias-resolved type")
+                    | :Enum _ => { "Primitive", details_primitive() }
+                    | :Opaque => { "Primitive", details_primitive() }
+                    | :Alias _ => (
+                        let diagnostic = {
+                            .severity = :Error,
+                            .source = :Internal,
+                            .message = () => (
+                                let output = @current Output;
+                                output.write("type info is supposed to get alias-resolved type, got ");
+                                Ir.Print.type_name(ty);
+                            ),
+                            .span,
+                            .related = ArrayList.new(),
+                        };
+                        Diagnostic.report_and_unwind(diagnostic)
+                    )
                 )
             )
-            | _ => "Primitive"
+            | _ => { "Primitive", details_primitive() }
         );
-        let members = {
-            .name = "members",
-            .value = {
-                .shape = :List members,
-                .ty = :List :Named "MemberInfo",
-                .span,
-            },
+        let mut fields = ArrayList.new();
+        let details = {
+            .name = "details",
+            .value = details,
         };
-        &mut fields |> ArrayList.push_back(members);
+        &mut fields |> ArrayList.push_back(details);
         let kind = {
             .name = "kind",
             .value = {
@@ -862,6 +928,65 @@ const Compiler = (
         place_of_result
     );
 
+    const expect_ty_enum = (
+        ty :: &Ir.Type,
+        .span :: Span,
+    ) -> &OrdSet.t[String] => with_return (
+        let ctx = @current Context;
+        match resolve_type_aliases(ty^) with (
+            | :Named name => (
+                let def = &ctx.program.types
+                    |> OrdMap.get(name)
+                    |> Option.unwrap;
+                match def^ with (
+                    | :Enum { .variants = ref variants } => (
+                        return variants;
+                    )
+                    | _ => ()
+                );
+            )
+            | _ => ()
+        );
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Compiler,
+            .message = () => (
+                let output = @current Output;
+                output.write("Expected a variant type, got ");
+                Ir.Print.type_name(ty);
+            ),
+            .span,
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
+    );
+
+    const WithSpan = [T] newtype {
+        T,
+        .span :: Span,
+    };
+
+    const check_variant = (
+        .variant :: WithSpan[String],
+        .ty :: WithSpan[type (&Ir.Type)],
+    ) -> () => (
+        let variant_names = expect_ty_enum(...ty);
+        if not variant_names |> OrdSet.contains(variant.0) then (
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    let output = @current Output;
+                    output.write("This variant doesn't exist in type ");
+                    Ir.Print.type_name(ty.0);
+                ),
+                .span = variant.span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        );
+    );
+
     const parse_expr_impl = (
         expected_ty :: Option.t[Ir.Type],
         ast :: Ast.t,
@@ -874,6 +999,37 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "variant" then (
+                        let variant = root
+                            |> AstHelpers.expect_single_child(:Some "label")
+                            |> AstHelpers.expect_ident;
+                        let ty = expected_ty |> expect_known_type(ast.span);
+                        check_variant(
+                            .variant = { variant, .span = ast.span },
+                            .ty = { &ty, .span = ast.span },
+                        );
+                        return {
+                            .shape = :Expr :Variant variant,
+                            .ty,
+                        };
+                    );
+                    if rule.name == "==" then (
+                        let { lhs, rhs } = root
+                            |> AstHelpers.expect_two_children(:None);
+                        let enum = parse_expr(:None, lhs);
+                        let variant = rhs
+                            |> AstHelpers.expect_rule("variant")
+                            |> AstHelpers.expect_single_child(:Some "label")
+                            |> AstHelpers.expect_ident;
+                        check_variant(
+                            .variant = { variant, .span = rhs.span },
+                            .ty = { &enum.ty, .span = lhs.span },
+                        );
+                        return {
+                            .shape = :Expr :EnumIs { .enum, .variant },
+                            .ty = :Bool,
+                        };
+                    );
                     if rule.name == "type_info" then (
                         let ty = root
                             |> AstHelpers.expect_single_child(:Some "type")

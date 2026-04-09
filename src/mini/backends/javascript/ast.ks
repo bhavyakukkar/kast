@@ -27,6 +27,7 @@ const Ast = (
         | :NumberLiteral Float64
         | :StringLiteral String
         | :Var Var
+        | :Array ArrayList.t[Expr]
         | :Obj ArrayList.t[ObjPart]
         | :Field {
             .obj :: Expr,
@@ -40,9 +41,20 @@ const Ast = (
             .f :: Expr,
             .args :: ArrayList.t[Expr],
         }
+        | :Index {
+            .obj :: Expr,
+            .index :: Expr,
+        }
+        | :Equal {
+            .lhs :: Expr,
+            .rhs :: Expr,
+        }
     );
 
     const Stmt = newtype (
+        | :RawConcat {
+            .parts :: ArrayList.t[Expr],
+        }
         | :Expr Expr
         | :Let {
             .var :: Var,
@@ -87,6 +99,16 @@ const Ast = (
                     output.write(".");
                     output.write(field);
                 )
+                | :Array elements => (
+                    output.write("[\n");
+                    output.inc_indentation();
+                    for element in elements |> ArrayList.into_iter do (
+                        Print.expr(element);
+                        output.write(",\n");
+                    );
+                    output.dec_indentation();
+                    output.write("]");
+                )
                 | :Obj parts => (
                     output.write("{\n");
                     output.inc_indentation();
@@ -102,7 +124,7 @@ const Ast = (
                                 Print.expr(packed);
                             )
                         );
-                        output.write(",");
+                        output.write(",\n");
                     );
                     output.dec_indentation();
                     output.write("}");
@@ -134,6 +156,17 @@ const Ast = (
                     );
                     output.write(")");
                 )
+                | :Index { .obj, .index } => (
+                    Print.expr(obj);
+                    output.write("[");
+                    Print.expr(index);
+                    output.write("]");
+                )
+                | :Equal { .lhs, .rhs } => (
+                    Print.expr(lhs);
+                    output.write(" === ");
+                    Print.expr(rhs);
+                )
             );
             output.write(")");
         );
@@ -141,6 +174,15 @@ const Ast = (
         const stmt = (self :: Stmt) => (
             let output = @current Output;
             match self with (
+                | :RawConcat { .parts } => (
+                    for part in parts |> ArrayList.into_iter do (
+                        if part is :Raw s then (
+                            output.write(s);
+                        ) else (
+                            Print.expr(part);
+                        );
+                    );
+                )
                 | :Expr expr => Print.expr(expr)
                 | :Let { .var, .value } => (
                     output.write("let ");

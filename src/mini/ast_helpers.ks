@@ -69,6 +69,7 @@ const AstHelpers = (
         group :: Ast.Group,
         child_names :: Option.t[type { String, String }],
     ) -> { Ast.t, Ast.t } => (
+        with std.PanicHandler = handle_panics(&group);
         let { a, b } = match child_names with (
             | :None => (
                 group.children
@@ -89,6 +90,7 @@ const AstHelpers = (
         b :: String,
         c :: String,
     ) -> { Ast.t, Ast.t, Ast.t } => (
+        with std.PanicHandler = handle_panics(&group);
         let a = (&group.children |> Tuple.get_named(a))^;
         let b = (&group.children |> Tuple.get_named(b))^;
         let c = (&group.children |> Tuple.get_named(c))^;
@@ -103,6 +105,7 @@ const AstHelpers = (
         group :: Ast.Group,
         child_name :: Option.t[String],
     ) -> Ast.t => (
+        with std.PanicHandler = handle_panics(&group);
         let child = match child_name with (
             | :None => (
                 group.children
@@ -112,4 +115,20 @@ const AstHelpers = (
         );
         child |> Ast.unwrap_child_value
     );
+
+    # TODO not catch panics but instead use Tuple.get_*_opt or smth
+    const handle_panics = (group :: &Ast.Group) -> std.PanicHandlerT => {
+        .handle = [T] (message :: String) -> T => (
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    (@current Output).write(message);
+                ),
+                .span = group^.span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        ),
+    };
 );

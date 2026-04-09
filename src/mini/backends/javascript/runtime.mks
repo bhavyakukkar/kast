@@ -17,8 +17,14 @@ const TypeKind = enum {
     | :Array
 };
 
-const TypeInfo = struct {
+const TypeInfoDetails = union {
     .members :: List[MemberInfo],
+    .inner_ty :: &TypeInfo,
+    .primitive :: (),
+};
+
+const TypeInfo = struct {
+    .details :: TypeInfoDetails,
     .kind :: TypeKind,
 };
 
@@ -26,64 +32,70 @@ const get_member = (obj :: &Any, member :: &MemberInfo) -> &Any => (
     @native "{get:()=>\(obj).get()[\(member^.offset_or_name)],set:value=>\(obj).get()[\(member^.offset_or_name)]=value}"
 );
 
-const allocate_type_on_stack = (
+const allocate_type_on_heap = (
     T :: &TypeInfo,
 ) -> &Any => (
     if T^.kind == :Object then (
         let result :: Any = @native "{}";
         let setup_member = (member :: MemberInfo) -> () => (
-            get_member(&result, &member)^ = allocate_type(member.ty)
+            get_member(&result, &member)^ = allocate_type_on_heap(member.ty)
         );
-        @native "for (let member of \(T^.members)) { \(setup_member)(undefined, member) }";
+        @native "stmt: for (let member of \(T^.details.members)) { \(setup_member)(undefined, member) }";
         &result
     ) else (
         &uninitialized
     )
 );
 
-const allocate_type_on_heap = (T :: &TypeInfo) -> &Any => (
-    allocate_type_on_stack(T)
+const allocate_type_on_stack = (T :: &TypeInfo) -> &Any => (
+    allocate_type_on_heap(T)
 );
 
 const initialize_type_info_for_struct = (
     T :: &TypeInfo,
+    members :: List[MemberInfo],
 ) -> () => (
     T^.kind = :Object;
+    T^.details.members = members;
 );
 
 const copy_impl = (
-    value :: Any,
     T :: &TypeInfo,
+    value :: Any,
 ) -> Any => (
     if T^.kind == :Object then (
-        target^ = @native "{}";
+        let target :: Any = @native "{}";
         let copy_member = (member :: MemberInfo) -> () => (
-            copy(
-                get_member(target, &member),
-                get_member(source, &member),
+            get_member(&target, &member)^ = copy_impl(
+                get_member(&value, &member)^,
                 member.ty,
             );
         );
-        @native "for (let member of \(T^.members)) { \(copy_member)(undefined, member) }";
+        @native "stmt: for (let member of \(T^.details.members)) { \(copy_member)(undefined, member); }";
     ) else if T^.kind == :Array then (
-        target^ = @native "[]";
-        let copy_element = (source_element :: Any) -> Any => (
-            copy(
-                get_member(target, &member),
-                get_member(source, &member),
-                member.ty,
-            );
+        let inner_ty = T^.details.inner_ty;
+        let target :: Any = @native "[]";
+        let copy_element = (element :: Any) -> Any => (
+            copy_impl(element, inner_ty)
         );
-        @native "for (let e of \(source^)) { \(copy_member)(undefined, member) }";
+        @native "stmt: for (let e of \(value)) { \(target).push(\(copy_element)(e)); }";
     ) else (
         value
     )
 );
 
 const copy = (
+    T :: &TypeInfo,
     target :: &Any,
     source :: &Any,
-    T :: &TypeInfo,
 ) -> () => (
-    target^ = copy_impl(T, source);
+    target^ = copy_impl(T, source^);
+);
+
+const move = (
+    T :: &TypeInfo,
+    target :: &Any,
+    source :: &Any,
+) -> () => (
+    target^ = source^;
 );
