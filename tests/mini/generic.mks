@@ -16,15 +16,17 @@ const GenericType = (T :: &TypeInfo) -> &TypeInfo => (
     result
 );
 
-const generic_fn = (T :: &TypeInfo) -> ((&Any, &Any) -> ()) => (
-    (field :: &Any, result :: &Any) -> () => (
-        let GenericType_of_T = GenericType(T);
-        let result_field = get_member(
-            result,
-            &GenericType_of_T^.details.members.[0],
-        );
-        move(T, result_field, field);
-    )
+const generic_fn = (
+    T :: &TypeInfo,
+    field :: &Any,
+    result :: &Any,
+) -> () => (
+    let GenericType_of_T = GenericType(T);
+    let result_field = get_member(
+        result,
+        &GenericType_of_T^.details.members.[0],
+    );
+    move(T, result_field, field);
 );
 
 const const_123 :: Int32 = 123;
@@ -35,6 +37,6 @@ const GenericType_of_Int32 = struct {
 
 const main = () -> () => (
     let x :: GenericType_of_Int32 = uninitialized;
-    generic_fn(&@TypeInfo(Int32))(&const_123, &x);
+    generic_fn(&@TypeInfo(Int32), &const_123, &x);
     @native "stmt: console.log(\(x))";
 );

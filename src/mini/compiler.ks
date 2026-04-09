@@ -1201,7 +1201,7 @@ const Compiler = (
                                     let output = @current Output;
                                     output.write("Type ");
                                     Ir.Print.type_name(&ty);
-                                    output.write("can't be used as record");
+                                    output.write(" can't be used as record");
                                 ),
                                 .span = ast.span,
                                 .related = ArrayList.new(),
