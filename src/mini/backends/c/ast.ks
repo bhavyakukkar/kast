@@ -1,25 +1,35 @@
 use (import "../../../output.ks").*;
+use std.collections.OrdSet;
 
 module:
 
 const Ast = (
     module:
 
+    const Ident = newtype {
+        .name :: String,
+    };
+
     const Ty = newtype (
         | :SizeT
         | :Char
         | :Int
+        | :Int32
+        | :Int64
+        | :Float64
+        | :Bool
         | :Void
         | :Pointer Ty
+        | :Named Ident
     );
 
     const FnArg = newtype {
-        .name :: String,
+        .name :: Ident,
         .ty :: Ty,
     };
 
     const FnSignature = newtype {
-        .name :: String,
+        .name :: Ident,
         .args :: ArrayList.t[FnArg],
         .result_ty :: Ty,
     };
@@ -36,7 +46,9 @@ const Ast = (
     );
 
     const Expr = newtype (
-        | :Ident String
+        | :Raw String
+        | :RawParts ArrayList.t[Expr]
+        | :Ident Ident
         | :Literal Literal
         | :Apply {
             .f :: Expr,
@@ -47,6 +59,11 @@ const Ast = (
     const Stmt = newtype (
         | :Expr Expr
         | :Return Expr
+        | :LetVar {
+            .ty :: Ty,
+            .ident :: Ident,
+            .value :: Expr,
+        }
     );
 
     const Block = newtype {
@@ -54,7 +71,7 @@ const Ast = (
     };
 
     const Program = newtype {
-        .includes :: ArrayList.t[String],
+        .includes :: OrdSet.t[String],
         .fns :: ArrayList.t[Fn],
     };
 
@@ -96,6 +113,14 @@ const Ast = (
             )
         );
 
+        const ident = (ident :: &Ident) => (
+            write(ident^.name);
+        );
+
+        const raw = (s :: String) => (
+            ansi.with_mode(:Cyan, () => write(s));
+        );
+
         const expr = (expr :: &Expr) => with_return (
             if expr^ is :Literal ref literal then (
                 Print.literal(literal);
@@ -103,7 +128,17 @@ const Ast = (
             );
             write("(");
             match expr^ with (
-                | :Ident name => write(name)
+                | :Raw s => Print.raw(s)
+                | :RawParts ref parts => (
+                    for part in parts |> ArrayList.iter do (
+                        if part^ is :Raw s then (
+                            Print.raw(s)
+                        ) else (
+                            Print.expr(part)
+                        );
+                    );
+                )
+                | :Ident ref ident => Print.ident(ident)
                 | :Apply { .f = ref f, .args = ref args } => (
                     Print.expr(f);
                     write("(");
@@ -123,10 +158,15 @@ const Ast = (
                 | :SizeT => write_keyword("size_t")
                 | :Void => write_keyword("void")
                 | :Int => write_keyword("int")
+                | :Bool => write_keyword("bool")
+                | :Int32 => write_keyword("int32_t")
+                | :Int64 => write_keyword("int64_t")
+                | :Float64 => write_keyword("double")
                 | :Pointer ref t => (
                     Print.ty(t);
                     write("*")
                 )
+                | :Named ref ident => Print.ident(ident)
             )
         );
 
@@ -136,6 +176,13 @@ const Ast = (
                 | :Return ref expr => (
                     write_keyword("return ");
                     Print.expr(expr);
+                )
+                | :LetVar { .ty = ref ty, .ident = ref ident, .value = ref value } => (
+                    Print.ty(ty);
+                    write(" ");
+                    Print.ident(ident);
+                    write(" = ");
+                    Print.expr(value);
                 )
             );
         );
@@ -154,7 +201,7 @@ const Ast = (
         const fn_signature = (signature :: &FnSignature) => (
             Print.ty(&signature^.result_ty);
             write(" ");
-            write(signature^.name);
+            Print.ident(&signature^.name);
             write("(");
             for { i, arg } in &signature^.args |> ArrayList.iter |> std.iter.enumerate do (
                 if i != 0 then (
@@ -162,7 +209,7 @@ const Ast = (
                 );
                 Print.ty(&arg^.ty);
                 write(" ");
-                write(arg^.name);
+                Print.ident(&arg^.name);
             );
             write(")");
         );
@@ -175,7 +222,7 @@ const Ast = (
         );
 
         const program = (program :: &Program) => (
-            for &@"include" in &program^.includes |> ArrayList.iter do (
+            for &@"include" in &program^.includes |> OrdSet.iter do (
                 write_keyword("#include ");
                 ansi.with_mode(
                     :Green,
