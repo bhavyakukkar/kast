@@ -1,23 +1,67 @@
 use (import "./common.ks").*;
 
-module:
+const Delim = newtype {
+    .c1 :: Char,
+    .c2 :: Option.t[Char],
+    .raw :: String,
+};
 
-const read_string_with_delim = (delim :: Char) => with_return (
+const new_delim = (s :: String) -> Delim => (
+    if String.length(s) > 2 then (
+        panic("at most 2 char delim please");
+    );
+    let c1 = String.at(s, 0);
+    let c2 = if String.length(s) > 1 then (
+        :Some String.at(s, 1)
+    ) else (
+        :None
+    );
+    { .c1, .c2, .raw = s }
+);
+
+const next_is_delim = (delim :: Delim) -> Bool => (
+    let ctx = @current Context;
+    let reader = &ctx.lexer^.reader;
+    if delim.c2 is :Some c2 then (
+        reader |> next_two_are(delim.c1, c2)
+    ) else (
+        reader |> next_is(delim.c1)
+    )
+);
+# assumes we already checked that next_is_delim
+const consume_delim = (delim :: Delim) -> Token.t => (
     let ctx = @current Context;
     let lexer = ctx.lexer;
     let reader = &mut lexer^.reader;
-    let c = Reader.peek(&reader^) |> Option.unwrap_or_else(() => return :None);
-    if c != delim then return :None;
-    let open_token = {
-        .shape = :Punct { .raw = to_string(delim) },
-        .span = Span.single_char(
-            .position = reader^.position,
-            .char = :Some delim,
-            .path = lexer^.source.path,
-        ),
-    };
     let start = reader^.position;
-    Reader.advance(reader);
+    for _ in String.iter(delim.raw) do (
+        reader |> Reader.advance;
+    );
+    {
+        .shape = :Punct { .raw = delim.raw },
+        .span = {
+            .start,
+            .end = reader^.position,
+            .path = lexer^.source.path,
+        },
+    }
+);
+
+module:
+
+const read_string_impl = (
+    .delim :: Delim,
+    .multiline :: Bool,
+    .strip_indentation :: Bool,
+) => with_return (
+    let ctx = @current Context;
+    let lexer = ctx.lexer;
+    let reader = &mut lexer^.reader;
+    if not next_is_delim(delim) then (
+        return :None;
+    );
+    let start = reader^.position;
+    let open_token = consume_delim(delim);
     let mut parts = ArrayList.new();
     let reset_raw_content_part = () => {
         .start = reader^.position,
@@ -72,10 +116,43 @@ const read_string_with_delim = (delim :: Char) => with_return (
             );
         content_part = reset_content_part();
     );
+    let indentation = if strip_indentation then (
+        let mut indentation = "";
+        while Reader.peek(&reader^) is :Some c do (
+            if c == '\n' then (
+                indentation = ""
+            ) else if Char.is_whitespace(c) then (
+                indentation += to_string(c);
+            ) else (
+                break;
+            );
+            reader |> Reader.advance;
+        );
+        indentation
+    ) else "";
     while Reader.peek(&reader^) is :Some c do (
         const outer_loop_body = @current std.LoopBody;
-        if c == '\n' then break;
-        if c == delim then break;
+        if c == '\n' then (
+            if not multiline then (
+                break;
+            );
+            if strip_indentation then (
+                add_char('\n');
+                reader |> Reader.advance;
+                for expected in String.iter(indentation) do (
+                    if next_is_delim(delim) then break;
+                    if &reader^ |> next_is('\n') then (
+                        break;
+                    );
+                    if not &reader^ |> next_is(expected) then (
+                        error_at_current_position("Expected more indentation in multiline string");
+                    );
+                    reader |> Reader.advance;
+                );
+                continue;
+            );
+        );
+        if next_is_delim(delim) then break;
         if c == '\\' then (
             finish_raw_content_part();
             let escape_start = reader^.position;
@@ -288,30 +365,20 @@ const read_string_with_delim = (delim :: Char) => with_return (
                 }
             );
     );
-    let close_token = (
+    if not next_is_delim(delim) then (
         let span_so_far = {
             .start,
             .end = reader^.position,
             .path = lexer^.source.path,
         };
-        let c = Reader.peek(&reader^)
-            |> Option.unwrap_or_else(
-                () => error_with_span(span_so_far, "Unfinished string")
-            );
-        if c != delim then error_with_span(span_so_far, "Unfinished string");
-        {
-            .shape = :Punct { .raw = to_string(delim) },
-            .span = Span.single_char(
-                .position = reader^.position,
-                .char = :Some delim,
-                .path = lexer^.source.path,
-            ),
-        }
+        error_with_span(span_so_far, "Unfinished string");
     );
-    Reader.advance(reader);
-    let start = start.string_encoding_index;
-    let end = reader^.position.string_encoding_index;
-    let raw = String.substring(reader^.contents, start, end - start);
+    let close_token = consume_delim(delim);
+    let raw = (
+        let start = start.string_encoding_index;
+        let end = reader^.position.string_encoding_index;
+        String.substring(reader^.contents, start, end - start)
+    );
     if &parts |> ArrayList.length == 1 then (
         if (&parts |> ArrayList.at(0))^ is :Content { .raw_parts, .contents, ... } then (
             return :Some :String {
@@ -324,7 +391,7 @@ const read_string_with_delim = (delim :: Char) => with_return (
         );
     );
     :Some :InterpolatedString {
-        .delimiter = to_string(delim),
+        .delimiter = delim.raw,
         .raw,
         .open = open_token,
         .parts,
@@ -333,10 +400,25 @@ const read_string_with_delim = (delim :: Char) => with_return (
 );
 
 const read_string :: ReadFn = () => with_return (
-    if read_string_with_delim('\'') is :Some token then (
+    if read_string_impl(
+        .delim = new_delim("''"),
+        .multiline = true,
+        .strip_indentation = true,
+    ) is :Some token then (
         return :Some token;
     );
-    if read_string_with_delim('"') is :Some token then (
+    if read_string_impl(
+        .delim = new_delim("'"),
+        .multiline = false,
+        .strip_indentation = false,
+    ) is :Some token then (
+        return :Some token;
+    );
+    if read_string_impl(
+        .delim = new_delim("\""),
+        .multiline = false,
+        .strip_indentation = false,
+    ) is :Some token then (
         return :Some token;
     );
     :None

@@ -47,7 +47,7 @@ const read_raw_ident :: ReadFn = () => with_return (
     );
     let start = lexer^.reader.position;
     reader |> Reader.advance;
-    let string_token = read_string_with_delim('"') |> Option.unwrap;
+    let string_token = read_string() |> Option.unwrap;
     let end = lexer^.reader.position;
     let span :: Span = {
         .start,
