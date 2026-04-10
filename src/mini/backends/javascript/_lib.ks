@@ -190,9 +190,16 @@ const JavaScript = (
                     let part = match part with (
                         | :Raw s => with_return (
                             if first then (
-                                if s |> String.strip_prefix(.prefix = "stmt: ") is :Some s then (
+                                if s |> String.strip_prefix(.prefix = "stmt:") is :Some s then (
                                     stmt = true;
-                                    return :Raw s;
+                                    let mut start = 0;
+                                    while (
+                                        start < String.length(s)
+                                        and String.at(s, start) |> Char.is_whitespace
+                                    ) do (
+                                        start += Char.string_encoding_len(String.at(s, start));
+                                    );
+                                    return :Raw String.substring_from(s, start);
                                 )
                             );
                             :Raw s

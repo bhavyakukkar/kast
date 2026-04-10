@@ -21,6 +21,7 @@
 @syntax "fn" 7 @wrap never = args " " "->" " " result_ty " " "=>" " " body;
 @syntax "if_without_else" 7.5 @wrap never = "if" " " cond " " "then" " " then_case;
 @syntax "if" 7.5 @wrap never = "if" " " cond " " "then" " " then_case " " "else" " " else_case ->;
+# @syntax "for" 7.5 @wrap never = "for" " " ident " " "in" " " start ".." end " " "do" " " body;
 @syntax "unwindable" 7.7 @wrap never = "unwindable" " " token: >=1000 " " body;
 @syntax "unwind" 7.7 @wrap never = "unwind" " " token: >=1000 " " "with" " " value;
 @syntax "create_context_type" 9 @wrap never = "@context" " " type;
@@ -36,7 +37,7 @@
 @syntax "list" 70 @wrap never = <- "List" "[" _:any "]";
 @syntax "unwind_token" 70 @wrap never = <- "UnwindToken" "[" _:any "]";
 @syntax "field" 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
-@syntax "index" 70 @wrap never = <- list ""/"\n\t" "." "[" index "]" ""/"\\";
+@syntax "index" 70 @wrap never = <- list ""/"\n\t" "." "[" index:any "]" ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
 @syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");
 @syntax "newtype" 500 @wrap never = "newtype" " " _;

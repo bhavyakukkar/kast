@@ -1,54 +1,84 @@
- # const MemberOffsetOrName = type Int32;
-# const initialize_offset_or_name = (
-#     name :: String,
-# ) -> MemberOffsetOrName => (
-#     0
-# );
-# const MemberInfo = struct {
-#     .offset_or_name :: MemberOffsetOrName,
-#     .ty :: &TypeInfo,
-# };
-# const TypeInfo = struct {
-#     .members :: List[MemberInfo],
-#     .stride :: Int32,
-#     .size :: Int32,
-# };
-# const get_member = (
-#     obj :: &Any,
-#     member :: &MemberInfo,
-# ) -> &Any => (
-#     @native "\(obj) + \(member^.offset_or_name)"
-# );
-# const allocate_type_on_stack = (
-#     T :: &TypeInfo,
-# ) -> &Any => (
-#     # TODO this fn must be inlined
-#     @native "alloca(\(T^.size))"
-# );
-# const allocate_type_on_heap = (
-#     T :: &TypeInfo,
-# ) -> &Any => (
-#     @native "malloc(\(T^.size))"
-# );
-# const initialize_type_info_for_struct = (
-#     T :: &TypeInfo,
-# ) -> () => (
-#     # TODO calculate member offsets and size
-# );
-# const copy = (
-#     target :: &Any,
-#     source :: &Any,
-#     T :: &TypeInfo,
-# ) -> () => (
-#     @native "memcpy(\(target), \(source), \(T^.size))"
-# );
-# const move = (
-#     target :: &Any,
-#     source :: &Any,
-#     T :: &TypeInfo,
-# ) -> () => (
-#     @native "memcpy(\(target), \(source), \(T^.size))"
-# );
+const MemberOffsetOrName = type SizeT;
+const MemberInfo = struct {
+    .offset_or_name :: MemberOffsetOrName,
+    .ty :: &TypeInfo,
+};
+const TypeInfo = struct {
+    .members :: List[MemberInfo],
+    .stride :: SizeT,
+    .size :: SizeT,
+    .alignment :: SizeT,
+};
+const get_member = (
+    obj :: &Any,
+    member :: &MemberInfo,
+) -> &Any => (
+    @native "\(obj) + \(member^.offset_or_name)"
+);
+const allocate_type_on_stack = (
+    T :: &TypeInfo,
+) -> &Any => (
+    # TODO this fn must be inlined
+    @native "alloca(\(T^.size))"
+);
+const allocate_type_on_heap = (
+    T :: &TypeInfo,
+) -> &Any => (
+    @native "malloc(\(T^.size))"
+);
+
+const mul = (a :: SizeT, b :: SizeT) -> SizeT => (
+    @native "\(a) * \(b)"
+);
+
+const greater = (a :: SizeT, b :: SizeT) -> SizeT => (
+    @native "\(a) > \(b)"
+);
+
+const div_round_up = (a :: SizeT, b :: SizeT) -> SizeT => (
+    @native "(\(a) + \(b) - 1) / \(b)"
+);
+
+const align = (x :: SizeT, alignment :: SizeT) -> SizeT => (
+    mul(div_round_up(x, alignment), alignment)
+);
+
+const initialize_type_info_for_struct = (
+    T :: &TypeInfo,
+    members :: List[MemberInfo],
+) -> () => (
+    T^.alignment = @native "1";
+    T^.size = @native "0";
+    @native ''
+        for (size_t i = 0; i < \(members.length); i++) {
+            \(
+                let member = &members.[@native "i"];
+                if greater(member^.ty^.alignment, T^.alignment) then (
+                    T^.alignment = member^.ty^.alignment;
+                );
+                member^.offset_or_name = align(T^.size, member^.ty^.alignment);
+                T^.size = add(member.offset_or_name, member^.ty^.size);
+            );
+        }
+    '';
+    T^.stride = align(T^.size, T^.alignment);
+    T^.members = members;
+);
+
+const copy = (
+    target :: &Any,
+    source :: &Any,
+    T :: &TypeInfo,
+) -> () => (
+    @native "memcpy(\(target), \(source), \(T^.size))"
+);
+const move = (
+    target :: &Any,
+    source :: &Any,
+    T :: &TypeInfo,
+) -> () => (
+    @native "memcpy(\(target), \(source), \(T^.size))"
+);
 
 const SizeT = type @native "size_t";
 const C_String = type @native "char*";
@@ -57,3 +87,4 @@ const StringView = struct {
     .contents :: C_String,
     .length :: SizeT,
 };
+const String = type StringView;

@@ -211,6 +211,18 @@ const Ir = (
             output.write("_nF");
         );
 
+        const raw_string_as_ident = (s :: String) => (
+            let output = @current Output;
+            for c in String.iter(s) do (
+                let c = if Char.is_ascii_alphanumeric(c) or c == '_' then (
+                    c
+                ) else (
+                    '_'
+                );
+                output.write(to_string(c));
+            );
+        );
+
         const type_name_as_ident = (self :: &Type) => (
             let output = @current Output;
             match self^ with (
@@ -236,7 +248,8 @@ const Ir = (
                     Print.type_name_as_ident(result_ty);
                 )
                 | :Native s => (
-                    panic("TODO native type as ident")
+                    output.write("Native_");
+                    Print.raw_string_as_ident(s);
                 )
             )
         );

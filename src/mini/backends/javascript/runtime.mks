@@ -29,7 +29,11 @@ const TypeInfo = struct {
 };
 
 const get_member = (obj :: &Any, member :: &MemberInfo) -> &Any => (
-    @native "{get:()=>\(obj).get()[\(member^.offset_or_name)],set:value=>\(obj).get()[\(member^.offset_or_name)]=value}"
+    @native ''
+        {
+            get: () => \(obj).get()[\(member^.offset_or_name)],
+            set: value => \(obj).get()[\(member^.offset_or_name)] = value,
+        }''
 );
 
 const allocate_type_on_heap = (
@@ -40,7 +44,11 @@ const allocate_type_on_heap = (
         let setup_member = (member :: MemberInfo) -> () => (
             get_member(&result, &member)^ = allocate_type_on_heap(member.ty)
         );
-        @native "stmt: for (let member of \(T^.details.members)) { \(setup_member)(undefined, member) }";
+        @native ''
+            stmt:
+            for (let member of \(T^.details.members)) {
+                \(setup_member)(undefined, member);
+            }'';
         &result
     ) else (
         &uninitialized
@@ -71,14 +79,22 @@ const copy_impl = (
                 member.ty,
             );
         );
-        @native "stmt: for (let member of \(T^.details.members)) { \(copy_member)(undefined, member); }";
+        @native ''
+            stmt:
+            for (let member of \(T^.details.members)) {
+                \(copy_member)(undefined, member);
+            }'';
     ) else if T^.kind == :Array then (
         let inner_ty = T^.details.inner_ty;
         let target :: Any = @native "[]";
         let copy_element = (element :: Any) -> Any => (
             copy_impl(element, inner_ty)
         );
-        @native "stmt: for (let e of \(value)) { \(target).push(\(copy_element)(e)); }";
+        @native ''
+            stmt:
+            for (let e of \(value)) {
+                \(target).push(\(copy_element)(e));
+            }'';
     ) else (
         value
     )
@@ -101,4 +117,4 @@ const move = (
 );
 
 const String = type @native "string";
-const StringView = type @native "string";
+const StringView = type String;
