@@ -1,60 +1,59 @@
-const MemberOffsetOrName = type Int32;
+ # const MemberOffsetOrName = type Int32;
+# const initialize_offset_or_name = (
+#     name :: String,
+# ) -> MemberOffsetOrName => (
+#     0
+# );
+# const MemberInfo = struct {
+#     .offset_or_name :: MemberOffsetOrName,
+#     .ty :: &TypeInfo,
+# };
+# const TypeInfo = struct {
+#     .members :: List[MemberInfo],
+#     .stride :: Int32,
+#     .size :: Int32,
+# };
+# const get_member = (
+#     obj :: &Any,
+#     member :: &MemberInfo,
+# ) -> &Any => (
+#     @native "\(obj) + \(member^.offset_or_name)"
+# );
+# const allocate_type_on_stack = (
+#     T :: &TypeInfo,
+# ) -> &Any => (
+#     # TODO this fn must be inlined
+#     @native "alloca(\(T^.size))"
+# );
+# const allocate_type_on_heap = (
+#     T :: &TypeInfo,
+# ) -> &Any => (
+#     @native "malloc(\(T^.size))"
+# );
+# const initialize_type_info_for_struct = (
+#     T :: &TypeInfo,
+# ) -> () => (
+#     # TODO calculate member offsets and size
+# );
+# const copy = (
+#     target :: &Any,
+#     source :: &Any,
+#     T :: &TypeInfo,
+# ) -> () => (
+#     @native "memcpy(\(target), \(source), \(T^.size))"
+# );
+# const move = (
+#     target :: &Any,
+#     source :: &Any,
+#     T :: &TypeInfo,
+# ) -> () => (
+#     @native "memcpy(\(target), \(source), \(T^.size))"
+# );
 
-const initialize_offset_or_name = (
-    name :: String,
-) -> MemberOffsetOrName => (
-    0
-);
+const SizeT = type @native "size_t";
+const C_String = type @native "char*";
 
-const MemberInfo = struct {
-    .offset_or_name :: MemberOffsetOrName,
-    .ty :: &TypeInfo,
+const StringView = struct {
+    .contents :: C_String,
+    .length :: SizeT,
 };
-
-const TypeInfo = struct {
-    .members :: List[MemberInfo],
-    .stride :: Int32,
-    .size :: Int32,
-};
-
-const get_member = (
-    obj :: &Any,
-    member :: &MemberInfo,
-) -> &Any => (
-    @native "\(obj) + \(member^.offset_or_name)"
-);
-
-const allocate_type_on_stack = (
-    T :: &TypeInfo,
-) -> &Any => (
-    # TODO this fn must be inlined
-    @native "alloca(\(T^.size))"
-);
-
-const allocate_type_on_heap = (
-    T :: &TypeInfo,
-) -> &Any => (
-    @native "malloc(\(T^.size))"
-);
-
-const initialize_type_info_for_struct = (
-    T :: &TypeInfo,
-) -> () => (
-    # TODO calculate member offsets and size
-);
-
-const copy = (
-    target :: &Any,
-    source :: &Any,
-    T :: &TypeInfo,
-) -> () => (
-    @native "memcpy(\(target), \(source), \(T^.size))"
-);
-
-const move = (
-    target :: &Any,
-    source :: &Any,
-    T :: &TypeInfo,
-) -> () => (
-    @native "memcpy(\(target), \(source), \(T^.size))"
-);

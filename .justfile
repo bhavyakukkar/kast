@@ -16,7 +16,11 @@ build continuous="":
         src/cli/_main.ks
 
 c path:
-    kast --color false mini compile --target c {{path}} > target/compiled.c
+    kast --color false mini \
+        compile --target c \
+        src/mini/backends/c/runtime.mks \
+        {{path}} \
+        > target/compiled.c
     clang target/compiled.c -o target/compiled
     ./target/compiled
 

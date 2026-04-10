@@ -26,6 +26,24 @@ const AstHelpers = (
         )
     );
 
+    const expect_string = (ast :: Ast.t) -> String => (
+        match ast.shape with (
+            | :Token { .shape = :String { .contents, ... }, ... } => contents
+            | _ => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        (@current Output).write("Expected a string token");
+                    ),
+                    .span = ast.span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
+        )
+    );
+
     const expect_string_literal = (ast :: Ast.t) -> String => (
         match ast.shape with (
             | :Token { .shape = :String { .contents, ... }, ... } => contents

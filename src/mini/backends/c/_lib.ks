@@ -17,6 +17,7 @@ const C = (
 
     const ContextT = newtype {
         .program :: Ir.Program,
+        .defined_types :: OrdSet.t[String],
         .result :: Ast.Program,
         .next_id :: Int32,
     };
@@ -53,8 +54,8 @@ const C = (
             | :Float64 => :Float64
             | :Bool => :Bool
             | :Char => :Char
-            # | :String => 
             | :Named name => :Named ident(name)
+            | :Native s => :Raw s
         # | :Fn FnType
         )
     );
@@ -85,9 +86,21 @@ const C = (
                 .get = () => { .expr = :Some :Ident ident(name) },
                 .set = value => (
                     insert_stmt(:Assign { .assignee = :Ident ident(name), .value });
-                )
+                ),
             }
-            # | :Field 
+            | :Field { .obj = ref obj, .field } => (
+                let obj = calculate_place(obj);
+                let field_expr = :Field {
+                    .obj = pure(obj.get()),
+                    .field = ident(field),
+                };
+                {
+                    .get = () => { .expr = :Some field_expr },
+                    .set = value => (
+                        insert_stmt(:Assign { .assignee = field_expr, .value });
+                    ),
+                }
+            )
             # | :Index 
             # | :CurrentContext String
             # | :Deref Expr
@@ -101,14 +114,32 @@ const C = (
         )
     );
 
-    const calculate_literal = (literal :: &Ir.Literal) -> Pure => (
+    const calculate_literal = (literal :: &Ir.Literal) -> Pure => with_return (
         let literal :: Ast.Literal = match literal^ with (
             | :Bool x => :Bool x
             | :Int32 x => :Int32 x
             | :Int64 x => :Int64 x
             | :Float64 x => :Float64 x
             | :Char x => :Char x
-            | :String x => :String x
+            | :String s => return {
+                .expr = :Some :CompoundLiteral {
+                    .ty = :Named ident("StringView"),
+                    .fields = (
+                        let mut fields = ArrayList.new();
+                        let contents = {
+                            .name = ident("contents"),
+                            .value = :Literal :String s,
+                        };
+                        &mut fields |> ArrayList.push_back(contents);
+                        let length = {
+                            .name = ident("length"),
+                            .value = :Literal :Int String.length(s),
+                        };
+                        &mut fields |> ArrayList.push_back(length);
+                        fields
+                    )
+                },
+            }
         );
         { .expr = :Some :Literal literal }
     );
@@ -187,7 +218,7 @@ const C = (
                         :Some block
                     )
                 );
-                insert_stmt(:If {.cond, .then_case, .else_case });
+                insert_stmt(:If { .cond, .then_case, .else_case });
                 return { .expr = if is_void then :None else :Some :Ident ident }
             )
             # | :Let { .name, .value }
@@ -284,19 +315,116 @@ const C = (
         &mut ctx.result.fns |> ArrayList.push_back(fn);
     );
 
+    const make_sure_all_are_defined = (ty :: &Ir.Type) => (
+        match ty^ with (
+            | :Any => ()
+            | :Ref ref inner => make_sure_all_are_defined(inner)
+            | :List ref inner => make_sure_all_are_defined(inner)
+            | :UnwindToken ref inner => make_sure_all_are_defined(inner)
+            | :Unit => ()
+            | :Int32 => ()
+            | :Int64 => ()
+            | :Float64 => ()
+            | :Bool => ()
+            | :Char => ()
+            | :Named name => (
+                let def = &(@current Context).program.types
+                    |> OrdMap.get(name)
+                    |> Option.unwrap;
+                type_def(name, def);
+            )
+            | :Fn { .args = ref args, .result = ref result } => (
+                for arg in args |> ArrayList.iter do (
+                    make_sure_all_are_defined(arg);
+                );
+                make_sure_all_are_defined(result);
+            )
+            | :Native String => ()
+        )
+    );
+
+    const type_def = (name :: String, def :: &Ir.TypeDef) => with_return (
+        let mut ctx = @current Context;
+        if &ctx.defined_types |> OrdSet.contains(name) then (
+            return;
+        );
+        &mut ctx.defined_types |> OrdSet.add(name);
+        match def^ with (
+            | :Opaque => ()
+            | :Enum _ => ()
+            | :Union { .variants = ref variants } => (
+                for &{ .key = _, .value = ref ty } in variants |> OrdMap.iter do (
+                    make_sure_all_are_defined(ty);
+                );
+            )
+            | :Struct { .fields = ref fields } => (
+                for &{ .key = _, .value = ref ty } in fields |> OrdMap.iter do (
+                    make_sure_all_are_defined(ty);
+                );
+            )
+            | :Alias ref ty => (
+                make_sure_all_are_defined(ty);
+            )
+        );
+        let def :: Ast.TyDefShape = match def^ with (
+            | :Opaque => :Alias :Pointer :Void
+            | :Enum { .variants = ref variants } => :Enum (
+                let mut idents = ArrayList.new();
+                for &variant in variants |> OrdSet.iter do (
+                    &mut idents |> ArrayList.push_back(ident(variant));
+                );
+                { .variants = idents }
+            )
+            | :Union { .variants = ref variants } => :Union (
+                let mut ast_fields = ArrayList.new();
+                for &{ .key = name, .value = ref ty } in variants |> OrdMap.iter do (
+                    let field = {
+                        .name = ident(name),
+                        .ty = convert_ty(ty),
+                    };
+                    &mut ast_fields |> ArrayList.push_back(field);
+                );
+                { .fields = ast_fields }
+            )
+            | :Struct { .fields = ref fields } => :Struct (
+                let mut ast_fields = ArrayList.new();
+                for &{ .key = name, .value = ref ty } in fields |> OrdMap.iter do (
+                    let field = {
+                        .name = ident(name),
+                        .ty = convert_ty(ty),
+                    };
+                    &mut ast_fields |> ArrayList.push_back(field);
+                );
+                { .fields = ast_fields }
+            )
+            | :Alias ref ty => :Alias convert_ty(ty)
+        );
+        let def :: Ast.TyDef = {
+            .name = ident(name),
+            .def,
+        };
+        &mut ctx.result.types |> ArrayList.push_back(def);
+    );
+
     const compile = (program :: Ir.Program) -> Compiled => (
         with Context = {
+            .defined_types = OrdSet.new(),
             .program,
             .result = {
                 .includes = OrdSet.new(),
+                .types = ArrayList.new(),
                 .fns = ArrayList.new(),
             },
             .next_id = 0,
         };
         let mut ctx = @current Context;
         # for int32_t and similar
-        &mut ctx.result.includes |> OrdSet.add("<stdint.h>");
+        &mut ctx.result.includes
+            |> OrdSet.add("<stdint.h>");
         &mut ctx.result.includes |> OrdSet.add("<stdbool.h>");
+        for &{ .key = name, .value = ref ty_def } in &ctx.program.types |> OrdMap.iter do (
+            type_def(name, ty_def);
+        );
         for &{ .key = name, .value = ref def } in &ctx.program.fns |> OrdMap.iter do (
             add_fn(name, def);
         );

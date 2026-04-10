@@ -31,7 +31,6 @@ const Compiler = (
         | :Struct
         | :Union
         | :Alias
-        | :Native
     );
 
     const TopLevelKind = newtype (
@@ -181,16 +180,6 @@ const Compiler = (
                     &mut state^.top_level_items |> ArrayList.push_back(item);
                     return;
                 );
-                if rule.name == "native" then (
-                    let def = root |> AstHelpers.expect_single_child(:None);
-                    let item = {
-                        .name,
-                        .kind = :Type :Native,
-                        .def,
-                    };
-                    &mut state^.top_level_items |> ArrayList.push_back(item);
-                    return;
-                );
                 if rule.name == "fn" then (
                     let item = {
                         .name,
@@ -311,7 +300,6 @@ const Compiler = (
                     | :Enum => process_enum(.name, .def)
                     | :Union => process_struct_or_union(.name, .kind, .def)
                     | :Struct => process_struct_or_union(.name, .kind, .def)
-                    | :Native => process_native_type(.name, .def)
                 )
                 | _ => ()
             );
@@ -370,7 +358,7 @@ const Compiler = (
         Diagnostic.report_and_unwind(diagnostic)
     );
     # TODO should take &
-    const resolve_type_aliases = (ty :: Ir.Type) -> Ir.Type => (
+    const resolve_type_aliases = (ty :: Ir.Type) -> Ir.Type => with_return (
         match ty with (
             | :Any => :Any
             | :Unit => :Unit
@@ -379,7 +367,6 @@ const Compiler = (
             | :Float64 => :Float64
             | :Char => :Char
             | :Bool => :Bool
-            | :String => :String
             | :Named name => (
                 let def = &(@current Context).program.types
                     |> OrdMap.get(name)
@@ -430,7 +417,6 @@ const Compiler = (
             | :Float64 => "Float64"
             | :Bool => "Bool"
             | :Char => "Char"
-            | :String => "String"
             | :Named name => (
                 let ctx = @current Context;
                 let def = &ctx.program.types |> OrdMap.get(name) |> Option.unwrap;
@@ -502,7 +488,6 @@ const Compiler = (
             | { :Float64, :Float64 } => ()
             | { :Bool, :Bool } => ()
             | { :Char, :Char } => ()
-            | { :String, :String } => ()
             | { :Named a, :Named b } => (
                 if a != b then (
                     (@current TypeCheckContext).fail(
@@ -788,7 +773,7 @@ const Compiler = (
                     .name = "offset_or_name",
                     .value = {
                         .shape = :Literal :String name,
-                        .ty = :String,
+                        .ty = :Named "StringView",
                         .span,
                     },
                 };
@@ -832,16 +817,17 @@ const Compiler = (
         let details_primitive = () -> Ir.Expr => {
             .shape = :Record (
                 let mut fields = ArrayList.new();
-                &mut fields |> ArrayList.push_back(
-                    {
-                        .name = "primitive",
-                        .value = {
-                            .shape = :Unit,
-                            .ty = :Unit,
-                            .span,
-                        },
-                    }
-                );
+                &mut fields
+                    |> ArrayList.push_back(
+                        {
+                            .name = "primitive",
+                            .value = {
+                                .shape = :Unit,
+                                .ty = :Unit,
+                                .span,
+                            },
+                        }
+                    );
                 fields
             ),
             .ty = :Named "TypeInfoDefails",
@@ -852,16 +838,17 @@ const Compiler = (
         ) -> Ir.Expr => {
             .shape = :Record (
                 let mut fields = ArrayList.new();
-                &mut fields |> ArrayList.push_back(
-                    {
-                        .name = "inner_ty",
-                        .value = {
-                            .shape = :Ref type_info(inner_ty),
-                            .ty = :Unit,
-                            .span,
-                        },
-                    }
-                );
+                &mut fields
+                    |> ArrayList.push_back(
+                        {
+                            .name = "inner_ty",
+                            .value = {
+                                .shape = :Ref type_info(inner_ty),
+                                .ty = :Unit,
+                                .span,
+                            },
+                        }
+                    );
                 fields
             ),
             .ty = :Named "TypeInfoDefails",
@@ -1564,7 +1551,7 @@ const Compiler = (
                         | :String str => (
                             let open_raw = Token.raw(str.open);
                             let { ty, literal } = if open_raw == "\"" then (
-                                { :String, :String str.contents }
+                                { :Named "StringView", :String str.contents }
                             ) else if open_raw == "'" then (
                                 if String.length(str.contents) == 0 then (
                                     let diagnostic = {
@@ -1654,6 +1641,12 @@ const Compiler = (
         match ast.shape with (
             | :Empty => return :Unit
             | :Rule { .rule, .root } => (
+                if rule.name == "native" then (
+                    let raw = root
+                        |> AstHelpers.expect_single_child(:None)
+                        |> AstHelpers.expect_string;
+                    return :Native raw;
+                );
                 if rule.name == "ref" then (
                     let referenced = root |> AstHelpers.expect_single_child(:None);
                     return :Ref parse_type(referenced);
@@ -1699,7 +1692,6 @@ const Compiler = (
                     if name == "Int64" then return :Int64;
                     if name == "Float64" then return :Float64;
                     if name == "Char" then return :Char;
-                    if name == "String" then return :String;
                     if not &(@current Context).type_names |> OrdSet.contains(name) then (
                         let diagnostic = {
                             .severity = :Error,
@@ -1829,55 +1821,6 @@ const Compiler = (
         let mut ctx = @current Context;
         let fn = parse_fn_def(def, .parent_scope = :None);
         &mut ctx.program.fns |> OrdMap.add(name, fn);
-    );
-
-    const process_native_type = (
-        .name :: String,
-        .def :: Ast.t,
-    ) => (
-        let mut ctx = @current Context;
-        let ty = with_return (
-            if def.shape is :Token token then (
-                if token.shape is :String s then (
-                    let name = s.contents;
-                    if name == "Int32" then (
-                        return :Int32;
-                    );
-                    if name == "Bool" then (
-                        return :Bool;
-                    );
-                    if name == "String" then (
-                        return :String;
-                    );
-                    if name == "Unit" then (
-                        return :Unit;
-                    );
-                    let diagnostic = {
-                        .severity = :Error,
-                        .source = :Compiler,
-                        .message = () => (
-                            let output = @current Output;
-                            output.write(String.escape(name));
-                            output.write(" is not valid native type");
-                        ),
-                        .span = def.span,
-                        .related = ArrayList.new(),
-                    };
-                    Diagnostic.report_and_unwind(diagnostic)
-                );
-            );
-            let diagnostic = {
-                .severity = :Error,
-                .source = :Compiler,
-                .message = () => (
-                    (@current Output).write("Expected a string literal as name of native type");
-                ),
-                .span = def.span,
-                .related = ArrayList.new(),
-            };
-            Diagnostic.report_and_unwind(diagnostic)
-        );
-        &mut ctx.program.types |> OrdMap.add(name, :Alias ty);
     );
 
     const process_enum = (

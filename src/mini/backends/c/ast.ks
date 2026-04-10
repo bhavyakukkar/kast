@@ -21,6 +21,8 @@ const Ast = (
         | :Void
         | :Pointer Ty
         | :Named Ident
+        | :Struct Ident
+        | :Raw String
     );
 
     const FnArg = newtype {
@@ -49,14 +51,27 @@ const Ast = (
         | :String String
     );
 
+    const FieldInitializer = newtype {
+        .name :: Ident,
+        .value :: Expr,
+    };
+
     const Expr = newtype (
         | :Raw String
         | :RawParts ArrayList.t[Expr]
         | :Ident Ident
         | :Literal Literal
+        | :CompoundLiteral {
+            .ty :: Ty,
+            .fields :: ArrayList.t[FieldInitializer],
+        }
         | :Apply {
             .f :: Expr,
             .args :: ArrayList.t[Expr],
+        }
+        | :Field {
+            .obj :: Expr,
+            .field :: Ident,
         }
     );
 
@@ -83,8 +98,32 @@ const Ast = (
         .stmts :: ArrayList.t[Stmt],
     };
 
+    const FieldDef = newtype {
+        .name :: Ident,
+        .ty :: Ty,
+    };
+
+    const TyDefShape = newtype (
+        | :Struct {
+            .fields :: ArrayList.t[FieldDef],
+        }
+        | :Union {
+            .fields :: ArrayList.t[FieldDef],
+        }
+        | :Enum {
+            .variants :: ArrayList.t[Ident],
+        }
+        | :Alias Ty
+    );
+
+    const TyDef = newtype {
+        .name :: Ident,
+        .def :: TyDefShape,
+    };
+
     const Program = newtype {
         .includes :: OrdSet.t[String],
+        .types :: ArrayList.t[TyDef],
         .fns :: ArrayList.t[Fn],
     };
 
@@ -168,6 +207,23 @@ const Ast = (
                     );
                 )
                 | :Ident ref ident => Print.ident(ident)
+                | :Literal ref literal => Print.literal(literal)
+                | :CompoundLiteral { .ty = ref ty, .fields = ref fields } => (
+                    write("(");
+                    Print.ty(ty);
+                    write(")");
+                    write("{\n");
+                    inc_indentation();
+                    for field in fields |> ArrayList.iter do (
+                        write(".");
+                        Print.ident(&field^.name);
+                        write(" = ");
+                        Print.expr(&field^.value);
+                        write(",\n");
+                    );
+                    dec_indentation();
+                    write("}")
+                )
                 | :Apply { .f = ref f, .args = ref args } => (
                     Print.expr(f);
                     write("(");
@@ -176,6 +232,11 @@ const Ast = (
                         Print.expr(arg);
                     );
                     write(")");
+                )
+                | :Field { .obj = ref obj, .field = ref field } => (
+                    Print.expr(obj);
+                    write(".");
+                    Print.ident(field);
                 )
             );
             write(")");
@@ -196,6 +257,11 @@ const Ast = (
                     write("*")
                 )
                 | :Named ref ident => Print.ident(ident)
+                | :Struct ref ident => (
+                    write_keyword("struct ");
+                    Print.ident(ident);
+                )
+                | :Raw s => Print.raw(s)
             )
         );
 
@@ -268,6 +334,54 @@ const Ast = (
             write("\n");
         );
 
+        const ty_def = (def :: &TyDef) => (
+            write_keyword("typedef ");
+            match def^.def with (
+                | :Alias ref ty => Print.ty(ty)
+                | :Struct { .fields = ref fields } => (
+                    write_keyword("struct ");
+                    Print.ident(&def^.name);
+                    write(" {");
+                    inc_indentation();
+                    for field in fields |> ArrayList.iter do (
+                        Print.ty(&field^.ty);
+                        write(" ");
+                        Print.ident(&field^.name);
+                        write(";\n");
+                    );
+                    dec_indentation();
+                    write("}");
+                )
+                | :Union { .fields = ref fields } => (
+                    write_keyword("union ");
+                    write(" {");
+                    inc_indentation();
+                    for field in fields |> ArrayList.iter do (
+                        Print.ty(&field^.ty);
+                        write(" ");
+                        Print.ident(&field^.name);
+                        write(";\n");
+                    );
+                    dec_indentation();
+                    write("}");
+                )
+                | :Enum { .variants = ref variants } => (
+                    write_keyword("enum ");
+                    write(" {");
+                    inc_indentation();
+                    for variant in variants |> ArrayList.iter do (
+                        Print.ident(variant);
+                        write(",\n");
+                    );
+                    dec_indentation();
+                    write("}");
+                )
+            );
+            write(" ");
+            Print.ident(&def^.name);
+            write(";\n");
+        );
+
         const program = (program :: &Program) => (
             for &@"include" in &program^.includes |> OrdSet.iter do (
                 write_keyword("#include ");
@@ -276,6 +390,10 @@ const Ast = (
                     () => write(@"include"),
                 );
                 write("\n");
+            );
+            write("\n");
+            for ty in &program^.types |> ArrayList.iter do (
+                Print.ty_def(ty);
             );
             write("\n");
             for fn in &program^.fns |> ArrayList.iter do (

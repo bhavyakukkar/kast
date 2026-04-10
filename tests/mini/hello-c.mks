@@ -17,18 +17,19 @@ const fib = (n :: Int32) -> Int32 => (
         add(fib(sub(n, 1)), fib(sub(n, 2)))
     )
 );
-# const print_string = (s :: String) -> () => (
-#     @native "fwrite(\(s).content, sizeof(char), \(s).length, stdout)";
-# );
-# const print_int32 = (x :: Int32) -> () => (
-#     @native "printf(\"%d\", \(x))";
-# );
+
+const print_string = (s :: StringView) -> () => (
+    @native "fwrite(\(s.contents), sizeof(char), \(s.length), stdout)";
+);
+
+const print_int32 = (x :: Int32) -> () => (
+    @native "printf(\"%d\", \(x))";
+);
 
 const main = () -> () => (
     @native "#include <stdio.h>";
 
-    @native "printf(\"fib(10) = %d\\n\", \(fib(10)))";
-# print_string("fib(10) = ");
-# print_int32(fib(10));
-# print_string("\n");
+    print_string("fib(10) = ");
+    print_int32(fib(10));
+    print_string("\n");
 );

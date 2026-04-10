@@ -38,9 +38,9 @@ const Ir = (
         | :Float64
         | :Bool
         | :Char
-        | :String
         | :Named String
         | :Fn FnType
+        | :Native String
     );
 
     const NativeExprPart = newtype (
@@ -179,7 +179,6 @@ const Ir = (
                 | :Int64 => output.write("Int64")
                 | :Float64 => output.write("Float64")
                 | :Char => output.write("Char")
-                | :String => output.write("String")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type(ty)
                 | :Ref ref referenced => (
@@ -196,6 +195,7 @@ const Ir = (
                     Print.type_name(result_ty);
                     output.write("]");
                 )
+                | :Native s => output.write(s)
             )
         );
 
@@ -221,7 +221,6 @@ const Ir = (
                 | :Int64 => output.write("Int64")
                 | :Float64 => output.write("Float64")
                 | :Char => output.write("Char")
-                | :String => output.write("String")
                 | :Named name => output.write(name)
                 | :Fn ref ty => Print.fn_type_as_ident(ty)
                 | :Ref ref referenced => (
@@ -235,6 +234,9 @@ const Ir = (
                 | :UnwindToken ref result_ty => (
                     output.write("UnwindToken_");
                     Print.type_name_as_ident(result_ty);
+                )
+                | :Native s => (
+                    panic("TODO native type as ident")
                 )
             )
         );
