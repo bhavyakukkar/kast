@@ -1,4 +1,4 @@
- # Find this:
+# Find this:
 #   &group^.parts |> ArrayList.at(part_idx)
 # and replace with this:
 #   group^.parts.[part_idx]

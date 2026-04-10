@@ -35,6 +35,7 @@ const Ast = (
                 .open :: Token.t,
                 .parts :: ArrayList.t[InterpolatedStringPart],
                 .close :: Token.t,
+                .stripped_indentation :: String,
             }
             | :Rule {
                 .rule :: SyntaxRule.t,
@@ -119,6 +120,7 @@ const Ast = (
                 .open = _,
                 .parts = ref parts,
                 .close = _,
+                .stripped_indentation = _,
             } => (
                 ansi.with_mode(
                     :Green,

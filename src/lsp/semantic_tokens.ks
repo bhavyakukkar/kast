@@ -213,19 +213,12 @@ const semantic_tokens = (
             |> Option.unwrap_or_else(() => return :Null);
 
         let mut data :: ArrayList.t[Int32] = ArrayList.new();
-        let mut prev_start :: Position = Position.beginning();
+        let mut prev_start = { .line = 0, .column = 0 };
         let add_token = (
             span :: Span,
             token_type :: TokenType,
             token_modifiers :: ArrayList.t[TokenModifier],
         ) => (
-            let delta_line = span.start.line - prev_start.line;
-            let delta_start = if delta_line == 0 then (
-                span.start.column.string_encoding - prev_start.column.string_encoding
-            ) else (
-                span.start.column.string_encoding
-            );
-            let length = span.end.string_encoding_index - span.start.string_encoding_index;
             let token_type = token_type |> TokenType.index;
             let token_modifiers = (
                 let mut flags = 0;
@@ -238,12 +231,32 @@ const semantic_tokens = (
                 );
                 flags
             );
-            &mut data |> ArrayList.push_back(delta_line);
-            &mut data |> ArrayList.push_back(delta_start);
-            &mut data |> ArrayList.push_back(length);
-            &mut data |> ArrayList.push_back(token_type);
-            &mut data |> ArrayList.push_back(token_modifiers);
-            prev_start = span.start;
+            for line in span.start.line..span.end.line + 1 do (
+                let start_column = if line == span.start.line then (
+                    span.start.column.string_encoding
+                ) else (
+                    0
+                );
+                let end_column = if line == span.end.line then (
+                    span.end.column.string_encoding
+                ) else (
+                    let line_contents = &file_state^.lines |> ArrayList.at(line);
+                    String.length(line_contents^)
+                );
+                let delta_line = line - prev_start.line;
+                let delta_start = if delta_line == 0 then (
+                    start_column - prev_start.column
+                ) else (
+                    start_column
+                );
+                let length = end_column - start_column;
+                &mut data |> ArrayList.push_back(delta_line);
+                &mut data |> ArrayList.push_back(delta_start);
+                &mut data |> ArrayList.push_back(length);
+                &mut data |> ArrayList.push_back(token_type);
+                &mut data |> ArrayList.push_back(token_modifiers);
+                prev_start = { .line, .column = start_column };
+            );
         );
         Highlight.highlight(
             parsed,

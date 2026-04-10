@@ -60,6 +60,7 @@ const Token = (
         .open :: Token.t,
         .parts :: ArrayList.t[InterpolatedStringPart],
         .close :: Token.t,
+        .stripped_indentation :: String,
     };
 
     const StringToken = newtype {
@@ -68,6 +69,7 @@ const Token = (
         .raw_parts :: ArrayList.t[RawStringPart],
         .close :: Token.t,
         .contents :: String,
+        .stripped_indentation :: String,
     };
 
     const raw = (token :: Token.t) -> String => (

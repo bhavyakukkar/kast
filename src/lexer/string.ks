@@ -116,7 +116,7 @@ const read_string_impl = (
             );
         content_part = reset_content_part();
     );
-    let indentation = if strip_indentation then (
+    let stripped_indentation = if strip_indentation then (
         let mut indentation = "";
         while Reader.peek(&reader^) is :Some c do (
             if c == '\n' then (
@@ -139,7 +139,7 @@ const read_string_impl = (
             if strip_indentation then (
                 add_char('\n');
                 reader |> Reader.advance;
-                for expected in String.iter(indentation) do (
+                for expected in String.iter(stripped_indentation) do (
                     if next_is_delim(delim) then break;
                     if &reader^ |> next_is('\n') then (
                         break;
@@ -387,6 +387,7 @@ const read_string_impl = (
                 .contents,
                 .open = open_token,
                 .close = close_token,
+                .stripped_indentation,
             };
         );
     );
@@ -396,6 +397,7 @@ const read_string_impl = (
         .open = open_token,
         .parts,
         .close = close_token,
+        .stripped_indentation,
     }
 );
 

@@ -23,34 +23,55 @@ const Format = (
         .queued_newlines :: Int32,
         .prev_span :: Span,
         .prev_was_block_comment :: Bool,
+        .prev_was_string_content :: Bool,
         .just_printed_newline :: Bool,
         .queued_indentation :: Int32,
+        .indentation_width :: Int32,
     };
 
     const Context = @context ContextT;
 
+    const IndentationT = newtype {
+        .string :: String,
+        .extra_in_string :: String,
+    };
+
+    const Indentation = @context IndentationT;
+
     const flush = () => (
         let output = @current Output;
         let mut ctx = @current Context;
+        let mut indentation = @current Indentation;
         for _ in 0..ctx.queued_newlines do (
             output.write("\n");
             ctx.just_printed_newline = true;
         );
         ctx.queued_newlines = 0;
         while ctx.queued_indentation < 0 do (
-            output.dec_indentation();
+            indentation.string = indentation.string
+                |> String.substring_from(ctx.indentation_width);
             ctx.queued_indentation += 1;
         );
         while ctx.queued_indentation > 0 do (
-            output.inc_indentation();
+            for _ in 0..ctx.indentation_width do (
+                indentation.string += " ";
+            );
             ctx.queued_indentation -= 1;
         );
     );
 
-    const print_raw = (raw :: String) => (
+    const print_raw = (raw :: String) => with_return (
+        if String.length(raw) == 0 then (
+            return;
+        );
         flush();
-        (@current Output).write(raw);
-        (@current Context).just_printed_newline = false;
+        let output = @current Output;
+        let mut ctx = @current Context;
+        if ctx.just_printed_newline then (
+            output.write((@current Indentation).string);
+        );
+        output.write(raw);
+        ctx.just_printed_newline = false;
     );
 
     const inc_indentation = () => (
@@ -70,18 +91,28 @@ const Format = (
         let mut ctx = @current Context;
         let flush_before = () => (
             flush();
-            if ctx.just_printed_newline and token.span.start.line - ctx.prev_span.end.line > 1 then (
+            if (
+                ctx.just_printed_newline
+                and token.span.start.line - ctx.prev_span.end.line > 1
+                and not ctx.prev_was_string_content
+            ) then (
                 queue_newline();
             );
         );
         if token.shape is :Comment { .raw, .ty } then (
-            if ctx.prev_span.end.line == token.span.start.line then (
+            if (
+                not ctx.just_printed_newline
+                and ctx.prev_span.end.line == token.span.start.line
+            ) then (
                 output.write(" ");
             ) else (
                 if not ctx.just_printed_newline and ctx.queued_newlines == 0 then (
                     queue_newline();
                 );
                 flush_before();
+            );
+            if ctx.just_printed_newline then (
+                output.write((@current Indentation).string);
             );
             output.write(raw);
             ctx.just_printed_newline = false;
@@ -99,13 +130,80 @@ const Format = (
                 output.write(" ");
             );
             flush_before();
-            print_raw(Token.raw(token));
+            if token.shape is :String {
+                .open,
+                .close,
+                .raw_parts = ref raw_parts,
+                .stripped_indentation,
+                ...
+            } then (
+                print_raw(Token.raw(open));
+                if stripped_indentation != "" then (
+                    inc_indentation();
+                );
+                for part in raw_parts |> ArrayList.iter do (
+                    let raw = match part^ with (
+                        | :Escape { .raw, ... } => raw
+                        | :Content { .raw, ... } => raw
+                    );
+                    print_raw_string_content(raw, .stripped_indentation);
+                );
+                if stripped_indentation != "" then (
+                    dec_indentation();
+                );
+                print_raw(Token.raw(close));
+            ) else (
+                print_raw(Token.raw(token));
+            );
         );
         ctx.prev_span = token.span;
         ctx.prev_was_block_comment = match token.shape with (
             | :Comment { .ty = :Block, ... } => true
             | _ => false
         );
+        ctx.prev_was_string_content = false;
+    );
+
+    const print_raw_string_content = (
+        raw :: String,
+        .stripped_indentation :: String,
+    ) => (
+        let mut ctx = @current Context;
+        let mut first = true;
+        for line in raw |> String.split('\n') do (
+            if first then (
+                first = false;
+            ) else (
+                queue_newline();
+            );
+            let mut i = 0;
+            while (
+                i < String.length(line)
+                and i < String.length(stripped_indentation)
+            ) do (
+                if String.at(stripped_indentation, i) == String.at(line, i) then (
+                    i += 1;
+                ) else (
+                    break;
+                );
+            );
+            let line = line |> String.substring_from(i);
+            let mut i = 0;
+            while i < String.length(line) do (
+                if String.at(line, i) |> Char.is_whitespace then (
+                    i += 1;
+                ) else (
+                    break;
+                );
+            );
+            flush();
+            if ctx.just_printed_newline then (
+                (@current Indentation).extra_in_string = line
+                    |> String.substring(0, i);
+            );
+            print_raw(line);
+        );
+        ctx.prev_was_string_content = true;
     );
 
     const format_to_string = (parsed :: &Parser.Parsed) -> String => (
@@ -125,14 +223,20 @@ const Format = (
         with Context = {
             .queued_newlines = 0,
             .queued_indentation = 0,
+            .indentation_width = 4,
             .just_printed_newline = true,
             .prev_span = Span.empty(
                 .position = Position.beginning(),
                 .path = parsed^.ast.span.path,
             ),
             .prev_was_block_comment = false,
+            .prev_was_string_content = false,
         };
         with Output = output;
+        with Indentation = {
+            .string = "",
+            .extra_in_string = "",
+        };
         let {
             .ast = ref ast,
             .ignored_trailing_tokens = ref ignored_trailing_tokens,
@@ -156,12 +260,25 @@ const Format = (
         match shape^ with (
             | :Empty => ()
             | :Token token => print_token(token)
-            | :InterpolatedString { .delimiter = _, .open, .parts, .close } => (
+            | :InterpolatedString {
+                .delimiter = _,
+                .open,
+                .parts,
+                .close,
+                .stripped_indentation,
+            } => (
+                with Indentation = {
+                    .extra_in_string = "",
+                    ...(@current Indentation),
+                };
                 print_token(open);
+                if stripped_indentation != "" then (
+                    inc_indentation();
+                );
                 for part in &parts |> ArrayList.iter do (
                     match part^ with (
                         | :Content { .raw, ... } => (
-                            print_raw(raw);
+                            print_raw_string_content(raw, .stripped_indentation);
                         )
                         | :Interpolated {
                             .open,
@@ -169,12 +286,31 @@ const Format = (
                             .ast = ref inner,
                             .ignored_trailing_tokens = ref ignored_trailing_tokens,
                         } => (
+                            with Indentation = {
+                                .string = (
+                                    let cur = @current Indentation;
+                                    cur.string + cur.extra_in_string
+                                ),
+                                .extra_in_string = "",
+                            };
+                            let wrapped = open.span.end.line != close.span.start.line;
                             print_token(open);
+                            if wrapped then (
+                                queue_newline();
+                                inc_indentation();
+                            );
                             walk_ast(inner, .parent = :None);
                             walk_ignored_tokens(ignored_trailing_tokens);
+                            if wrapped then (
+                                queue_newline();
+                                dec_indentation();
+                            );
                             print_token(close);
                         )
                     );
+                );
+                if stripped_indentation != "" then (
+                    dec_indentation();
                 );
                 print_token(close);
             )

@@ -59,8 +59,7 @@ const initialize_type_info_for_struct = (
                 member^.offset_or_name = align(T^.size, member^.ty^.alignment);
                 T^.size = add(member.offset_or_name, member^.ty^.size);
             );
-        }
-    '';
+        }'';
     T^.stride = align(T^.size, T^.alignment);
     T^.members = members;
 );

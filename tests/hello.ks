@@ -1,6 +1,8 @@
-print(''
-    def foo():
-        return \(2 + 2)
+print(
+    ''
+        def foo():
+            return \(2 + 2)
 
-    foo()
-'');
+        foo()
+    ''
+);

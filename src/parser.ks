@@ -207,7 +207,14 @@ const Parser = (
             Log.debug_msg("Parsed single token " + String.escape(peek_raw));
             ctx.token_stream |> TokenStream.advance;
             let parsed = match peek.shape with (
-                | :InterpolatedString { .delimiter, .open, .close, .parts = ref token_parts, .raw = _ } => (
+                | :InterpolatedString {
+                    .delimiter,
+                    .open,
+                    .close,
+                    .parts = ref token_parts,
+                    .raw = _,
+                    .stripped_indentation,
+                } => (
                     let mut ast_parts = ArrayList.new();
                     for token_part in token_parts |> ArrayList.iter do (
                         let ast_part :: Ast.InterpolatedStringPart = match token_part^ with (
@@ -256,7 +263,13 @@ const Parser = (
                         );
                         &mut ast_parts |> ArrayList.push_back(ast_part);
                     );
-                    :InterpolatedString { .delimiter, .open, .close, .parts = ast_parts }
+                    :InterpolatedString {
+                        .delimiter,
+                        .open,
+                        .close,
+                        .parts = ast_parts,
+                        .stripped_indentation,
+                    }
                 )
                 | _ => :Token peek
             );

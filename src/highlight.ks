@@ -219,7 +219,13 @@ const Highlight = (
                     )
                 )
             )
-            | :InterpolatedString { .delimiter = _, .open, .parts, .close } => (
+            | :InterpolatedString {
+                .delimiter = _,
+                .open,
+                .parts,
+                .close,
+                .stripped_indentation = _,
+            } => (
                 ctx.print(open.span, :StringDelimeter, Token.raw(open));
                 for part in &parts |> ArrayList.iter do (
                     match part^ with (
