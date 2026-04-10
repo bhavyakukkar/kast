@@ -1,0 +1,13 @@
+const fib = (n :: Int32) -> Int32 => (
+    if less(n, 2) then (
+        1
+    ) else (
+        add(fib(sub(n, 1)), fib(sub(n, 2)))
+    )
+);
+
+const main = () -> () => (
+    print_string("fib(10) = ");
+    print_int32(fib(10));
+    print_string("\n");
+);

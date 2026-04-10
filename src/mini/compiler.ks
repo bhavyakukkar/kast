@@ -367,6 +367,7 @@ const Compiler = (
             | :Float64 => :Float64
             | :Char => :Char
             | :Bool => :Bool
+            | :Native s => :Native s
             | :Named name => (
                 let def = &(@current Context).program.types
                     |> OrdMap.get(name)
@@ -417,6 +418,7 @@ const Compiler = (
             | :Float64 => "Float64"
             | :Bool => "Bool"
             | :Char => "Char"
+            | :Native s => "native " + String.escape(s)
             | :Named name => (
                 let ctx = @current Context;
                 let def = &ctx.program.types |> OrdMap.get(name) |> Option.unwrap;
@@ -434,6 +436,17 @@ const Compiler = (
     );
 
     const type_check_impl = (expected :: &Ir.Type, actual :: &Ir.Type) => (
+        let fail = () => (
+            (@current TypeCheckContext).fail(
+                () => (
+                    let output = @current Output;
+                    output.write("Expected ");
+                    output.write(short_type_name(expected));
+                    output.write(", got ");
+                    output.write(short_type_name(actual));
+                )
+            );
+        );
         match { expected^, actual^ } with (
             | { :Any, _ } => ()
             | { _, :Any } => ()
@@ -490,15 +503,7 @@ const Compiler = (
             | { :Char, :Char } => ()
             | { :Named a, :Named b } => (
                 if a != b then (
-                    (@current TypeCheckContext).fail(
-                        () => (
-                            let output = @current Output;
-                            output.write("Expected ");
-                            output.write(a);
-                            output.write(", got ");
-                            output.write(b);
-                        )
-                    );
+                    fail();
                 );
             )
             | { :Fn ref a, :Fn ref b } => (
@@ -550,15 +555,12 @@ const Compiler = (
                     &b^.result,
                 );
             )
-            | _ => (@current TypeCheckContext).fail(
-                () => (
-                    let output = @current Output;
-                    output.write("Expected ");
-                    output.write(short_type_name(expected));
-                    output.write(", got ");
-                    output.write(short_type_name(actual));
-                )
+            | { :Native a, :Native b } => (
+                if a != b then (
+                    fail();
+                );
             )
+            | _ => fail()
         );
     );
 

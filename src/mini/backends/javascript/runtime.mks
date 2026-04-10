@@ -99,3 +99,6 @@ const move = (
 ) -> () => (
     target^ = source^;
 );
+
+const String = type @native "string";
+const StringView = type @native "string";

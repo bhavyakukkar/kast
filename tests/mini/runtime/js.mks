@@ -1,0 +1,19 @@
+const add = (a :: Int32, b :: Int32) -> Int32 => (
+    @native "\(a) + \(b)"
+);
+
+const sub = (a :: Int32, b :: Int32) -> Int32 => (
+    @native "\(a) - \(b)"
+);
+
+const less = (a :: Int32, b :: Int32) -> Bool => (
+    @native "\(a) < \(b)"
+);
+
+const print_string = (s :: StringView) -> () => (
+    @native "Kast.print_string(\(s))";
+);
+
+const print_int32 = (x :: Int32) -> () => (
+    @native "Kast.print_int32(\(x))";
+);

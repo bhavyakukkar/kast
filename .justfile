@@ -15,14 +15,25 @@ build continuous="":
         --output target/kast.mjs \
         src/cli/_main.ks
 
-c path:
+c path *args:
     kast --color false mini \
         compile --target c \
+        tests/mini/runtime/c.mks \
         src/mini/backends/c/runtime.mks \
         {{path}} \
         > target/compiled.c
     clang target/compiled.c -o target/compiled
-    ./target/compiled
+    ./target/compiled {{args}}
+
+js path *args:
+    kast --color false mini \
+        compile --target js \
+        --js-runtime tests/mini/runtime/js.js \
+        tests/mini/runtime/js.mks \
+        src/mini/backends/javascript/runtime.mks \
+        {{path}} \
+        > target/compiled.mjs
+    node target/compiled.mjs {{args}}
 
 watch:
     #!/usr/bin/env bash
