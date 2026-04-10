@@ -16,7 +16,7 @@ build continuous="":
         src/cli/_main.ks
 
 c path *args:
-    kast --color false mini \
+    kast mini \
         compile --target c \
         tests/mini/runtime/c.mks \
         src/mini/backends/c/runtime.mks \
@@ -26,7 +26,7 @@ c path *args:
     ./target/compiled {{args}}
 
 js path *args:
-    kast --color false mini \
+    kast mini \
         compile --target js \
         --js-runtime tests/mini/runtime/js.js \
         tests/mini/runtime/js.mks \

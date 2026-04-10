@@ -41,19 +41,25 @@ const Common = (
     const Args = (
         module:
 
+        const ColorMode = newtype (
+            | :Auto
+            | :Always
+            | :Never
+        );
+
         const t = newtype {
             .output_mode :: (
                 | :Human
                 | :Json
             ),
             .stop_on_error :: Bool,
-            .color :: Bool,
+            .color :: ColorMode,
         };
 
         const default = () -> Args.t => {
             .output_mode = :Human,
             .stop_on_error = true,
-            .color = true,
+            .color = :Auto,
         };
 
         const parse_arg = (
@@ -80,11 +86,28 @@ const Common = (
                 return;
             );
             if arg == "--color" then (
-                args^.color = String.parse(std.sys.argv_at(arg_idx^ + 1));
+                let value = std.sys.argv_at(arg_idx^ + 1);
+                args^.color = if value == "always" then (
+                    :Always
+                ) else if value == "never" then (
+                    :Never
+                ) else if value == "auto" then (
+                    :Auto
+                ) else (
+                    Diagnostic.abort("Unexpected value for --color. Use always/never/auto")
+                );
                 arg_idx^ += 2;
                 return;
             );
             Diagnostic.abort("Unexpected arg " + arg);
         );
+    );
+
+    const output_color = (isatty :: Bool, color :: Args.ColorMode) -> Bool => (
+        match color with (
+            | :Always => true
+            | :Never => false
+            | :Auto => isatty
+        )
     );
 );

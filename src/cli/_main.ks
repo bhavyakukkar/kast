@@ -14,8 +14,14 @@ use (import "./structural_find_and_replace.ks").*;
 use (import "./tokenize.ks").*;
 use (import "./mini.ks").*;
 
-with Stdout = new_std_output(std.io.stdout.write, .color = true);
-with Stderr = new_std_output(std.io.stderr.write, .color = true);
+with Stdout = new_std_output(
+    std.io.stdout.write,
+    .color = Common.output_color(std.io.stdout.isatty(), :Auto),
+);
+with Stderr = new_std_output(
+    std.io.stderr.write,
+    .color = Common.output_color(std.io.stderr.isatty(), :Auto),
+);
 with Output = (@current Stdout);
 with Diagnostic.AbortHandler = Diagnostic.default_abort_handler;
 
@@ -93,8 +99,14 @@ const Args = (
 
 let { .common = common_args, .subcommand } = Args.parse();
 
-with Stdout = new_std_output(std.io.stdout.write, .color = common_args.color);
-with Stderr = new_std_output(std.io.stderr.write, .color = common_args.color);
+with Stdout = new_std_output(
+    std.io.stdout.write,
+    .color = Common.output_color(std.io.stdout.isatty(), common_args.color),
+);
+with Stderr = new_std_output(
+    std.io.stderr.write,
+    .color = Common.output_color(std.io.stderr.isatty(), common_args.color),
+);
 with Output = (@current Stdout);
 
 with Diagnostic.HandlerContext = Diagnostic.default_handler(.stop_on_error = common_args.stop_on_error);
