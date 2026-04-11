@@ -11,6 +11,7 @@ use (import "../token_stream.ks").*;
 use (import "../position.ks").*;
 use (import "../syntax_rule.ks").*;
 use (import "../syntax_parser.ks").*;
+use (import "../syntax_sources.ks").*;
 use (import "../ast.ks").*;
 use (import "../parser.ks").*;
 const dep = import "../../deps/json/lib.ks";
@@ -101,9 +102,7 @@ const Json = (
     };
 
     const ruleset = () => (
-        const path = "src/json/syntax.ks";
-        const source = Source.read(SourcePath.file(path));
-        let mut lexer = Lexer.new(source);
+        let mut lexer = Lexer.new(json_syntax |> SyntaxSource.to_source);
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         SyntaxParser.parse_syntax_ruleset(&mut token_stream)
     );

@@ -1,4 +1,5 @@
 use (import "../diagnostic.ks").*;
+use (import "../syntax_sources.ks").*;
 
 module:
 
@@ -6,7 +7,7 @@ const Common = (
     module:
 
     const Syntax = newtype {
-        .ruleset :: String,
+        .ruleset :: SyntaxSource,
         .ext :: Option.t[String],
     };
 

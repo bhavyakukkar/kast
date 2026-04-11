@@ -6,6 +6,7 @@ use (import "../source_path.ks").*;
 use (import "../lexer/_lib.ks").*;
 use (import "../token_stream.ks").*;
 use (import "../syntax_parser.ks").*;
+use (import "../syntax_sources.ks").*;
 use (import "../parser.ks").*;
 use (import "../ast.ks").*;
 use (import "../mini/_lib.ks").*;
@@ -26,8 +27,6 @@ module:
 
 const Mini = (
     module:
-
-    const syntax_ruleset_path = root_scope.Mini.Compiler.ruleset_path();
 
     const Repl = (
         module:
@@ -160,7 +159,7 @@ const Mini = (
 
         const parse = (start_index :: Int32) -> t => (
             let fix_syntax = :Some {
-                .ruleset = syntax_ruleset_path,
+                .ruleset = minikast_syntax,
                 .ext = :Some "mks",
             };
             let mut common = Common.Args.default();

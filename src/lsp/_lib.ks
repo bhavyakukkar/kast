@@ -85,8 +85,6 @@ const Lsp = (
     const run = (arg :: CliArgs.t) => (
         (@current Stdout).color = false;
         (@current Stderr).color = false;
-        const kast_syntax_file :: Source = Source.read(SourcePath.file("std/syntax.ks"));
-        const minikast_syntax_file :: Source = Source.read(SourcePath.file("src/mini/syntax.ks"));
         let get_syntax = source => (
             let mut lexer = Lexer.new(source);
             let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
@@ -94,8 +92,8 @@ const Lsp = (
         );
         let mut state :: State = {
             .@"syntax" = {
-                .kast = get_syntax(kast_syntax_file),
-                .minikast = get_syntax(minikast_syntax_file),
+                .kast = get_syntax(kast_syntax |> SyntaxSource.to_source),
+                .minikast = get_syntax(minikast_syntax |> SyntaxSource.to_source),
             },
             .files = OrdMap.new(),
         };

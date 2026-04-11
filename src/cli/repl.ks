@@ -7,6 +7,7 @@ use (import "../lexer/_lib.ks").*;
 use (import "../token_stream.ks").*;
 use (import "../syntax_ruleset.ks").*;
 use (import "../syntax_parser.ks").*;
+use (import "../syntax_sources.ks").*;
 use (import "../parser.ks").*;
 use (import "../ast.ks").*;
 use (import "../highlight.ks").*;
@@ -143,8 +144,7 @@ const Repl = (
     );
 
     const run = (common_args :: Common.Args.t, args :: Args.t) => (
-        let ruleset_path = "std/syntax.ks";
-        let mut lexer = Lexer.new(Source.read(SourcePath.file(ruleset_path)));
+        let mut lexer = Lexer.new(kast_syntax |> SyntaxSource.to_source);
         let mut token_stream = TokenStream.from_fn(() => Lexer.next(&mut lexer));
         let ruleset = SyntaxParser.parse_syntax_ruleset(&mut token_stream);
         let eval = (line :: Line) => (
