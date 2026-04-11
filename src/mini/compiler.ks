@@ -2091,6 +2091,7 @@ const Compiler = (
             .args,
             .result_ty = result_ty,
             .body,
+            .span = def.span,
         }
     );
 

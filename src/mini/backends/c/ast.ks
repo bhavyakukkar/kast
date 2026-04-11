@@ -57,8 +57,11 @@ const Ast = (
     };
 
     const Expr = newtype (
+        | :Stmt Block
         | :Raw String
         | :RawParts ArrayList.t[Expr]
+        | :Ref Expr
+        | :Deref Expr
         | :Ident Ident
         | :Literal Literal
         | :CompoundLiteral {
@@ -76,6 +79,7 @@ const Ast = (
     );
 
     const Stmt = newtype (
+        | :RawParts ArrayList.t[Expr]
         | :Expr Expr
         | :Return Expr
         | :LetVar {
@@ -206,6 +210,15 @@ const Ast = (
                         );
                     );
                 )
+                | :Stmt ref block => Print.block(block)
+                | :Ref ref referenced => (
+                    write("&");
+                    Print.expr(referenced);
+                )
+                | :Deref ref pointer => (
+                    write("*");
+                    Print.expr(pointer);
+                )
                 | :Ident ref ident => Print.ident(ident)
                 | :Literal ref literal => Print.literal(literal)
                 | :CompoundLiteral { .ty = ref ty, .fields = ref fields } => (
@@ -267,6 +280,15 @@ const Ast = (
 
         const stmt = (stmt :: &Stmt) => (
             match stmt^ with (
+                | :RawParts ref parts => (
+                    for part in parts |> ArrayList.iter do (
+                        if part^ is :Raw s then (
+                            Print.raw(s)
+                        ) else (
+                            Print.expr(part)
+                        );
+                    );
+                )
                 | :Expr ref expr => Print.expr(expr)
                 | :Return ref expr => (
                     write_keyword("return ");
@@ -341,7 +363,7 @@ const Ast = (
                 | :Struct { .fields = ref fields } => (
                     write_keyword("struct ");
                     Print.ident(&def^.name);
-                    write(" {");
+                    write(" {\n");
                     inc_indentation();
                     for field in fields |> ArrayList.iter do (
                         Print.ty(&field^.ty);
@@ -354,7 +376,7 @@ const Ast = (
                 )
                 | :Union { .fields = ref fields } => (
                     write_keyword("union ");
-                    write(" {");
+                    write(" {\n");
                     inc_indentation();
                     for field in fields |> ArrayList.iter do (
                         Print.ty(&field^.ty);
@@ -367,7 +389,7 @@ const Ast = (
                 )
                 | :Enum { .variants = ref variants } => (
                     write_keyword("enum ");
-                    write(" {");
+                    write(" {\n");
                     inc_indentation();
                     for variant in variants |> ArrayList.iter do (
                         Print.ident(variant);

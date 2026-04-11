@@ -36,6 +36,7 @@ const allocate_type_on_stack = (
 const allocate_type_on_heap = (
     T :: &TypeInfo,
 ) -> &Any => (
+    @native "#include <stdlib.h>";
     @native "malloc(\(T^.size))"
 );
 
@@ -43,8 +44,32 @@ const add = [T] (a :: T, b :: T) -> T => (
     @native "\(a) + \(b)"
 );
 
+const sub = [T] (a :: T, b :: T) -> T => (
+    @native "\(a) - \(b)"
+);
+
 const mul = [T] (a :: T, b :: T) -> T => (
     @native "\(a) * \(b)"
+);
+
+const less = [T] (a :: T, b :: T) -> Bool => (
+    @native "\(a) < \(b)"
+);
+
+const less_or_equal = [T] (a :: T, b :: T) -> Bool => (
+    @native "\(a) <= \(b)"
+);
+
+const equal = [T] (a :: T, b :: T) -> Bool => (
+    @native "\(a) == \(b)"
+);
+
+const not_equal = [T] (a :: T, b :: T) -> Bool => (
+    @native "\(a) != \(b)"
+);
+
+const greater_or_equal = [T] (a :: T, b :: T) -> Bool => (
+    @native "\(a) >= \(b)"
 );
 
 const greater = [T] (a :: T, b :: T) -> Bool => (
@@ -83,6 +108,7 @@ const initialize_type_info_for_struct = (
     T^.alignment = @native "1";
     T^.size = @native "0";
     @native ''
+        stmt:
         for (size_t i = 0; i < \(members.length); i++) {
             \(
                 let member = list_index[MemberInfo](members, @native "i");
@@ -102,6 +128,7 @@ const copy = (
     source :: &Any,
     T :: &TypeInfo,
 ) -> () => (
+    @native "#include <string.h>";
     @native "memcpy(\(target), \(source), \(T^.size))"
 );
 const move = (
@@ -109,6 +136,7 @@ const move = (
     source :: &Any,
     T :: &TypeInfo,
 ) -> () => (
+    @native "#include <string.h>";
     @native "memcpy(\(target), \(source), \(T^.size))"
 );
 

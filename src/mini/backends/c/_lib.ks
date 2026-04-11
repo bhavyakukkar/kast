@@ -1,4 +1,7 @@
 use (import "../../ir.ks").*;
+use (import "../../../diagnostic.ks").*;
+use (import "../../../output.ks").*;
+use (import "../../../span.ks").*;
 use std.collections.OrdMap;
 use std.collections.OrdSet;
 
@@ -43,6 +46,7 @@ const C = (
     );
 
     const convert_ty = (ty :: &Ir.Type) -> Ast.Ty => (
+        let ctx = @current Context;
         match ty^ with (
             | :Any => :Void
             | :Ref ref t => :Pointer convert_ty(t)
@@ -52,24 +56,47 @@ const C = (
             | :Float64 => :Float64
             | :Bool => :Bool
             | :Char => :Char
-            | :Named name => :Named ident(name)
+            | :Named name => (
+                let def = &ctx.program.types
+                    |> OrdMap.get(name)
+                    |> Option.unwrap;
+                if def^ is :Struct _ then (
+                    :Struct ident(name)
+                ) else (
+                    :Named ident(name)
+                )
+            )
             | :Native s => :Raw s
         # | :Fn FnType
         )
     );
 
     const Pure = newtype {
+        .span :: Span,
         .expr :: Option.t[Ast.Expr],
     };
 
-    const void = () -> Pure => {
+    const void = (span :: Span) -> Pure => {
         .expr = :None,
+        .span,
     };
 
     const pure = (pure :: Pure) -> Ast.Expr => (
         match pure.expr with (
             | :Some expr => expr
-            | :None => panic("Pure doesnt have expr")
+            | :None => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        let output = @current Output;
+                        output.write("This expression is void, and can't be used as a value");
+                    ),
+                    .span = pure.span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
         )
     );
 
@@ -79,9 +106,13 @@ const C = (
     };
 
     const calculate_place = (ir_expr :: &Ir.PlaceExpr) -> Place => with_return (
+        let span = ir_expr^.span;
         match ir_expr^.shape with (
             | :Ident name => {
-                .get = () => { .expr = :Some :Ident ident(name) },
+                .get = () => {
+                    .expr = :Some :Ident ident(name),
+                    .span,
+                },
                 .set = value => (
                     insert_stmt(:Assign { .assignee = :Ident ident(name), .value });
                 ),
@@ -93,26 +124,55 @@ const C = (
                     .field = ident(field),
                 };
                 {
-                    .get = () => { .expr = :Some field_expr },
+                    .get = () => {
+                        .expr = :Some field_expr,
+                        .span,
+                    },
                     .set = value => (
                         insert_stmt(:Assign { .assignee = field_expr, .value });
                     ),
                 }
             )
-            # | :Index 
             # | :CurrentContext String
-            # | :Deref Expr
+            | :Deref ref reference => (
+                let reference = pure(calculate(reference));
+                let deref_expr = :Deref reference;
+                {
+                    .get = () => {
+                        .expr = :Some deref_expr,
+                        .span,
+                    },
+                    .set = value => (
+                        insert_stmt(:Assign { .assignee = deref_expr, .value });
+                    ),
+                }
+            )
             | :Temp ref expr => (
                 let value = calculate(expr);
                 {
                     .get = () => value,
-                    .set = _ => panic("can't assign to temp expr"),
+                    .set = _ => (
+                        let diagnostic = {
+                            .severity = :Error,
+                            .source = :Compiler,
+                            .message = () => (
+                                let output = @current Output;
+                                output.write("Can't assign to temporary expression");
+                            ),
+                            .span = expr^.span,
+                            .related = ArrayList.new(),
+                        };
+                        Diagnostic.report_and_unwind(diagnostic)
+                    ),
                 }
             )
         )
     );
 
-    const calculate_literal = (literal :: &Ir.Literal) -> Pure => with_return (
+    const calculate_literal = (
+        literal :: &Ir.Literal,
+        span :: Span,
+    ) -> Pure => with_return (
         let literal :: Ast.Literal = match literal^ with (
             | :Bool x => :Bool x
             | :Int32 x => :Int32 x
@@ -137,44 +197,97 @@ const C = (
                         fields
                     )
                 },
+                .span,
             }
         );
-        { .expr = :Some :Literal literal }
+        {
+            .expr = :Some :Literal literal,
+            .span,
+        }
     );
 
     const calculate = (ir_expr :: &Ir.Expr) -> Pure => with_return (
         let mut ctx = @current Context;
         let expr :: Ast.Expr = match ir_expr^.shape with (
-            | :Unit => return void()
-            # | :Uninitialized
+            | :Unit => return void(ir_expr^.span)
+            | :Uninitialized => (
+                if ir_expr^.ty is :Unit then (
+                    return void(ir_expr^.span);
+                );
+                let mut block = new_block();
+                with Scope = {
+                    .block = &mut block,
+                };
+                let ident = new_ident("uninitialized");
+                insert_stmt(
+                    :LetVar {
+                        .ty = convert_ty(&ir_expr^.ty),
+                        .ident,
+                        .value = :None,
+                    }
+                );
+                insert_stmt(:Expr :Ident ident);
+                :Stmt block
+            )
             | :Claim ref place => return calculate_place(place).get()
-            # | :Ref PlaceExpr
+            | :Ref ref place => return {
+                .expr = :Some :Ref pure(calculate_place(place).get()),
+                .span = ir_expr^.span,
+            }
             | :Native { .parts = ref parts } => (
                 let mut raw_parts = ArrayList.new();
+                let mut stmt = false;
                 for part in parts |> ArrayList.iter do (
                     match part^ with (
                         | :Raw s => (
+                            if s |> String.strip_prefix(.prefix = "stmt:") is :Some s then (
+                                stmt = true;
+                                let mut start = 0;
+                                while (
+                                    start < String.length(s)
+                                    and String.at(s, start) |> Char.is_whitespace
+                                ) do (
+                                    start += Char.string_encoding_len(String.at(s, start));
+                                );
+                                let s = String.substring_from(s, start);
+                                &mut raw_parts |> ArrayList.push_back(:Raw s);
+                                continue;
+                            );
                             if String.strip_prefix(s, .prefix = "#include ") is :Some @"include" then (
                                 &mut ctx.result.includes |> OrdSet.add(@"include");
-                                return void();
+                                return void(ir_expr^.span);
                             );
                             &mut raw_parts |> ArrayList.push_back(:Raw s);
                         )
                         | :Interpolated ref expr => (
-                            &mut raw_parts |> ArrayList.push_back(pure(calculate(expr)));
+                            let mut block = new_block();
+                            with Scope = {
+                                .block = &mut block,
+                            };
+                            let result = calculate(expr);
+                            if result.expr is :Some expr then (
+                                insert_stmt(:Expr expr);
+                            );
+                            &mut raw_parts |> ArrayList.push_back(:Stmt block);
                         )
                     )
                 );
+                if stmt then (
+                    insert_stmt(:RawParts raw_parts);
+                    return void(ir_expr^.span);
+                );
                 :RawParts raw_parts
             )
-            | :Literal ref literal => return calculate_literal(literal)
+            | :Literal ref literal => (
+                return calculate_literal(literal, ir_expr^.span)
+            )
             # | :Variant String
             | :Stmt ref expr => (
                 calculate(expr);
-                return void()
+                return void(ir_expr^.span)
             )
             | :Then ref exprs => (
-                let mut result = void();
+                let mut result = void(ir_expr^.span);
                 for expr in exprs |> ArrayList.iter do (
                     result = calculate(expr);
                 );
@@ -217,10 +330,31 @@ const C = (
                     )
                 );
                 insert_stmt(:If { .cond, .then_case, .else_case });
-                return { .expr = if is_void then :None else :Some :Ident ident }
+                return {
+                    .expr = if is_void then :None else :Some :Ident ident,
+                    .span = ir_expr^.span,
+                }
             )
-            # | :Let { .name, .value }
-            # | :Assign { .assignee, .value }
+            | :Let { .name, .value = ref value } => (
+                if value^.shape is :Uninitialized then (
+                    insert_stmt(
+                        :LetVar {
+                            .ty = convert_ty(&value^.ty),
+                            .ident = ident(name),
+                            .value = :None,
+                        }
+                    );
+                ) else (
+                    let_var(&value^.ty, ident(name), pure(calculate(value)));
+                );
+                return void(ir_expr^.span)
+            )
+            | :Assign { .assignee = ref assignee, .value = ref value } => (
+                let assignee = calculate_place(assignee);
+                let value = pure(calculate(value));
+                assignee.set(value);
+                return void(ir_expr^.span)
+            )
             # | :Fn FnDef
             | :Scope ref expr => (
                 with Scope = {
@@ -237,17 +371,33 @@ const C = (
                 );
                 :Apply { .f, .args }
             )
-        # | :InjectContext
-        # | :Record ArrayList.t[Field]
-        # | :EnumIs
+            # | :InjectContext
+            # | :EnumIs
+            | :Record ref fields => (
+                let mut field_initializers = ArrayList.new();
+                for field in fields |> ArrayList.iter do (
+                    let field = {
+                        .name = ident(field^.name),
+                        .value = pure(calculate(&field^.value)),
+                    };
+                    &mut field_initializers |> ArrayList.push_back(field);
+                );
+                :CompoundLiteral {
+                    .ty = convert_ty(&ir_expr^.ty),
+                    .fields = field_initializers,
+                }
+            )
         );
         if ir_expr^.ty is :Unit then (
             insert_stmt(:Expr expr);
-            void()
+            void(ir_expr^.span)
         ) else (
             let ident = new_ident("value");
             let_var(&ir_expr^.ty, ident, expr);
-            { .expr = :Some :Ident ident }
+            {
+                .expr = :Some :Ident ident,
+                .span = ir_expr^.span,
+            }
         )
     );
 
@@ -290,7 +440,17 @@ const C = (
                     if def^.result_ty is :Unit then (
                         :Int
                     ) else (
-                        panic("main must return unit")
+                        let diagnostic = {
+                            .severity = :Error,
+                            .source = :Compiler,
+                            .message = () => (
+                                let output = @current Output;
+                                output.write("main must return ()");
+                            ),
+                            .span = def^.span,
+                            .related = ArrayList.new(),
+                        };
+                        Diagnostic.report_and_unwind(diagnostic)
                     )
                 ) else (
                     convert_ty(&def^.result_ty)
@@ -315,7 +475,10 @@ const C = (
     const make_sure_all_are_defined = (ty :: &Ir.Type) => (
         match ty^ with (
             | :Any => ()
-            | :Ref ref inner => make_sure_all_are_defined(inner)
+            | :Ref ref inner => (
+                # type can be forward declared for pointers
+                # make_sure_all_are_defined(inner)
+            )
             | :Unit => ()
             | :Int32 => ()
             | :Int64 => ()

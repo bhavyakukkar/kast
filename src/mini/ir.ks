@@ -140,6 +140,7 @@ const Ir = (
         .args :: ArrayList.t[FnArg],
         .result_ty :: Type,
         .body :: Expr,
+        .span :: Span,
     };
 
     const Program = newtype {
