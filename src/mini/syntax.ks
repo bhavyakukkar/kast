@@ -3,6 +3,7 @@
 @syntax "stmt" 0 @wrap always = _ ";";
 @syntax "assign" 2 @wrap never = assignee " " "=" " " value;
 @syntax "const" 2 @wrap never = "const" " " name " " "=" " " value;
+@syntax "template" 2.2 @wrap never = "[" args:any "]" " " def;
 @syntax "enum" 2.5 @wrap never = "enum" " " def;
 @syntax "union" 2.5 @wrap never = "union" " " def;
 @syntax "struct" 2.5 @wrap never = "struct" " " def;
@@ -34,10 +35,8 @@
 @syntax "variant" 42 @wrap never = ":" label: >=1000;
 @syntax "cast" 60.5 @wrap never = value " " "as" " " target;
 @syntax "ref" 61 @wrap never = "&" _ ->;
-@syntax "list" 70 @wrap never = <- "List" "[" _:any "]";
-@syntax "unwind_token" 70 @wrap never = <- "UnwindToken" "[" _:any "]";
 @syntax "field" 70 @wrap never = <- obj ""/"\n\t" "." field ""/"\\";
-@syntax "index" 70 @wrap never = <- list ""/"\n\t" "." "[" index:any "]" ""/"\\";
+@syntax "instantiate" 70 @wrap never = <- template ""/"\n\t" "[" args:any "]" ""/"\\";
 @syntax "deref" 70 @wrap never = <- _ "^";
 @syntax "apply" 70 @wrap never = <- f _=(@wrap if_any "(" ""/"\n\t" args:any ""/"\n\\" ")");
 @syntax "newtype" 500 @wrap never = "newtype" " " _;

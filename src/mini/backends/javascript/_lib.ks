@@ -293,13 +293,6 @@ const JavaScript = (
                     .args,
                 }
             )
-            | :List elements => :Array (
-                let mut elements_js = ArrayList.new();
-                for element in elements |> ArrayList.into_iter do (
-                    &mut elements_js |> ArrayList.push_back(:Var calculate(element));
-                );
-                elements_js
-            )
             | :EnumIs { .enum, .variant } => :Equal {
                 .lhs = :Var calculate(enum),
                 .rhs = :StringLiteral variant,

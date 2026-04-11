@@ -1,4 +1,11 @@
 const MemberOffsetOrName = type SizeT;
+
+const initialize_offset_or_name = (
+    name :: String,
+) -> MemberOffsetOrName => (
+    @native "0"
+);
+
 const MemberInfo = struct {
     .offset_or_name :: MemberOffsetOrName,
     .ty :: &TypeInfo,
@@ -9,6 +16,11 @@ const TypeInfo = struct {
     .size :: SizeT,
     .alignment :: SizeT,
 };
+
+const get_type_members = (ty :: &TypeInfo) -> List[MemberInfo] => (
+    ty^.members
+);
+
 const get_member = (
     obj :: &Any,
     member :: &MemberInfo,
@@ -27,20 +39,41 @@ const allocate_type_on_heap = (
     @native "malloc(\(T^.size))"
 );
 
-const mul = (a :: SizeT, b :: SizeT) -> SizeT => (
+const add = [T] (a :: T, b :: T) -> T => (
+    @native "\(a) + \(b)"
+);
+
+const mul = [T] (a :: T, b :: T) -> T => (
     @native "\(a) * \(b)"
 );
 
-const greater = (a :: SizeT, b :: SizeT) -> SizeT => (
+const greater = [T] (a :: T, b :: T) -> Bool => (
     @native "\(a) > \(b)"
 );
 
-const div_round_up = (a :: SizeT, b :: SizeT) -> SizeT => (
+const div_round_up = [T] (a :: T, b :: T) -> T => (
     @native "(\(a) + \(b) - 1) / \(b)"
 );
 
 const align = (x :: SizeT, alignment :: SizeT) -> SizeT => (
-    mul(div_round_up(x, alignment), alignment)
+    mul[SizeT](div_round_up[SizeT](x, alignment), alignment)
+);
+
+const List = [T] struct {
+    .data :: &T,
+    .length :: SizeT,
+};
+
+const allocate_list = [T] (length :: SizeT) -> List[T] => (
+    let T_TypeInfo = @TypeInfo(T);
+    {
+        .data = @native "malloc(\(length) * \(T_TypeInfo.stride))",
+        .length = length,
+    }
+);
+
+const list_index = [T] (list :: List[T], idx :: Int32) -> &T => (
+    @native "&\(list.data)[\(idx)]"
 );
 
 const initialize_type_info_for_struct = (
@@ -52,12 +85,12 @@ const initialize_type_info_for_struct = (
     @native ''
         for (size_t i = 0; i < \(members.length); i++) {
             \(
-                let member = &members.[@native "i"];
-                if greater(member^.ty^.alignment, T^.alignment) then (
+                let member = list_index[MemberInfo](members, @native "i");
+                if greater[SizeT](member^.ty^.alignment, T^.alignment) then (
                     T^.alignment = member^.ty^.alignment;
                 );
                 member^.offset_or_name = align(T^.size, member^.ty^.alignment);
-                T^.size = add(member.offset_or_name, member^.ty^.size);
+                T^.size = add[SizeT](member^.offset_or_name, member^.ty^.size);
             );
         }'';
     T^.stride = align(T^.size, T^.alignment);

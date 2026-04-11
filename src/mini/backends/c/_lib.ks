@@ -46,8 +46,6 @@ const C = (
         match ty^ with (
             | :Any => :Void
             | :Ref ref t => :Pointer convert_ty(t)
-            # | :List Type
-            # | :UnwindToken Type
             | :Unit => :Void
             | :Int32 => :Int32
             | :Int64 => :Int64
@@ -223,7 +221,6 @@ const C = (
             )
             # | :Let { .name, .value }
             # | :Assign { .assignee, .value }
-            # | :List
             # | :Fn FnDef
             | :Scope ref expr => (
                 with Scope = {
@@ -319,8 +316,6 @@ const C = (
         match ty^ with (
             | :Any => ()
             | :Ref ref inner => make_sure_all_are_defined(inner)
-            | :List ref inner => make_sure_all_are_defined(inner)
-            | :UnwindToken ref inner => make_sure_all_are_defined(inner)
             | :Unit => ()
             | :Int32 => ()
             | :Int64 => ()

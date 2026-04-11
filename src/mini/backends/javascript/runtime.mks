@@ -11,6 +11,21 @@ const MemberInfo = struct {
     .ty :: &TypeInfo,
 };
 
+const List = [T] type @native "Array<any>";
+
+const allocate_list = [T] (size :: Int32) -> List[T] => (
+    @native "[]"
+);
+
+const list_index = [T] (list :: List[T], idx :: Int32) -> &T => (
+    @native ''
+        {
+            get: () => \(list)[\(idx)],
+            set: value => \(list)[\(idx)] = value,
+        }
+    ''
+);
+
 const TypeKind = enum {
     | :Primitive
     | :Object
@@ -27,6 +42,10 @@ const TypeInfo = struct {
     .details :: TypeInfoDetails,
     .kind :: TypeKind,
 };
+
+const get_type_members = (ty :: &TypeInfo) -> List[MemberInfo] => (
+    ty^.details.members
+);
 
 const get_member = (obj :: &Any, member :: &MemberInfo) -> &Any => (
     @native ''

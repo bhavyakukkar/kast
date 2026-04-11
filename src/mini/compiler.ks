@@ -20,6 +20,12 @@ use std.collections.OrdSet;
 use (import "./ir.ks").*;
 use (import "./ast_helpers.ks").*;
 
+const single_element_list = [T] (x :: T) -> ArrayList.t[T] => (
+    let mut result = ArrayList.new();
+    &mut result |> ArrayList.push_back(x);
+    result
+);
+
 module:
 
 const Compiler = (
@@ -51,14 +57,97 @@ const Compiler = (
         .value :: Ast.t,
     };
 
+    const TemplateArgs = newtype {
+        .args :: ArrayList.t[Ir.Type],
+        .by_name :: OrdMap.t[String, Ir.Type],
+    };
+
+    const TemplateArgsContext = @context TemplateArgs;
+
+    const compare_ty = (
+        a :: &Ir.Type,
+        b :: &Ir.Type,
+    ) -> std.cmp.Ordering => (
+        match { a^, b^ } with (
+            | { :Any, :Any } => :Equal
+            | { :Any, _ } => :Less
+            | { _, :Any } => :Greater
+            | { :Unit, :Unit } => :Equal
+            | { :Unit, _ } => :Less
+            | { _, :Unit } => :Greater
+            | { :Bool, :Bool } => :Equal
+            | { :Bool, _ } => :Less
+            | { _, :Bool } => :Greater
+            | { :Int32, :Int32 } => :Equal
+            | { :Int32, _ } => :Less
+            | { _, :Int32 } => :Greater
+            | { :Int64, :Int64 } => :Equal
+            | { :Int64, _ } => :Less
+            | { _, :Int64 } => :Greater
+            | { :Float64, :Float64 } => :Equal
+            | { :Float64, _ } => :Less
+            | { _, :Float64 } => :Greater
+            | { :Char, :Char } => :Equal
+            | { :Char, _ } => :Less
+            | { _, :Char } => :Greater
+            | { :Named a, :Named b } => std.cmp.default_compare[String](a, b)
+            | { :Named _, _ } => :Less
+            | { _, :Named _ } => :Greater
+            | { :Ref ref a, :Ref ref b } => compare_ty(a, b)
+            | { :Ref _, _ } => :Less
+            | { _, :Ref _ } => :Greater
+            | { :Native a, :Native b } => std.cmp.default_compare[String](a, b)
+            | { :Native _, _ } => :Less
+            | { _, :Native _ } => :Greater
+            | { :Fn ref ty, :Fn ref ty } => panic("TODO compare fn types")
+            | { :Fn _, _ } => :Less
+            | { _, :Fn _ } => :Greater
+        )
+    );
+
+    const compare_template_args = (
+        a :: TemplateArgs,
+        b :: TemplateArgs,
+    ) -> std.cmp.Ordering => with_return (
+        let len_a = &a.args |> ArrayList.length;
+        let len_b = &b.args |> ArrayList.length;
+        let len_ord = std.cmp.default_compare(len_a, len_b);
+        if len_ord is :Equal then () else (
+            return len_ord;
+        );
+        for i in 0..len_a do (
+            let ty_a = &a.args |> ArrayList.at(i);
+            let ty_b = &b.args |> ArrayList.at(i);
+            let ty_ord = compare_ty(ty_a, ty_b);
+            if ty_ord is :Equal then () else (
+                return ty_ord;
+            );
+        );
+        :Equal
+    );
+
+    const Instantiation = newtype (
+        | :Type String
+        | :Fn String
+    );
+
+    const Template = newtype {
+        .arg_names :: ArrayList.t[String],
+        .def :: Ast.t,
+        .instantiations :: OrdMap.t[TemplateArgs, Instantiation],
+    };
+
     const State = newtype {
         .top_level_item_def_span :: OrdMap.t[String, Span],
         .top_level_items :: ArrayList.t[TopLevelItem],
+        .templates :: OrdMap.t[String, Template],
         .consts :: ArrayList.t[Const],
         .type_names :: OrdSet.t[String],
         .fn_types :: OrdMap.t[String, Ir.FnType],
         .program :: Ir.Program,
     };
+
+    const Context = @context State;
 
     const init = () -> State => {
         .top_level_item_def_span = OrdMap.new(),
@@ -66,6 +155,7 @@ const Compiler = (
         .type_names = OrdSet.new(),
         .fn_types = OrdMap.new(),
         .consts = ArrayList.new(),
+        .templates = OrdMap.new(),
         .program = {
             .types = OrdMap.new(),
             .contexts = OrdMap.new(),
@@ -75,141 +165,178 @@ const Compiler = (
         },
     };
 
-    const add_source_ast = (state :: &mut State, ast :: Ast.t) => (
-        let type_def = (name :: String, kind :: TypeKind, root :: Ast.Group) => (
-            let def = (
-                &root.children
-                    |> Tuple.get_named("def")
-            )^
-                |> Ast.unwrap_child_value;
-            let def = def
-                |> AstHelpers.expect_rule("record")
-                |> AstHelpers.expect_single_child(:None);
-            let item = {
-                .name,
-                .kind = :Type kind,
-                .def,
-            };
-            &mut state^.top_level_items |> ArrayList.push_back(item);
-        );
-        let set_top_level_def = (name :: String, span :: Span) => (
-            if &state^.top_level_item_def_span |> OrdMap.get(name) is :Some &other_span then (
-                let diagnostic = {
-                    .severity = :Error,
-                    .source = :Compiler,
-                    .message = () => (
-                        let output = @current Output;
-                        output.write("Top level item ");
-                        output.write(String.escape(name));
-                        output.write(" has already been defined");
-                    ),
-                    .span,
-                    .related = (
-                        let mut related = ArrayList.new();
-                        let info = {
-                            .span = other_span,
-                            .message = () => (
-                                let output = @current Output;
-                                output.write("Previous definition is here");
-                            ),
-                        };
-                        &mut related |> ArrayList.push_back(info);
-                        related
-                    ),
-                };
-                Diagnostic.report_and_unwind(diagnostic)
-            );
-            &mut state^.top_level_item_def_span |> OrdMap.add(name, span);
-        );
-        let top_level_item = (root :: Ast.Group) => with_return (
-            let name_ast = (
-                &root.children
-                    |> Tuple.get_named("name")
-            )^
-                |> Ast.unwrap_child_value;
-            let value = (
-                &root.children
-                    |> Tuple.get_named("value")
-            )^
-                |> Ast.unwrap_child_value;
-            if name_ast.shape is :Rule { .rule, .root } then (
-                if rule.name == "type ascribe" then (
-                    let { name_ast, ty } = root
-                        |> AstHelpers.expect_two_children(:Some { "expr", "type" });
-                    let name = name_ast |> AstHelpers.expect_ident;
-                    set_top_level_def(name, name_ast.span);
-                    let @"const" = {
-                        .name,
-                        .ty,
-                        .value,
-                    };
-                    &mut state^.consts |> ArrayList.push_back(@"const");
-                    return;
-                );
-            );
-            let name = name_ast |> AstHelpers.expect_ident;
-            set_top_level_def(name, name_ast.span);
-            if value.shape is :Rule { .rule, .root } then (
-                if rule.name == "type alias" then (
-                    let item = {
-                        .name,
-                        .kind = :Type :Alias,
-                        .def = root |> AstHelpers.expect_single_child(:None),
-                    };
-                    &mut state^.top_level_items |> ArrayList.push_back(item);
-                    return;
-                );
-                if rule.name == "enum" then (
-                    type_def(name, :Enum, root);
-                    return;
-                );
-                if rule.name == "struct" then (
-                    type_def(name, :Struct, root);
-                    return;
-                );
-                if rule.name == "union" then (
-                    type_def(name, :Union, root);
-                    return;
-                );
-                if rule.name == "opaque_type" then (
-                    let item = {
-                        .name,
-                        .kind = :Type :Opaque,
-                        .def = value,
-                    };
-                    &mut state^.top_level_items |> ArrayList.push_back(item);
-                    return;
-                );
-                if rule.name == "fn" then (
-                    let item = {
-                        .name,
-                        .kind = :Fn,
-                        .def = value,
-                    };
-                    &mut state^.top_level_items |> ArrayList.push_back(item);
-                    return;
-                );
-                if rule.name == "create_context_type" then (
-                    let item = {
-                        .name,
-                        .kind = :Context,
-                        .def = root |> AstHelpers.expect_single_child(:Some "type"),
-                    };
-                    &mut state^.top_level_items |> ArrayList.push_back(item);
-                    return;
-                );
-            );
+    const extract_type_def = (root :: Ast.Group) -> Ast.t => (
+        let def = (
+            &root.children
+                |> Tuple.get_named("def")
+        )^
+            |> Ast.unwrap_child_value;
+        let def = def
+            |> AstHelpers.expect_rule("record")
+            |> AstHelpers.expect_single_child(:None);
+        def
+    );
+
+    const type_def = (name :: String, kind :: TypeKind, root :: Ast.Group) => (
+        let mut ctx = @current Context;
+        let item = {
+            .name,
+            .kind = :Type kind,
+            .def = extract_type_def(root),
+        };
+        &mut ctx.top_level_items |> ArrayList.push_back(item);
+    );
+
+    const set_top_level_def_span = (name :: String, span :: Span) => (
+        let mut ctx = @current Context;
+        if &ctx.top_level_item_def_span |> OrdMap.get(name) is :Some &other_span then (
             let diagnostic = {
                 .severity = :Error,
                 .source = :Compiler,
                 .message = () => (
-                    (@current Output).write("Unexpected top level item");
+                    let output = @current Output;
+                    output.write("Top level item ");
+                    output.write(String.escape(name));
+                    output.write(" has already been defined");
                 ),
-                .span = value.span,
-                .related = ArrayList.new(),
+                .span,
+                .related = (
+                    let mut related = ArrayList.new();
+                    let info = {
+                        .span = other_span,
+                        .message = () => (
+                            let output = @current Output;
+                            output.write("Previous definition is here");
+                        ),
+                    };
+                    &mut related |> ArrayList.push_back(info);
+                    related
+                ),
             };
             Diagnostic.report_and_unwind(diagnostic)
         );
+        &mut ctx.top_level_item_def_span |> OrdMap.add(name, span);
+    );
+
+    const add_top_level_item = (root :: Ast.Group) => with_return (
+        let mut ctx = @current Context;
+        let name_ast = (
+            &root.children
+                |> Tuple.get_named("name")
+        )^
+            |> Ast.unwrap_child_value;
+        let value = (
+            &root.children
+                |> Tuple.get_named("value")
+        )^
+            |> Ast.unwrap_child_value;
+        if name_ast.shape is :Rule { .rule, .root } then (
+            if rule.name == "type ascribe" then (
+                let { name_ast, ty } = root
+                    |> AstHelpers.expect_two_children(:Some { "expr", "type" });
+                let name = name_ast |> AstHelpers.expect_ident;
+                set_top_level_def_span(name, name_ast.span);
+                let @"const" = {
+                    .name,
+                    .ty,
+                    .value,
+                };
+                &mut ctx.consts |> ArrayList.push_back(@"const");
+                return;
+            );
+        );
+        let name = name_ast |> AstHelpers.expect_ident;
+        set_top_level_def_span(name, name_ast.span);
+        set_top_level_item(name, value);
+    );
+
+    const set_top_level_item = (name :: String, value :: Ast.t) => with_return (
+        let mut ctx = @current Context;
+        if value.shape is :Rule { .rule, .root } then (
+            if rule.name == "template" then (
+                let { args, def } = root
+                    |> AstHelpers.expect_two_children(:Some { "args", "def" });
+                let mut arg_names = ArrayList.new();
+                for arg in Ast.iter_list(
+                    args,
+                    .binary_rule_name = "comma",
+                    .trailing_or_leading_rule_name = :Some "trailing comma",
+                ) do (
+                    let arg = arg |> AstHelpers.expect_ident;
+                    &mut arg_names |> ArrayList.push_back(arg);
+                );
+                let template = {
+                    .arg_names,
+                    .def,
+                    .instantiations = OrdMap.new_with_compare(compare_template_args),
+                };
+                &mut ctx.templates |> OrdMap.add(name, template);
+                return;
+            );
+            if rule.name == "type alias" then (
+                let item = {
+                    .name,
+                    .kind = :Type :Alias,
+                    .def = root |> AstHelpers.expect_single_child(:None),
+                };
+                &mut ctx.top_level_items |> ArrayList.push_back(item);
+                return;
+            );
+            if rule.name == "enum" then (
+                type_def(name, :Enum, root);
+                return;
+            );
+            if rule.name == "struct" then (
+                type_def(name, :Struct, root);
+                return;
+            );
+            if rule.name == "union" then (
+                type_def(name, :Union, root);
+                return;
+            );
+            if rule.name == "opaque_type" then (
+                let item = {
+                    .name,
+                    .kind = :Type :Opaque,
+                    .def = value,
+                };
+                &mut ctx.top_level_items |> ArrayList.push_back(item);
+                return;
+            );
+            if rule.name == "fn" then (
+                let item = {
+                    .name,
+                    .kind = :Fn,
+                    .def = value,
+                };
+                &mut ctx.top_level_items |> ArrayList.push_back(item);
+                return;
+            );
+            if rule.name == "create_context_type" then (
+                let item = {
+                    .name,
+                    .kind = :Context,
+                    .def = root |> AstHelpers.expect_single_child(:Some "type"),
+                };
+                &mut ctx.top_level_items |> ArrayList.push_back(item);
+                return;
+            );
+        );
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Compiler,
+            .message = () => (
+                (@current Output).write("Unexpected top level item");
+            ),
+            .span = value.span,
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
+    );
+
+    const add_source_ast = (state :: &mut State, ast :: Ast.t) => (
+        # TODO this will copy state, need context to be ref?
+        with Context = state^;
         for item in Ast.iter_list(
             ast,
             .binary_rule_name = "then",
@@ -217,7 +344,7 @@ const Compiler = (
         ) do (
             if item.shape is :Rule { .rule, .root } then (
                 if rule.name == "const" then (
-                    top_level_item(root);
+                    add_top_level_item(root);
                     continue;
                 );
             );
@@ -257,7 +384,194 @@ const Compiler = (
         add_source_ast(state, parsed.ast)
     );
 
-    const Context = @context State;
+    const instantiate_ty = (
+        template_name :: String,
+        args :: ArrayList.t[Ir.Type],
+        span :: Span,
+    ) -> Ir.Type => (
+        match instantiate(template_name, args, span) with (
+            | :Type ty_name => :Named ty_name
+            | :Fn _ => (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        let output = @current Output;
+                        output.write("Expected type, but this template expands to a fn");
+                    ),
+                    .span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic)
+            )
+        )
+    );
+
+    const instantiate = (
+        template_name :: String,
+        args :: ArrayList.t[Ir.Type],
+        span :: Span,
+    ) -> Instantiation => (
+        let mut ctx = @current Context;
+        let template = &mut ctx.templates
+            |> OrdMap.get_mut(template_name)
+            |> Option.unwrap_or_else(
+                () => (
+                    let diagnostic = {
+                        .severity = :Error,
+                        .source = :Compiler,
+                        .message = () => (
+                            let output = @current Output;
+                            output.write("Could not find template named ");
+                            output.write(String.escape(template_name));
+                        ),
+                        .span,
+                        .related = ArrayList.new(),
+                    };
+                    Diagnostic.report_and_unwind(diagnostic)
+                )
+            );
+        let expected_args_len = &template^.arg_names |> ArrayList.length;
+        Log.debug_msg("calculating template args");
+        let args :: TemplateArgs = (
+            let mut by_name = OrdMap.new();
+            let args_len = &args |> ArrayList.length;
+            let expected_args_len = &template^.arg_names |> ArrayList.length;
+            if args_len != expected_args_len then (
+                let diagnostic = {
+                    .severity = :Error,
+                    .source = :Compiler,
+                    .message = () => (
+                        let output = @current Output;
+                        output.write("Template expected ");
+                        output.write(to_string(expected_args_len));
+                        output.write(" arg, got ");
+                        output.write(to_string(args_len));
+                    ),
+                    .span,
+                    .related = ArrayList.new(),
+                };
+                Diagnostic.report_and_unwind(diagnostic);
+            );
+            for { i, &arg } in &args |> ArrayList.iter |> std.iter.enumerate do (
+                let arg_name = &template^.arg_names |> ArrayList.at(i);
+                &mut by_name |> OrdMap.add(arg_name^, arg);
+            );
+            { .args, .by_name }
+        );
+        Log.debug_msg("calculated template args");
+        let do_instantiate = () => with_return (
+            let name = output_to_string(
+                () => (
+                    let output = @current Output;
+                    output.write(template_name);
+                    for arg in &args.args |> ArrayList.iter do (
+                        output.write("_");
+                        Ir.Print.type_name_as_ident(arg);
+                    );
+                )
+            );
+            Log.debug_msg("instantiating " + name);
+            set_top_level_def_span(name, span);
+            with TemplateArgsContext = args;
+            match template^.def.shape with (
+                | :Rule { .rule, .root } => (
+                    if rule.name == "type alias" then (
+                        let def = root |> AstHelpers.expect_single_child(:None);
+                        process_type(.name, .kind = :Alias, .def);
+                        return :Type name;
+                    );
+                    if rule.name == "enum" then (
+                        let def = extract_type_def(root);
+                        process_type(.name, .kind = :Enum, .def);
+                        return :Type name;
+                    );
+                    if rule.name == "struct" then (
+                        let def = extract_type_def(root);
+                        process_type(.name, .kind = :Struct, .def);
+                        return :Type name;
+                    );
+                    if rule.name == "union" then (
+                        let def = extract_type_def(root);
+                        process_type(.name, .kind = :Union, .def);
+                        return :Type name;
+                    );
+                    if rule.name == "fn" then (
+                        let def = template^.def;
+                        preprocess_toplevel_fn(name, def);
+                        # TODO wouldn't work with recursive templated fns
+                        process_toplevel_fn(.name, .def);
+                        return :Fn name;
+                    );
+                )
+                | _ => ()
+            );
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    let output = @current Output;
+                    output.write("Unsupported template definition");
+                ),
+                .span = template^.def.span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic)
+        );
+        let instantiation = &mut template^.instantiations
+            |> OrdMap.get_or_init(args, do_instantiate);
+        Log.debug(
+            () => (
+                let output = @current Output;
+                output.write("Instantiation at ");
+                Span.print(span);
+                output.write(" = ");
+                match instantiation^ with (
+                    | :Type name => (
+                        output.write("type ");
+                        output.write(name);
+                    )
+                    | :Fn name => (
+                        output.write("fn ");
+                        output.write(name);
+                    )
+                );
+            )
+        );
+        instantiation^
+    );
+
+    const parse_instantiate = (root :: Ast.Group) -> Instantiation => (
+        let { template, args_ast } = root
+            |> AstHelpers.expect_two_children(:Some { "template", "args" });
+        let template_name = template
+            |> AstHelpers.expect_ident;
+
+        let mut args = ArrayList.new();
+        for arg in Ast.iter_list(
+            args_ast,
+            .binary_rule_name = "comma",
+            .trailing_or_leading_rule_name = :Some "trailing comma",
+        ) do (
+            &mut args |> ArrayList.push_back(parse_type(arg));
+        );
+        instantiate(template_name, args, root.span)
+    );
+
+    const process_type = (.name :: String, .kind :: TypeKind, .def :: Ast.t) => (
+        let mut ctx = @current Context;
+        match kind with (
+            | :Opaque => (
+                &mut ctx.program.types |> OrdMap.add(name, :Opaque);
+            )
+            | :Alias => (
+                &mut ctx.program.types |> OrdMap.add(name, :Alias parse_type(def));
+            )
+            | :Enum => process_enum(.name, .def)
+            | :Union => process_struct_or_union(.name, .kind, .def)
+            | :Struct => process_struct_or_union(.name, .kind, .def)
+        )
+    );
 
     const compile = (mut state :: State) -> Ir.Program => (
         with Context = state;
@@ -267,6 +581,11 @@ const Compiler = (
             .vars = OrdMap.new(),
         };
         with ScopeContext = scope;
+        # Outside of template instantiations
+        with TemplateArgsContext = {
+            .args = ArrayList.new(),
+            .by_name = OrdMap.new(),
+        };
         for item in &state.top_level_items |> ArrayList.iter do (
             match item^.kind with (
                 | :Type _ => (
@@ -290,17 +609,7 @@ const Compiler = (
         for item in &state.top_level_items |> ArrayList.iter do (
             let { .name, .kind, .def } = item^;
             match kind with (
-                | :Type kind => match kind with (
-                    | :Opaque => (
-                        &mut state.program.types |> OrdMap.add(name, :Opaque);
-                    )
-                    | :Alias => (
-                        &mut state.program.types |> OrdMap.add(name, :Alias parse_type(def));
-                    )
-                    | :Enum => process_enum(.name, .def)
-                    | :Union => process_struct_or_union(.name, .kind, .def)
-                    | :Struct => process_struct_or_union(.name, .kind, .def)
-                )
+                | :Type kind => process_type(.name, .kind, .def)
                 | _ => ()
             );
         );
@@ -343,6 +652,20 @@ const Compiler = (
         );
         if &ctx.program.consts |> OrdMap.get(name) is :Some c then (
             return c^.ty;
+        );
+        if &ctx.templates |> OrdMap.get(name) is :Some _ then (
+            let diagnostic = {
+                .severity = :Error,
+                .source = :Compiler,
+                .message = () => (
+                    let output = @current Output;
+                    output.write(name);
+                    output.write(" is a template, can't be used directly");
+                ),
+                .span,
+                .related = ArrayList.new(),
+            };
+            Diagnostic.report_and_unwind(diagnostic);
         );
         let diagnostic = {
             .severity = :Error,
@@ -388,7 +711,6 @@ const Compiler = (
                 )
             )
             | :Ref referenced => :Ref resolve_type_aliases(referenced)
-            | :List element => :List resolve_type_aliases(element)
             | :Fn { .args, .result } => (
                 let mut resolved_args = ArrayList.new();
                 for &arg in &args |> ArrayList.iter do (
@@ -411,7 +733,6 @@ const Compiler = (
         match ty^ with (
             | :Any => "Any"
             | :Ref _ => "a reference"
-            | :List _ => "a list"
             | :Unit => "()"
             | :Int32 => "Int32"
             | :Int64 => "Int64"
@@ -458,36 +779,6 @@ const Compiler = (
                             () => (
                                 let output = @current Output;
                                 output.write("referenced types are different");
-                                msg()
-                            )
-                        )
-                    ),
-                };
-                type_check_impl(a, b);
-            )
-            | { :List ref a, :List ref b } => (
-                let parent_ctx = @current TypeCheckContext;
-                with TypeCheckContext = {
-                    .fail = [T] msg -> T => (
-                        parent_ctx.fail(
-                            () => (
-                                let output = @current Output;
-                                output.write("list element types are different");
-                                msg()
-                            )
-                        )
-                    ),
-                };
-                type_check_impl(a, b);
-            )
-            | { :UnwindToken ref a, :UnwindToken ref b } => (
-                let parent_ctx = @current TypeCheckContext;
-                with TypeCheckContext = {
-                    .fail = [T] msg -> T => (
-                        parent_ctx.fail(
-                            () => (
-                                let output = @current Output;
-                                output.write("unwind tokens' result types are different");
                                 msg()
                             )
                         )
@@ -804,8 +1095,22 @@ const Compiler = (
                     {
                         .name = "members",
                         .value = {
-                            .shape = :List members,
-                            .ty = :List :Named "MemberInfo",
+                            .shape = :Native (
+                                let mut parts = ArrayList.new();
+                                &mut parts |> ArrayList.push_back(:Raw "[");
+                                for member in members |> ArrayList.into_iter do (
+                                    &mut parts |> ArrayList.push_back(:Interpolated member);
+                                    &mut parts
+                                        |> ArrayList.push_back(:Raw ", ");
+                                );
+                                &mut parts |> ArrayList.push_back(:Raw "]");
+                                { .parts }
+                            ),
+                            .ty = instantiate_ty(
+                                "List",
+                                single_element_list(:Named "MemberInfo"),
+                                span,
+                            ),
                             .span,
                         },
                     }
@@ -857,7 +1162,6 @@ const Compiler = (
             .span,
         };
         let { kind, details } = match ty^ with (
-            | :List ref inner_ty => { "Array", details_inner_ty(inner_ty) }
             | :Named name => (
                 let def = &ctx.program.types
                     |> OrdMap.get(name)
@@ -988,6 +1292,27 @@ const Compiler = (
                     .ty = :Unit,
                 }
                 | :Rule { .rule, .root } => (
+                    if rule.name == "instantiate" then (
+                        match parse_instantiate(root) with (
+                            | :Fn name => return {
+                                .shape = :Place :Ident name,
+                                .ty = find_ident_ty(root.span, name),
+                            }
+                            | :Type _ => (
+                                let diagnostic = {
+                                    .severity = :Error,
+                                    .source = :Compiler,
+                                    .message = () => (
+                                        let output = @current Output;
+                                        output.write("Expected an expr, got type");
+                                    ),
+                                    .span = ast.span,
+                                    .related = ArrayList.new(),
+                                };
+                                Diagnostic.report(diagnostic);
+                            )
+                        )
+                    );
                     if rule.name == "variant" then (
                         let variant = root
                             |> AstHelpers.expect_single_child(:Some "label")
@@ -1027,70 +1352,6 @@ const Compiler = (
                         return {
                             .shape = :Place type_info.shape,
                             .ty = type_info.ty,
-                        };
-                    );
-                    if rule.name == "index" then (
-                        let { list_ast, index_ast } = root
-                            |> AstHelpers.expect_two_children(:Some { "list", "index" });
-                        let list = parse_place_expr(:None, list_ast);
-                        let element_ty = match list.ty with (
-                            | :List ty => ty
-                            | other => (
-                                let diagnostic = {
-                                    .severity = :Error,
-                                    .source = :Compiler,
-                                    .message = () => (
-                                        let output = @current Output;
-                                        output.write("Expected a list, got ");
-                                        Ir.Print.type_name(&other);
-                                    ),
-                                    .span = list_ast.span,
-                                    .related = ArrayList.new(),
-                                };
-                                Diagnostic.report_and_unwind(diagnostic)
-                            )
-                        );
-                        let index = parse_expr(:Some :Int32, index_ast);
-                        return {
-                            .shape = :Place :Index {
-                                .list,
-                                .index,
-                            },
-                            .ty = element_ty,
-                        };
-                    );
-                    if rule.name == "list" then (
-                        let inner = root |> AstHelpers.expect_single_child(:None);
-                        let element_ty = match expected_ty |> expect_known_type(ast.span) with (
-                            | :List ty => ty
-                            | other => (
-                                let diagnostic = {
-                                    .severity = :Error,
-                                    .source = :Compiler,
-                                    .message = () => (
-                                        let output = @current Output;
-                                        output.write("Expected ");
-                                        Ir.Print.type_name(&other);
-                                        output.write(", got a list");
-                                    ),
-                                    .span = ast.span,
-                                    .related = ArrayList.new(),
-                                };
-                                Diagnostic.report_and_unwind(diagnostic)
-                            )
-                        );
-                        let mut elements = ArrayList.new();
-                        for element in Ast.iter_list(
-                            inner,
-                            .binary_rule_name = "comma",
-                            .trailing_or_leading_rule_name = :Some "trailing comma",
-                        ) do (
-                            let element = parse_expr(:Some element_ty, element);
-                            &mut elements |> ArrayList.push_back(element);
-                        );
-                        return {
-                            .shape = :Expr :List elements,
-                            .ty = :List element_ty,
                         };
                     );
                     if rule.name == "deref" then (
@@ -1639,10 +1900,50 @@ const Compiler = (
         { .shape, .ty, .span = ast.span }
     );
 
+    const lookup_type = (name :: String, span :: Span) -> Ir.Type => with_return (
+        if &(@current TemplateArgsContext).by_name |> OrdMap.get(name) is :Some ty then (
+            return ty^;
+        );
+        if &(@current Context).type_names |> OrdSet.contains(name) then (
+            return :Named name;
+        );
+        let diagnostic = {
+            .severity = :Error,
+            .source = :Compiler,
+            .message = () => (
+                let output = @current Output;
+                output.write("Type ");
+                output.write(String.escape(name));
+                output.write(" not found");
+            ),
+            .span,
+            .related = ArrayList.new(),
+        };
+        Diagnostic.report_and_unwind(diagnostic)
+    );
+
     const parse_type = (ast :: Ast.t) -> Ir.Type => with_return (
         match ast.shape with (
             | :Empty => return :Unit
             | :Rule { .rule, .root } => (
+                if rule.name == "instantiate" then (
+                    match parse_instantiate(root) with (
+                        | :Type name => return :Named name
+                        | :Fn _ => (
+                            let diagnostic = {
+                                .severity = :Error,
+                                .source = :Compiler,
+                                .message = () => (
+                                    let output = @current Output;
+                                    output.write("Expected a type, got fn");
+                                ),
+                                .span = ast.span,
+                                .related = ArrayList.new(),
+                            };
+                            Diagnostic.report(diagnostic);
+                        )
+                    )
+                );
                 if rule.name == "native" then (
                     let raw = root
                         |> AstHelpers.expect_single_child(:None)
@@ -1652,14 +1953,6 @@ const Compiler = (
                 if rule.name == "ref" then (
                     let referenced = root |> AstHelpers.expect_single_child(:None);
                     return :Ref parse_type(referenced);
-                );
-                if rule.name == "unwind_token" then (
-                    let result_ty = root |> AstHelpers.expect_single_child(:None);
-                    return :UnwindToken parse_type(result_ty);
-                );
-                if rule.name == "list" then (
-                    let element = root |> AstHelpers.expect_single_child(:None);
-                    return :List parse_type(element);
                 );
                 if rule.name == "fn_type" then (
                     let { arg_asts, result } = root
@@ -1694,22 +1987,7 @@ const Compiler = (
                     if name == "Int64" then return :Int64;
                     if name == "Float64" then return :Float64;
                     if name == "Char" then return :Char;
-                    if not &(@current Context).type_names |> OrdSet.contains(name) then (
-                        let diagnostic = {
-                            .severity = :Error,
-                            .source = :Compiler,
-                            .message = () => (
-                                let output = @current Output;
-                                output.write("Type ");
-                                output.write(String.escape(name));
-                                output.write(" not found");
-                            ),
-                            .span = token.span,
-                            .related = ArrayList.new(),
-                        };
-                        Diagnostic.report(diagnostic);
-                    );
-                    return :Named name;
+                    return lookup_type(name, token.span);
                 )
                 | _ => ()
             )

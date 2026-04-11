@@ -30,8 +30,6 @@ const Ir = (
     const Type = newtype (
         | :Any
         | :Ref Type
-        | :List Type
-        | :UnwindToken Type
         | :Unit
         | :Int32
         | :Int64
@@ -78,7 +76,6 @@ const Ir = (
             .assignee :: PlaceExpr,
             .value :: Expr,
         }
-        | :List ArrayList.t[Expr]
         | :Fn FnDef
         | :Then ArrayList.t[Expr]
         | :Scope Expr
@@ -185,16 +182,6 @@ const Ir = (
                     output.write("&");
                     Print.type_name(referenced);
                 )
-                | :List ref element_ty => (
-                    output.write("List[");
-                    Print.type_name(element_ty);
-                    output.write("]");
-                )
-                | :UnwindToken ref result_ty => (
-                    output.write("UnwindToken[");
-                    Print.type_name(result_ty);
-                    output.write("]");
-                )
                 | :Native s => output.write(s)
             )
         );
@@ -238,14 +225,6 @@ const Ir = (
                 | :Ref ref referenced => (
                     output.write("Ref_");
                     Print.type_name_as_ident(referenced);
-                )
-                | :List ref element_ty => (
-                    output.write("List_");
-                    Print.type_name_as_ident(element_ty);
-                )
-                | :UnwindToken ref result_ty => (
-                    output.write("UnwindToken_");
-                    Print.type_name_as_ident(result_ty);
                 )
                 | :Native s => (
                     output.write("Native_");
