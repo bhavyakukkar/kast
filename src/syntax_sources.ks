@@ -2,7 +2,10 @@ use (import "./source.ks").*;
 use (import "./source_path.ks").*;
 
 const is_set = (var :: String) => (
-    &std.sys.get_env(var) |> Option.is_some
+    match std.sys.get_env(var) with (
+        | :Some c => String.length(c) > 0
+        | :None => false
+    )
 );
 
 const SyntaxSource = newtype (
