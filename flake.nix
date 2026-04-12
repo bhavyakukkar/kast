@@ -15,9 +15,9 @@
         filter = inputs.nix-filter.lib;
       in with pkgs; rec {
         mk-kast-js = {
-          kastSyntax ? null,
-          minikastSyntax ? null,
-          jsonSyntax ? null
+          readOnlyKastSyntax ? false,
+          readOnlyMinikastSyntax ? false,
+          readOnlyJsonSyntax ? false
         }: stdenv.mkDerivation {
           name = "kast-js";
           src = filter {
@@ -25,9 +25,9 @@
             include = [ ".justfile" "src" "deps" "std" ];
           };
 
-          READONLY_KAST_SYNTAX = kastSyntax;
-          READONLY_MINIKAST_SYNTAX = minikastSyntax;
-          READONLY_JSON_SYNTAX = jsonSyntax;
+          READONLY_KAST_SYNTAX = if readOnlyKastSyntax then "1" else "";
+          READONLY_MINIKAST_SYNTAX = if readOnlyMinikastSyntax then "1" else "";
+          READONLY_JSON_SYNTAX = if readOnlyJsonSyntax then "1" else "";
 
           buildInputs = [ kast-bootstrap just ];
           buildPhase = ''
