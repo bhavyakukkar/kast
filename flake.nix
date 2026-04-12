@@ -13,23 +13,33 @@
         pkgs = import inputs.nixpkgs { inherit system overlays; };
         kast-bootstrap = inputs.kast.packages.${system}.default;
         filter = inputs.nix-filter.lib;
-      in with pkgs; {
-        packages = rec {
-          kast-js = stdenv.mkDerivation {
-            name = "kast-js";
-            src = filter {
-              root = ./.;
-              include = [ ".justfile" "src" "deps" "std" ];
-            };
-            buildInputs = [ kast-bootstrap just ];
-            buildPhase = ''
-              KAST_BIN=${kast-bootstrap}/bin/kast just build
-            '';
-            installPhase = ''
-              mkdir $out
-              cp target/kast.mjs $out/kast.mjs
-            '';
+      in with pkgs; rec {
+        mk-kast-js = {
+          kastSyntax ? null,
+          minikastSyntax ? null,
+          jsonSyntax ? null
+        }: stdenv.mkDerivation {
+          name = "kast-js";
+          src = filter {
+            root = ./.;
+            include = [ ".justfile" "src" "deps" "std" ];
           };
+
+          READONLY_KAST_SYNTAX = kastSyntax;
+          READONLY_MINIKAST_SYNTAX = minikastSyntax;
+          READONLY_JSON_SYNTAX = jsonSyntax;
+
+          buildInputs = [ kast-bootstrap just ];
+          buildPhase = ''
+            KAST_BIN="${kast-bootstrap}/bin/kast" just build
+          '';
+          installPhase = ''
+            mkdir $out
+            cp target/kast.mjs $out/kast.mjs
+          '';
+        };
+        packages = rec {
+          kast-js = (mk-kast-js {});
           kast = pkgs.writeShellApplication {
             name = "kast";
             runtimeInputs = [ nodejs ];
