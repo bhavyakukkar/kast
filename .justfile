@@ -4,7 +4,7 @@ default:
 
 [arg("continuous", long="continuous", value="--continuous")]
 build continuous="" main="src/cli/_main.ks" name="kast":
-    mkdir -p target
+    mkdir -p target/js
     # flock --exclusive target 
     time ${KAST_BIN:-kast-bootstrap} compile \
         {{continuous}} \
@@ -12,8 +12,18 @@ build continuous="" main="src/cli/_main.ks" name="kast":
         --async never \
         --use-numbers-instead-of-symbols false \
         --target js \
-        --output target/{{name}}-tmp.mjs \
-        --post-compile-cmd 'just post-build target/{{name}}-tmp.mjs target/{{name}}.mjs' \
+        --output target/js/{{name}}-tmp.mjs \
+        --post-compile-cmd 'just post-build target/js/{{name}}-tmp.mjs target/js/{{name}}.mjs' \
+        {{main}}
+
+[arg("continuous", long="continuous", value="--continuous")]
+build-c continuous="" main="src/cli/_main.ks" name="kast":
+    mkdir -p target/c
+    # flock --exclusive target 
+    time ${KAST_BIN:-kast-bootstrap} compile \
+        {{continuous}} \
+        --target c \
+        --output target/c/{{name}}-tmp.c \
         {{main}}
 
 post-build src out:

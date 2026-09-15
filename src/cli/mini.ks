@@ -109,7 +109,12 @@ const Mini = (
                 |> Option.unwrap_or_else(
                     () => Diagnostic.abort("Specify compilation --target")
                 );
-            let target = if target == "javascript" or target == "js" then (
+            const CompilationTarget = newtype (
+                | :C
+                | :JavaScript
+            );
+
+            let target :: CompilationTarget = if target == "javascript" or target == "js" then (
                 :JavaScript
             ) else if target == "c" then (
                 :C
