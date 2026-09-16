@@ -39,17 +39,20 @@ jobs:
         run: opam exec -- dune build kast.opam
 
       - name: Install Dependencies
-        run: opam install . --deps-only
+        run: opam install .
 
-      - name: Build Kast
-        run: "eval $(opam env) && dune build --display=verbose"
+      - name: Check Kast installed
+        run: opam exec -- kast foo.ks
 
-      - name: Move binary to dist
-        run: cp _build/default/src/kast/bin/main.exe dist/kast.exe
+      # - name: Build Kast
+      #   run: "eval $(opam env) && dune build --display=verbose"
 
-      - name: Upload binary as artifact
-        uses: actions/upload-artifact@v7
-        if: env.preview == 'true'
-        with:
-          name: release
-          path: dist/*
+      # - name: Move binary to dist
+      #   run: cp _build/default/src/kast/bin/main.exe dist/kast.exe
+
+      # - name: Upload binary as artifact
+      #   uses: actions/upload-artifact@v7
+      #   if: env.preview == 'true'
+      #   with:
+      #     name: release
+      #     path: dist/*
