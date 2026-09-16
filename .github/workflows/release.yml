@@ -32,7 +32,7 @@ jobs:
           ocaml-compiler: 5
 
       - name: Generate opam-file
-        run: dune build kast.opam
+        run: opam exec -- dune build kast.opam
 
       - name: Install Dependencies
         run: opam install . --deps-only
