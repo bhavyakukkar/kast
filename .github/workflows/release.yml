@@ -31,6 +31,10 @@ jobs:
         with:
           ocaml-compiler: 5
 
+      - name: Install dune
+        # NOTE: change this if the development dune version set in flake.nix (createScope) changes
+        run: opam install dune.3.21.1
+
       - name: Generate opam-file
         run: opam exec -- dune build kast.opam
 
