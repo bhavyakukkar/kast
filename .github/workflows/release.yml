@@ -42,7 +42,7 @@ jobs:
         run: opam install . --deps-only
 
       - name: Build Kast
-        run: dune build --display=verbose
+        run: "eval $(opam env) && dune build --display=verbose"
 
       - name: Move binary to dist
         run: cp _build/default/src/kast/bin/main.exe dist/kast.exe
