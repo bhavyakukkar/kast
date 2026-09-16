@@ -29,7 +29,7 @@ jobs:
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.4.0
+          ocaml-compiler: 5.4
 
       - name: Install dune
         # NOTE: change this if the development dune version set in flake.nix (createScope) changes
