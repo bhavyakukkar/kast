@@ -43,3 +43,13 @@ jobs:
 
       - name: Build Kast
         run: opam exec -- dune build --display=verbose
+
+      - name: Move binary to dist
+        run: cp _build/default/src/kast/bin/main.exe dist/kast.exe
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v7
+        if: env.preview == 'true'
+        with:
+          name: release
+          path: dist/*
