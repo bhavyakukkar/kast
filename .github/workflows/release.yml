@@ -28,7 +28,8 @@ jobs:
 
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
-        # intentionally not specifying ocaml compiler version here
+        with:
+          ocaml-compiler: 5
 
       - name: Generate opam-file
         run: dune build kast.opam
