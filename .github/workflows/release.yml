@@ -42,4 +42,4 @@ jobs:
         run: opam install . --deps-only
 
       - name: Build Kast
-        run: opam exec -- dune build
+        run: opam exec -- dune build --display=verbose
