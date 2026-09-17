@@ -8,29 +8,53 @@
  (name kast)
  (depends
   (ocaml
-   (>= 5.4))
+   (and
+    (>= 5.4)
+    (< 5.5)))
   (ppx_deriving
-   (>= 6))
+   (and
+    (>= 6)
+    (< 7)))
   (ppx_getenv
-   (>= 2))
+   (and
+    (>= 2)
+    (< 3)))
   (linol
-   (>= 0.10))
+   (and
+    (>= 0.10)
+    (< 0.11)))
   (linol-eio
-   (>= 0.10))
+   (and
+    (>= 0.10)
+    (< 0.11)))
   (eio_main
-   (>= 1))
+   (and
+    (>= 1)
+    (< 2)))
   (js_of_ocaml
-   (>= 6))
+   (and
+    (>= 6.2)
+    (< 6.3)))
   (js_of_ocaml-compiler
-   (>= 6))
+   (and
+    (>= 6.2)
+    (< 6.3)))
   (js_of_ocaml-ppx
-   (>= 6))
+   (and
+    (>= 6.2)
+    (< 6.3)))
   (promise_jsoo
-   (>= 0.4))
+   (and
+    (>= 0.4)
+    (< 0.5)))
   (memtrace
-   (>= 0.2))
+   (and
+    (>= 0.2)
+    (< 0.3)))
   (uri
-   (>= 4))))
+   (and
+    (>= 4)
+    (< 5)))))
 
 (generate_opam_files)
 
