@@ -41,6 +41,10 @@ jobs:
       - name: Install Dependencies
         run: opam install . --deps-only
 
+      # Needed to compile runtime.mts to javascript (src/transpiler/javascript/dune)
+      - name: Install typescript
+        run: npm install
+
       - name: Build Kast
         run: |
           strace \
