@@ -80,10 +80,11 @@ jobs:
           # archive pkgname into $source/dist
           mkdir dist
           if [ "$exe" = "" ]; then
-              tar cJf $source/dist/$pkgname.tar.xz $pkgname
+              tar cJf dist/$pkgname.tar.xz $pkgname
           else
-              7z a -r $source/dist/$pkgname.zip $pkgname
+              7z a -r dist/$pkgname.zip $pkgname
           fi
+          mv dist $source/
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@v4
