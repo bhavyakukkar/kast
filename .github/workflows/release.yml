@@ -46,7 +46,6 @@ jobs:
           strace \
             -f \
             -e trace=process,execve \
-            -o strace.log \
             opam exec -- dune build
 
       - name: Move binary to dist
