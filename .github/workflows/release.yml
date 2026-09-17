@@ -46,14 +46,15 @@ jobs:
         run: npm install
 
       - name: Build Kast
-        run: |
-          strace \
-            -f \
-            -e trace=process,execve \
-            opam exec -- dune build
+        run: opam exec -- dune build
+
+      - name: Show executable location
+        run: find . -name *.exe
 
       - name: Move binary to dist
-        run: cp _build/default/src/kast/bin/main.exe dist/kast.exe
+        run: |
+          mkdir dist
+          cp _build/default/src/kast/bin/main.exe dist/kast
 
       - name: Upload binary as artifact
         uses: actions/upload-artifact@v7
