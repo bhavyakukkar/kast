@@ -17,7 +17,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
+          - windows-latest
+
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -26,7 +27,7 @@ jobs:
       - name: Checkout tree
         uses: actions/checkout@v6
 
-      - name: Set-up OCaml
+      - name: Set-up OCaml/OPAM
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: "5.4.0"
@@ -38,23 +39,27 @@ jobs:
       - name: Generate opam-file
         run: opam exec -- dune build kast.opam
 
-      - name: Install Dependencies
+      - name: Install OCaml Dependencies
         run: opam install . --deps-only
 
       # Needed to compile runtime.mts to javascript (src/transpiler/javascript/dune)
-      - name: Install typescript
+      - name: Install Node Dependencies
         run: npm install
 
       - name: Build Kast
         run: opam exec -- dune build
 
-      - name: Show executable location
-        run: find . -name *.exe
-
-      - name: Move binary to dist
+      - name: Build Archive
         run: |
-          mkdir dist
-          cp _build/default/src/kast/bin/main.exe dist/kast
+          mkdir -p dist
+          # copy binary
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp _build/default/src/kast/bin/main.exe "dist/kast.exe"
+          else
+            cp _build/default/src/kast/bin/main.exe "dist/kast"
+          fi
+          # copy standard-library
+          cp -r std dist/std
 
       - name: Upload binary as artifact
         uses: actions/upload-artifact@v7
