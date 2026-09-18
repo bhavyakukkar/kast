@@ -49,8 +49,8 @@ jobs:
           KAST_PATH=$(pwd)/kast_path
 
           # currently fails to transpile to js because of `let &@context`
-          # but it not needed to build self-kast anyway
-          rm $KAST_STD/thread.ks
+          # but it is not needed to build self-kast anyway
+          > $KAST_STD/thread.ks
 
           kast${exe} compile \
             --js-ref-vars false \
