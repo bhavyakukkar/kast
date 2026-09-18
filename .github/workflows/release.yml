@@ -27,6 +27,11 @@ jobs:
       - name: Checkout tree
         uses: actions/checkout@v6
 
+      - name: Checkout required submodules
+        run: |
+          git submodule update --init deps/uri
+          git submodule update --init deps/json
+
       - name: Install Kast
         run: |
           curl -L \
