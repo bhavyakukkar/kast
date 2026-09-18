@@ -9,6 +9,7 @@ use (import "./highlight.ks").*;
 use (import "./parse_json.ks").*;
 use (import "./parse_syntax_rules.ks").*;
 use (import "./parse_syntax_ruleset.ks").*;
+use (import "./generate_treesitter_grammar.ks").*;
 use (import "./parse.ks").*;
 use (import "./repl.ks").*;
 use (import "./run.ks").*;
@@ -36,6 +37,7 @@ const Args = (
         | :Tokenize Tokenize.Args.t
         | :ParseSyntaxRules ParseSyntaxRules.Args.t
         | :ParseSyntaxRuleset ParseSyntaxRuleset.Args.t
+        | :GenerateTreesitterGrammar GenerateTreesitterGrammar.Args.t
         | :Parse Parse.Args.t
         | :ParseJson ParseJson.Args.t
         | :Highlight Highlight.Args.t
@@ -66,6 +68,11 @@ const Args = (
                 );
                 if arg == "parse-syntax-ruleset" then (
                     unwind subcommand (:ParseSyntaxRuleset ParseSyntaxRuleset.Args.parse(i + 1));
+                );
+                if arg == "generate-treesitter-grammar" then (
+                    unwind subcommand (
+                        :GenerateTreesitterGrammar GenerateTreesitterGrammar.Args.parse(i + 1)
+                    );
                 );
                 if arg == "parse" then (
                     unwind subcommand (:Parse Parse.Args.parse(i + 1, .fix_syntax = :None));
@@ -122,6 +129,7 @@ match subcommand with (
     | :Tokenize args => Tokenize.run(common_args, args)
     | :ParseSyntaxRules args => ParseSyntaxRules.run(common_args, args)
     | :ParseSyntaxRuleset args => ParseSyntaxRuleset.run(common_args, args)
+    | :GenerateTreesitterGrammar args => GenerateTreesitterGrammar.run(common_args, args)
     | :Parse args => Parse.run(common_args, args)
     | :ParseJson args => ParseJson.run(common_args, args)
     | :Highlight args => Highlight.run(common_args, args)
