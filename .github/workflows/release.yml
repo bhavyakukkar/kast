@@ -8,12 +8,18 @@ env:
   # Preview mode: Publishes the build output as a CI artifact instead of creating
   # a release, allowing for manual inspection of the output. This mode is
   # activated if the CI run was triggered on a fork of the repository
-  preview: ${{ github.repository != 'bhavyakukkar/kast' }}
+  preview: ${{ github.repository != 'kast-lang/kast' }}
 
 permissions: read-all
 
 jobs:
   build:
+
+    permissions:
+      contents: write # upload to GitHub release
+      id-token: write # sign provenance attestations
+      attestations: write # write provenance to the attestations API
+
     strategy:
       matrix:
         os:
