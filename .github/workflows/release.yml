@@ -35,8 +35,8 @@ jobs:
 
           tar -xJf kast.tar.xz
           echo "$PWD/kast-v26-${{ runner.os }}" >> "$GITHUB_PATH"
-          KAST_PATH="$PWD/kast-v26-${{ runner.os }}"
-          echo "KAST_PATH=$KAST_PATH" >> "$GITHUB_ENV"
+          KAST_STD="$PWD/kast-v26-${{ runner.os }}/std"
+          echo "KAST_STD=$KAST_STD" >> "$GITHUB_ENV"
 
       - name: Kast Build
         run: |
@@ -45,9 +45,13 @@ jobs:
               exe=".exe"
           fi
 
-          rm $KAST_PATH/std/thread.ks
-
           mkdir -p target
+          KAST_PATH=$(pwd)/kast_path
+
+          # currently fails to transpile to js because of `let &@context`
+          # but it not needed to build self-kast anyway
+          rm $KAST_STD/thread.ks
+
           kast${exe} compile \
             --js-ref-vars false \
             --async never \
