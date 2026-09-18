@@ -46,6 +46,8 @@ jobs:
           fi
 
           rm $KAST_PATH/std/thread.ks
+          echo $KAST_PATH
+          ls $KAST_PATH
 
           mkdir -p target
           kast${exe} compile \
