@@ -36,6 +36,7 @@ jobs:
           tar -xJf kast.tar.xz
           echo "$PWD/kast-v26-${{ runner.os }}" >> "$GITHUB_PATH"
           KAST_PATH="$PWD/kast-v26-${{ runner.os }}"
+          echo "KAST_PATH=$KAST_PATH" >> "$GITHUB_ENV"
 
       - name: Kast Build
         run: |
