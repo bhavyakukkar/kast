@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout tree
         uses: actions/checkout@v6
+        with:
+          submodules: true
 
       - name: Install Kast
         run: |
@@ -35,8 +37,6 @@ jobs:
 
           tar -xJf kast.tar.xz
           echo "$PWD/kast-v26-${{ runner.os }}" >> "$GITHUB_PATH"
-          KAST_PATH="$PWD/kast-v26-${{ runner.os }}"
-          echo "KAST_PATH=$KAST_PATH" >> "$GITHUB_ENV"
 
       - name: Kast Build
         run: |
@@ -50,6 +50,9 @@ jobs:
           ls $KAST_PATH
 
           mkdir -p target
+          KAST_PATH=$(pwd)/kast_path
+          KAST_STD=$(pwd)/deps/bootstrap/std
+
           kast${exe} compile \
             --js-ref-vars false \
             --async never \
