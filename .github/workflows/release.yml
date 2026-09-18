@@ -1,0 +1,111 @@
+name: Release
+on:
+  push:
+    tags:
+    - v*
+
+env:
+  # Preview mode: Publishes the build output as a CI artifact instead of creating
+  # a release, allowing for manual inspection of the output. This mode is
+  # activated if the CI run was triggered on a fork of the repository
+  preview: ${{ github.repository != 'bhavyakukkar/kast' }}
+
+permissions: read-all
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout tree
+        uses: actions/checkout@v6
+
+      - name: Install Kast
+        run: |
+          curl -L \
+            "https://github.com/bhavyakukkar/kast/releases/download/v26/kast-v26-${{ runner.os }}.tar.xz" \
+            -o kast.tar.xz
+
+          tar -xJf kast.tar.xz
+          echo "$PWD/kast-v26-${{ runner.os }}" >> "$GITHUB_PATH"
+          KAST_PATH="$PWD/kast-v26-${{ runner.os }}"
+
+      - name: Kast Build
+        run: |
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then
+              exe=".exe"
+          fi
+
+          rm $KAST_PATH/std/thread.ks
+
+          mkdir -p target
+          kast${exe} compile \
+            --js-ref-vars false \
+            --async never \
+            --use-numbers-instead-of-symbols false \
+            --target js \
+            --output target/kast-tmp.mjs \
+            src/cli/_main.ks
+
+          (
+              echo 'const fs = await import("node:fs");'
+              cat target/kast-tmp.mjs
+          ) > target/kast.mjs
+
+      - name: Build Archive
+        shell: bash
+        if: env.preview == 'false'
+        run: |
+          set -ex
+
+          source="$(pwd)"
+          tag=${GITHUB_REF_NAME//\//}
+          platform="${{ runner.os }}"
+          pkgname=self-kast-$tag-$platform
+
+          cd "$(mktemp -d)" # go to temp dir
+
+          # copy to pkgname
+          mkdir -p $pkgname
+          cp $source/LICENSE $source/README.md $pkgname
+          cp $source/target/kast.mjs $pkgname/kast.mjs
+
+          # archive pkgname into $source/dist
+          mkdir dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+              7z a -r dist/$pkgname.zip $pkgname
+          else
+              tar cJf dist/$pkgname.tar.xz $pkgname
+          fi
+          mv dist $source/
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@v4
+        if: env.preview == 'false'
+        with:
+          subject-path: 'dist/*'
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # 2.11.5
+        if: env.preview == 'false'
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/*
+          file_glob: true
+          tag: ${{ github.ref_name }}
+          overwrite: true
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v7
+        if: env.preview == 'true'
+        with:
+          name: release
+          path: target/*
